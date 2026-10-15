@@ -181,7 +181,8 @@ export const artifactHeadSha = async (
   return withArtifactRepository(env, name, async (repo) => {
     validateRepositoryInfo(await repo.info(), name, expectedId);
 
-    return (await repo.log({ ref: `refs/heads/${branch}`, limit: 1 }))[0]?.hash ?? null;
+    // The binding resolves branch names, not full ref names.
+    return (await repo.log({ ref: branch, limit: 1 }))[0]?.hash ?? null;
   });
 };
 

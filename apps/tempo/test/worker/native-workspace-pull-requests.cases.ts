@@ -56,7 +56,7 @@ const fixture = async () => {
     fakeArtifactRepo(info(), {
       info: async () => info(),
       log: async ({ ref = "HEAD" } = {}) => {
-        const hash = refs.get(ref.replace(/^refs\/heads\//, ""));
+        const hash = refs.get(ref);
 
         return hash ? [artifactCommit(hash)] : [];
       },

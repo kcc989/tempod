@@ -135,7 +135,7 @@ test("forge demo: create a repo, build, run CI, open a PR and merge it", async (
   await watch.waitState(["ready"], 15 * 60_000);
 
   await build(watch);
-  expect(await sh(workspaceId, "node --test 2>&1 | tail -n 20")).toMatch(/# fail 0/);
+  expect(await sh(workspaceId, "node --test 2>&1 | tail -n 20")).toMatch(/\bfail 0\b/);
 
   const { commitSha } = await rpcRetry("commitAndPush", { workspaceId, message: "Add slugify module" });
   expect(commitSha).toMatch(/^[0-9a-f]{40}$/);
@@ -148,7 +148,7 @@ test("forge demo: create a repo, build, run CI, open a PR and merge it", async (
   const detail = await rpc("getCiRun", { projectId, runId: run.id });
   expect(detail.jobs.map((j) => [j.key, j.conclusion])).toEqual([["test", "success"]]);
   const log = await rpc("getCiJobLog", { projectId, runId: run.id, job: "test" });
-  expect(log.text).toMatch(/# pass [1-9]/);
+  expect(log.text).toMatch(/\bpass [1-9]/);
 
   const pr = await rpc("createPullRequest", {
     workspaceId,

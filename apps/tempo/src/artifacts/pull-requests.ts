@@ -84,8 +84,8 @@ const branchTips = async (
     if (requireWrite && info.readOnly) throw new TempoError("FORBIDDEN", "This repository is read-only.");
 
     const [head, base] = await Promise.all([
-      repo.log({ ref: `refs/heads/${headBranch}`, limit: 1 }),
-      repo.log({ ref: `refs/heads/${baseBranch}`, limit: 1 }),
+      repo.log({ ref: headBranch, limit: 1 }),
+      repo.log({ ref: baseBranch, limit: 1 }),
     ]);
 
     const headSha = head[0]?.hash ?? recoverHeadSha;
