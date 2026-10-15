@@ -991,9 +991,133 @@ pub fn intent_reason_text(reasons: &[String]) -> String {
         .join(", ")
 }
 
+pub const ADD_TO_CHECKLIST: &str = "Add to checklist";
+pub const ON_CHECKLIST: &str = "On checklist";
+pub const REOPEN_CHECKLIST_ITEM: &str = "Reopen";
+pub const MISSING_CHECKLIST_TEXT: &str = "Open checklist items not resolved:";
+
+/// 13, L-ADR-2: the proof card's header.
+pub fn proof_status_text(status: p::ProofContentStatus) -> &'static str {
+    match status {
+        p::ProofContentStatus::Checking => "Proof: Tempo is running the checks",
+        p::ProofContentStatus::Complete => "Proof complete",
+        p::ProofContentStatus::Incomplete => "Proof incomplete",
+    }
+}
+
+pub fn proof_check_text(check: &p::ProofContentChecksItem) -> String {
+    match (check.status, check.exit_code) {
+        (p::ProofContentChecksItemStatus::Running, _) => format!("{}: running", check.name),
+        (p::ProofContentChecksItemStatus::Passed, _) => format!("{}: passed", check.name),
+        (_, None) => format!("{}: did not start", check.name),
+        (_, Some(code)) => format!("{}: failed (exit {code})", check.name),
+    }
+}
+
+pub fn proof_screen_label(screen: &p::ProofContentScreensItem) -> String {
+    format!("{} · {} · {}", screen.route, screen.viewport, screen.theme)
+}
+
+pub fn proof_missing_routes_text(routes: &[String]) -> String {
+    format!("No screen for: {}", routes.join(", "))
+}
+
+/// A checklist item's text, or its id when the workspace no longer has it.
+pub fn checklist_text(checklist: &[p::ChecklistItem], checklist_id: &str) -> String {
+    checklist
+        .iter()
+        .find(|c| c.id == checklist_id)
+        .map_or_else(|| checklist_id.to_string(), |c| c.text.clone())
+}
+
+pub fn proof_resolved_note(note: &str) -> Option<String> {
+    (!note.is_empty()).then(|| format!(" — {note}"))
+}
+
+/// Only the proof that resolved an item offers to reopen it.
+pub fn can_reopen(checklist: &[p::ChecklistItem], checklist_id: &str, proof_id: &str) -> bool {
+    checklist.iter().any(|c| {
+        c.id == checklist_id
+            && c.status == p::ChecklistItemStatus::Resolved
+            && c.resolved_by.as_deref() == Some(proof_id)
+    })
+}
+
+pub fn on_checklist(checklist: &[p::ChecklistItem], item_id: &str) -> bool {
+    checklist
+        .iter()
+        .any(|c| c.source_item_id.as_deref() == Some(item_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn proof_texts_match_the_web_card() {
+        assert_eq!(
+            proof_status_text(p::ProofContentStatus::Checking),
+            "Proof: Tempo is running the checks"
+        );
+        assert_eq!(
+            proof_status_text(p::ProofContentStatus::Complete),
+            "Proof complete"
+        );
+        assert_eq!(
+            proof_status_text(p::ProofContentStatus::Incomplete),
+            "Proof incomplete"
+        );
+        let check = |status: &str, exit: serde_json::Value| -> p::ProofContentChecksItem {
+            serde_json::from_value(serde_json::json!({
+                "name": "lint", "runId": null, "status": status, "exitCode": exit
+            }))
+            .unwrap()
+        };
+        assert_eq!(
+            proof_check_text(&check("running", serde_json::Value::Null)),
+            "lint: running"
+        );
+        assert_eq!(proof_check_text(&check("passed", 0.into())), "lint: passed");
+        assert_eq!(
+            proof_check_text(&check("failed", serde_json::Value::Null)),
+            "lint: did not start"
+        );
+        assert_eq!(
+            proof_check_text(&check("failed", 2.into())),
+            "lint: failed (exit 2)"
+        );
+        let screen: p::ProofContentScreensItem = serde_json::from_value(serde_json::json!({
+            "route": "/todos", "viewport": "phone", "theme": "dark",
+            "artifactId": "a1", "version": 1, "recordingArtifactId": null
+        }))
+        .unwrap();
+        assert_eq!(proof_screen_label(&screen), "/todos · phone · dark");
+        assert_eq!(
+            proof_missing_routes_text(&["/".into(), "/settings".into()]),
+            "No screen for: /, /settings"
+        );
+        assert_eq!(proof_resolved_note(""), None);
+        assert_eq!(
+            proof_resolved_note("Fixed spacing").as_deref(),
+            Some(" — Fixed spacing")
+        );
+    }
+    #[test]
+    fn checklist_state_decides_reopen_and_add() {
+        let checklist: Vec<p::ChecklistItem> = serde_json::from_value(serde_json::json!([
+            {"id": "c1", "text": "Bigger buttons", "status": "resolved", "sourceItemId": "m1",
+             "resolvedBy": "proof-1", "createdAt": 1},
+            {"id": "c2", "text": "Dark mode contrast", "status": "open", "sourceItemId": null,
+             "resolvedBy": null, "createdAt": 2}
+        ]))
+        .unwrap();
+        assert_eq!(checklist_text(&checklist, "c1"), "Bigger buttons");
+        assert_eq!(checklist_text(&checklist, "gone"), "gone");
+        assert!(can_reopen(&checklist, "c1", "proof-1"));
+        assert!(!can_reopen(&checklist, "c1", "proof-2"));
+        assert!(!can_reopen(&checklist, "c2", "proof-1"));
+        assert!(on_checklist(&checklist, "m1"));
+        assert!(!on_checklist(&checklist, "m2"));
+    }
     #[test]
     fn intent_texts_match_the_web_card() {
         let mut intent: p::IntentContent = serde_json::from_value(serde_json::json!({

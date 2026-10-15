@@ -880,6 +880,26 @@ impl WorkspaceView {
         })
         .detach();
     }
+    fn checklist_request<F: p::Function>(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        event: &TranscriptEvent,
+        input: F::Input,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.checklist_key().unwrap_or_default();
+        let request = self.client.call::<F>(input);
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                transcript.update(cx, |t, cx| t.checklist_finished(&key, cx));
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
     fn operation(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -1479,6 +1499,30 @@ impl WorkspaceView {
                         cx,
                     )
                 }
+                TranscriptEvent::AddChecklistItem { item_id } => {
+                    let input = p::AddChecklistItemIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        item_id: item_id.clone(),
+                    };
+                    this.checklist_request::<api::AddChecklistItem>(
+                        transcript.clone(),
+                        event,
+                        input,
+                        cx,
+                    )
+                }
+                TranscriptEvent::ReopenChecklistItem { checklist_id } => {
+                    let input = p::ReopenChecklistItemIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        checklist_id: checklist_id.clone(),
+                    };
+                    this.checklist_request::<api::ReopenChecklistItem>(
+                        transcript.clone(),
+                        event,
+                        input,
+                        cx,
+                    )
+                }
                 TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
                     p::RequestAgentIn {
                         workspace_id: this.store.read(cx).workspace_id.clone(),
@@ -1649,7 +1693,13 @@ impl WorkspaceView {
                 .map(|p| (p.id.clone(), p))
                 .collect();
             let runs = state.runs.clone();
+            let checklist = state
+                .workspace
+                .as_ref()
+                .map(|w| w.checklist.clone())
+                .unwrap_or_default();
             chat.transcript.update(cx, |t, cx| {
+                t.set_checklist(checklist, cx);
                 t.read_only = read_only;
                 t.runs = runs;
                 t.agent_proposals = agent_proposals;
@@ -3276,6 +3326,15 @@ mod tests {
                         }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
+                    } else if path.ends_with("/addChecklistItem") {
+                        (
+                            200,
+                            serde_json::json!({
+                                "id": "checklist-1", "text": "Make it bigger", "status": "open",
+                                "sourceItemId": input["itemId"], "resolvedBy": null, "createdAt": 1
+                            })
+                            .to_string(),
+                        )
                     } else if path.ends_with("/listFiles") {
                         (200, r#"{"paths":["README.md"]}"#.into())
                     } else if path.ends_with("/readFile") {
@@ -4289,6 +4348,70 @@ mod tests {
                 (
                     "/api/v1/rpc/confirmIntent".to_string(),
                     serde_json::json!({"workspaceId": workspace_id, "intentId": "intent-1"})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn checklist_actions_send_add_and_reopen_once(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        let events = [
+            TranscriptEvent::AddChecklistItem {
+                item_id: "message-1".into(),
+            },
+            TranscriptEvent::ReopenChecklistItem {
+                checklist_id: "checklist-1".into(),
+            },
+        ];
+        for event in events {
+            let key = event.checklist_key().unwrap();
+            cx.update_window(window, |_, _, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.request_checklist(event.clone(), cx);
+                    assert!(t.checklist_busy(&key));
+                    t.request_checklist(event.clone(), cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.checklist_busy(&key)) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "checklist call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("ChecklistItem"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/addChecklistItem".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "itemId": "message-1"})
+                ),
+                (
+                    "/api/v1/rpc/reopenChecklistItem".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "checklistId": "checklist-1"})
                 ),
             ]
         );
