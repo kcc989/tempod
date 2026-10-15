@@ -7,6 +7,7 @@ import {
   commitTitle,
   importUrlError,
   parentPath,
+  pullRequestGuideRefs,
   repositorySearch,
   shortSha,
 } from "~/ui/components/repositories/model";
@@ -74,6 +75,16 @@ describe("repository navigation", () => {
     expect(githubUrlFor({ owner: "me", name: "demo" }, { prNumber: 2, branch: "feature" }, true)).toBe(
       "https://github.com/me/demo/pull/2",
     );
+  });
+
+  it("reads PR guides from the live head, the merged head commit, or the closed branch before its tip", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const pull = { headBranch: "feature", headSha: sha };
+
+    expect(pullRequestGuideRefs({ ...pull, state: "draft" })).toEqual(["feature"]);
+    expect(pullRequestGuideRefs({ ...pull, state: "merged" })).toEqual([sha, "feature"]);
+    expect(pullRequestGuideRefs({ ...pull, state: "closed" })).toEqual(["feature", sha]);
+    expect(pullRequestGuideRefs({ ...pull, state: "merged", headSha: null })).toEqual(["feature"]);
   });
 
   it("browses parents and abbreviates commit labels", () => {

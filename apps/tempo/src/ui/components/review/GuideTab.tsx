@@ -1,9 +1,8 @@
-import { PR_GUIDE_PATH, parsePrGuide, type PrGuide } from "@tempo/protocol";
-import { BookOpenIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PR_GUIDE_PATH, type PrGuide } from "@tempo/protocol";
+import { BookOpenIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import guidePrompt from "../../../../../../packages/protocol/pr-guide-prompt.txt?raw";
-import { MessageMarkdown } from "~/ui/components/chat/Markdown";
 import type { CenterTabProps } from "~/ui/components/chat/tab-kinds";
 import { EmptyState, ErrorState, SkeletonRows } from "~/ui/components/shell/States";
 import { Button } from "~/ui/components/ui/button";
@@ -19,7 +18,7 @@ import { openDiff, openFile, targetChatSession } from "~/ui/state/workspace-ui";
 import { DiffFile } from "./DiffFile";
 import { EMPTY_MARKS, isViewedMarks, viewedKey, withViewed } from "./diff-model";
 import { DraftsMenu, SendComments } from "./DiffTab";
-import { Comparison, GuideVisual } from "./GuideVisual";
+import { decodeGuideFile, GuideChapters } from "./GuideChapters";
 import { WakeButton } from "./parts";
 import { useInvalidateOnChanges, useLive, useReviewComments } from "./use-review";
 
@@ -59,17 +58,7 @@ export function GuideTab({ workspaceId }: CenterTabProps<"guide">) {
     if (live && ended > 0) void refetch();
   }, [ended, live, refetch]);
 
-  const result = useMemo(() => {
-    if (!file.data) return null;
-
-    try {
-      if (file.data.encoding !== "utf8") return { error: true as const };
-
-      return { guide: parsePrGuide(file.data.content) };
-    } catch {
-      return { error: true as const };
-    }
-  }, [file.data]);
+  const result = useMemo(() => (file.data ? decodeGuideFile(file.data) : null), [file.data]);
 
   const guide = result && "guide" in result ? result.guide : undefined;
   const canGenerate = live && session !== undefined && session.status !== "closed" && !generating;
@@ -242,15 +231,6 @@ function CreateGuidedPr({
 }
 
 function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide: PrGuide; live: boolean }) {
-  const [selectedId, setSelectedId] = useState(guide.chapters[0]!.id);
-
-  const index = Math.max(
-    0,
-    guide.chapters.findIndex((c) => c.id === selectedId),
-  );
-
-  const chapter = guide.chapters[index]!;
-
   const changes = useCallQuery(
     "getChanges",
     { workspaceId, scope: "branch" },
@@ -265,7 +245,6 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
   const { drafts } = useReviewComments(workspaceId);
   const [marks, setMarks] = useLocalStorage(viewedKey(workspaceId), EMPTY_MARKS, isViewedMarks);
   const hashes = useRef(new Map<string, string>());
-  const scrollRoot = useRef<HTMLDivElement>(null);
   const register = useCallback(() => {}, []);
 
   const onHash = useCallback((path: string, hash: string | null) => {
@@ -284,30 +263,12 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
   const remaining = files.filter((f) => !covered.has(f.path));
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-auto md:flex-row md:overflow-hidden">
-      <nav
-        aria-label="Guide chapters"
-        className="shrink-0 space-y-1 border-b p-2 md:w-56 md:overflow-y-auto md:border-r md:border-b-0"
-      >
-        <h2 className="px-2 py-2 text-sm font-semibold">{guide.title}</h2>
-        {guide.chapters.map((c, i) => (
-          <Button
-            key={c.id}
-            variant={c.id === chapter.id ? "secondary" : "ghost"}
-            size="sm"
-            className="h-auto w-full justify-start py-2 text-left whitespace-normal"
-            aria-current={c.id === chapter.id ? "step" : undefined}
-            onClick={() => {
-              setSelectedId(c.id);
-
-              if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
-            }}
-          >
-            <span className="mr-1 text-muted-foreground">{i + 1}.</span>
-            {c.title}
-          </Button>
-        ))}
-        {remaining.length > 0 && (
+    <GuideChapters
+      className="h-full"
+      guide={guide}
+      source={{ kind: "workspace", workspaceId, live }}
+      nav={
+        remaining.length > 0 && (
           <details className="px-2 py-2 text-xs">
             <summary className="cursor-pointer text-muted-foreground">
               Files outside guide ({remaining.length})
@@ -325,31 +286,10 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
               ))}
             </ul>
           </details>
-        )}
-      </nav>
-      <div
-        ref={scrollRoot}
-        className="min-w-0 flex-1 space-y-4 p-3 md:overflow-y-auto"
-        aria-label="Guided review"
-      >
-        <details open={index === 0} key={`overview-${chapter.id}`} className="rounded-md border p-3">
-          <summary className="cursor-pointer text-sm font-medium">PR overview</summary>
-          <div className="mt-3 space-y-3">
-            <MessageMarkdown workspaceId={workspaceId} text={guide.summary} streaming={false} />
-            <Comparison workspaceId={workspaceId} before={guide.before} after={guide.after} />
-          </div>
-        </details>
-        <article key={chapter.id} className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-semibold">{chapter.title}</h3>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {index + 1} / {guide.chapters.length}
-            </span>
-          </div>
-          <MessageMarkdown workspaceId={workspaceId} text={chapter.description} streaming={false} />
-          {chapter.visuals.map((v, i) => (
-            <GuideVisual key={`${i}-${JSON.stringify(v)}`} workspaceId={workspaceId} visual={v} live={live} />
-          ))}
+        )
+      }
+      code={(chapter, scrollRoot) => (
+        <>
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="mr-auto text-sm font-medium">Code</h4>
             <DraftsMenu workspaceId={workspaceId} drafts={drafts} />
@@ -391,39 +331,8 @@ function GuideReview({ workspaceId, guide, live }: { workspaceId: string; guide:
               );
             })
           )}
-          {chapter.files.length === 0 && (
-            <p className="text-xs text-muted-foreground">This chapter has no linked code files.</p>
-          )}
-        </article>
-        <div className="flex justify-between border-t pt-3">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={index === 0}
-            onClick={() => {
-              setSelectedId(guide.chapters[index - 1]!.id);
-
-              if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
-            }}
-          >
-            <ChevronLeftIcon />
-            Previous
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={index === guide.chapters.length - 1}
-            onClick={() => {
-              setSelectedId(guide.chapters[index + 1]!.id);
-
-              if (scrollRoot.current) scrollRoot.current.scrollTop = 0;
-            }}
-          >
-            Next
-            <ChevronRightIcon />
-          </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    />
   );
 }

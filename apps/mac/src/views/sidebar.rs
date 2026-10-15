@@ -1090,7 +1090,11 @@ fn hover_card(summary: &p::WorkspaceSummary, window: &mut Window, cx: &mut App) 
                 .gap_1()
                 .child(row(
                     "Branch",
-                    div().min_w_0().truncate().child(summary.branch.clone()).into_any_element(),
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .child(summary.branch.clone())
+                        .into_any_element(),
                 ))
                 .child(row(
                     "State",
