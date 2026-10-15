@@ -170,7 +170,7 @@ shadcn/ui new-york on Tailwind v4 and the `radix-ui` umbrella, sized for a 13 px
 
 ## Repositories (`ui/components/repositories/`)
 
-`/_app/repositories.tsx` exposes `/repositories` with validated search fields `project`, `tab` (`code`, `commits`, `pulls`, `issues`), `ref`, `path`, `file`, `pull` and `issue`. `/_app/workspaces.tsx` exposes the workspace list at `/workspaces` for phone navigation.
+`/_app/repositories.tsx` exposes `/repositories` with validated search fields `project`, `tab` (`code`, `commits`, `pulls`, `issues`, `checks`, `deploys`), `ref`, `path`, `file`, `pull`, `issue`, `run`, `job` and `deployment`. `/_app/workspaces.tsx` exposes the workspace list at `/workspaces` for phone navigation.
 
 `RepositoryHub` lists projects and chooses the repository view. GitHub projects keep their external browsing link. Artifact repository code, bounded file previews and commit history use repository RPCs without a running workspace. An absent selected ref stays absent in requests so an empty repository can show its initial workspace action. The branch picker permits a tag or commit only when its `allowRef` option is true.
 

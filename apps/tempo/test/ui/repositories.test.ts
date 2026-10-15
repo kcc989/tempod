@@ -3,6 +3,9 @@ import {
   ciDuration,
   ciRunsInput,
   ciState,
+  deployInput,
+  deploymentsInput,
+  deployState,
   selectedJob,
   commitTitle,
   importUrlError,
@@ -149,5 +152,41 @@ describe("repository checks model (10, Clients)", () => {
     expect(selectedJob(jobs, "missing")?.key).toBe("b");
     expect(selectedJob([job("a", null)], undefined)?.key).toBe("a");
     expect(selectedJob([], undefined)).toBeUndefined();
+  });
+});
+
+describe("repository deploys model (12, Clients)", () => {
+  it("parses deployment links and builds list and deploy input", () => {
+    expect(repositorySearch({ project: "p1", tab: "deploys", deployment: "d1" })).toEqual({
+      project: "p1",
+      tab: "deploys",
+      deployment: "d1",
+    });
+    expect(deploymentsInput("p1", null, 0)).toEqual({ projectId: "p1", offset: 0 });
+    expect(deploymentsInput("p1", "preview", 50)).toEqual({ projectId: "p1", offset: 50, target: "preview" });
+
+    const fixed = { key: "production", stage: "production", branch: "main", auto: true, agent: false };
+    const open = { key: "preview", stage: "preview", branch: null, auto: false, agent: true };
+    expect(deployInput("p1", fixed, "feature")).toEqual({ projectId: "p1", target: "production" });
+    expect(deployInput("p1", open, null)).toBeNull();
+    expect(deployInput("p1", open, "feature")).toEqual({
+      projectId: "p1",
+      target: "preview",
+      branch: "feature",
+    });
+    expect(deployInput("p1", undefined, "feature")).toBeNull();
+  });
+
+  it("never labels an unfinished deployment as succeeded", () => {
+    expect(deployState({ status: "running", conclusion: "success" })).toEqual({
+      label: "Running",
+      tone: "warning",
+    });
+    expect(deployState({ status: "queued", conclusion: null }).label).toBe("Queued");
+    expect(deployState({ status: "completed", conclusion: "success" })).toEqual({
+      label: "Succeeded",
+      tone: "success",
+    });
+    expect(deployState({ status: "completed", conclusion: "timed_out" }).tone).toBe("danger");
   });
 });

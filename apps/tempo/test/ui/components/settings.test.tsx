@@ -66,13 +66,14 @@ describe("settings page", () => {
       .getAllByRole("button")
       .map((b) => b.textContent);
 
-    expect(labels.slice(0, 9)).toEqual([
+    expect(labels.slice(0, 10)).toEqual([
       "General",
       "Shell",
       "Logins",
       "Agents",
       "Environments",
       "MCP servers",
+      "Cloudflare",
       "Appearance",
       "Shortcuts",
       "Devices",
@@ -113,6 +114,7 @@ describe("settings page", () => {
       "Agents",
       "Environments",
       "MCP servers",
+      "Cloudflare",
       "Appearance",
       "Shortcuts",
       "Devices",
