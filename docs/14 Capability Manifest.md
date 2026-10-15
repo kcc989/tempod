@@ -1,6 +1,6 @@
 # 14 Capability Manifest
 
-Status: **Draft, partly approved** (2026-10-15). It extends 01 (Credentials and egress, Environments, Agent profiles), 05, 12 and 13 (L-ADR-3, L-ADR-8).
+Status: **Approved** (2026-10-15). It extends 01 (Credentials and egress, Environments, Agent profiles), 05, 12 and 13 (L-ADR-3, L-ADR-8).
 
 In short: the **project profile** (13) is what the owner writes once about a project. The **manifest** is what Tempo makes from it for one agent session: the exact list of what that agent may read, call and deploy. The agent reads the list, so it knows what it can use. `TempoOutbound` checks every request against the list, so the agent cannot use more.
 
@@ -16,7 +16,8 @@ Agents stay on ACP v1. The manifest reaches the agent through the `tempo` MCP se
 - The WorkspaceDO stores the compiled manifest of each session in its own SQLite, with the session. No other DO writes it (rule 4).
 - `schemaVersion` is the format. It is `1`. A change to the format adds a new number; old sessions keep theirs.
 - `revision` counts changes for each project. `sha256` is the hash of the canonical JSON.
-- A session stores `{revision, sha256}` when it starts and uses that manifest until it ends, as it does with its agent profile (01). A changed manifest applies to new sessions. The owner can apply it to a running session with one action, which starts the next turn with the new manifest.
+- A session stores `{revision, sha256}` when it starts and uses that manifest until it ends, as it does with its agent profile (01). A manifest that grants more applies to new sessions.
+- **Removed access ends sessions (owner-approved 2026-10-15).** When the owner removes a capability, Tempo cancels the turn and closes every running session whose manifest has it, at once. `TempoOutbound` refuses its requests from that moment, before the session closes. A new session gets the new manifest.
 
 ### C-ADR-2. Capabilities, not hosts
 
@@ -72,7 +73,7 @@ deploy:
 | Field | Rule |
 |---|---|
 | `read` | Closed list: `repo`, `deployments`, `prod_errors`, `issues`, `pull_requests`, `ci_runs`. Each maps to `tempo` MCP tools. Tools not granted are not listed. |
-| `call[]` | `id` unique. `hosts` are patterns as in 05. `credential.ref` names an environment secret or a built-in key. `methods` is optional; empty means all. |
+| `call[]` | `id` unique. `hosts` are patterns as in 05. `credential.ref` names an environment secret or a built-in key. `methods` is optional; empty means all. Methods are the only limit; there are no path limits (owner-approved 2026-10-15). |
 | `cloudflare` | The project's Cloudflare resources and the permissions of the session token (13, L-ADR-8). Absent means the agent cannot call `api.cloudflare.com`. |
 | `exceptions` | The named exceptions (C-ADR-3) that apply to this session |
 | `deploy[]` | One entry per deploy target with `agent: true` in 12. `cloudflare` is a subset of the target's permissions. |
@@ -103,7 +104,4 @@ deploy:
 
 ## Open questions
 
-Answered on 2026-10-15: M-Q1 (named exceptions, C-ADR-3), M-Q2 (Cloudflare API allowed with checks, 13 L-ADR-8), M-Q5 (storage, C-ADR-1).
-
-1. **M-Q3. Live changes.** When the owner removes a capability, does it stop at once in running sessions, or only in new sessions (with an "apply now" action)? The draft says new sessions.
-2. **M-Q4. Path limits.** Is a list of HTTP methods enough to limit a `call`, or do some services need path limits too?
+All answered on 2026-10-15: M-Q1 (named exceptions, C-ADR-3), M-Q2 (Cloudflare API with checks, 13 L-ADR-8), M-Q3 (removed access ends sessions, C-ADR-1), M-Q4 (methods only), M-Q5 (storage, C-ADR-1).

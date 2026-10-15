@@ -1,6 +1,6 @@
 # 13 Loop
 
-Status: **Draft, partly approved.** The owner approved the targets and answered most questions on 2026-10-15 (Decisions log). The remaining questions are in Open questions. Phase 3 starts after they are answered and after one week of the friction log (`docs/evidence/friction-log/`).
+Status: **Approved** on 2026-10-15 (Decisions log), except Q-T4 (Open questions). The owner asked to start building on 2026-10-15. The friction-log week (`docs/evidence/friction-log/`) still sets the exit baseline; it runs before any loop feature is used for real work.
 
 Tempo becomes the owner's command center to build and run apps on Cloudflare. This tab defines one closed loop and makes it measurable. It changes 12 (gradual deploys, rollback, deploy events) and extends 01, 04, 07 and 08. It adds no feature outside the loop (Kill list).
 
@@ -50,11 +50,12 @@ The loop is first proven on one new native (Artifacts) project, built with Tempo
 |---|---|
 | Todos | Create, edit, complete, delete and order todos. Web UI at desktop and phone width. |
 | MCP | The app is a remote MCP server. Agents (Claude, Codex and others) can list, create, update, complete and tag todos with MCP tools. |
-| Smart tagging | When a todo is created or changed, the app suggests tags from its text. |
-| Background research | A todo can have a research job. An agent researches it in the background and attaches what it found to the todo. |
+| Smart tagging | When a todo is created or changed, Jev picks tags from the owner's tag list with one `choice` question per tag group, and says if a new tag is needed. |
+| Background research | A todo can have a research job. It searches with the Cloudflare Web Search API (`env.AI.websearch`, no API key) and attaches the best results to the todo, ranked by Jev. |
+| User | Only the owner (owner-confirmed 2026-10-15) |
 | Durable Objects | The research job runs in a Durable Object, so the project exercises graceful Durable Object deploys (L-ADR-4). |
 
-The features are proposed from the owner's one-line brief. Q-T1 to Q-T4 (Open questions) must be answered before the first task starts. Tempo's own repo, `tempod`, joins the loop after the todo app meets the targets.
+The owner confirmed the user, Jev and the web search API on 2026-10-15. Q-T4 (Open questions) is still open. Tempo's own repo, `tempod`, joins the loop after the todo app meets the targets.
 
 ## Architecture decisions
 
@@ -69,8 +70,9 @@ The features are proposed from the owner's one-line brief. Q-T1 to Q-T4 (Open qu
 3. The chat shows an intent card with two actions: **Confirm** (one click or ⌘↩) and **Correct** (a text field; sending it is the one action).
 4. **Confirm** switches the session to write with `session/set_config_option` (category `mode`), or removes the profile's edit-tool deny list, and queues the turn `Intent confirmed. Do the work.`
 5. **Correct** queues the correction as a user turn. The agent calls `propose_intent` again.
-6. **When it applies (proposed default, Q2).** The intent check runs once at the start of each task. Later messages in the same task do not need it. The agent calls `propose_intent` again, and the session goes back to read-only, when it plans work outside the confirmed `goal`. A message that starts with `/go` skips the check for that task.
-7. The fixed prompt text that asks for the intent is given with the first turn of the task, as the run header is in 08.
+6. **Risk decides who confirms (owner-approved 2026-10-15).** Jev (L-ADR-9) judges each intent with the profile and the session's manifest as state. It asks three questions: does the work open new permissions or capabilities; does it add a security risk; how hard is it to roll back. When all three are low, Tempo confirms the intent itself (`loop.intent.confirmed` with `by: "judge"`) and the work starts. The card stays in the chat, and **Correct** still works. When any one is high, or Jev does not answer, the owner confirms as in step 3.
+7. The intent check runs once at the start of each task. The agent calls `propose_intent` again, and the session goes back to read-only, when it plans work outside the confirmed `goal`. That new intent is judged again.
+8. The fixed prompt text that asks for the intent is given with the first turn of the task, as the run header is in 08.
 
 **Not chosen.** Plan mode only (not the same for four agents). ACP elicitation (needs a change to 02, and SDK 1.8.0 support is not verified). A free-text plan (the length is not enforceable).
 
@@ -123,7 +125,7 @@ The features are proposed from the owner's one-line brief. Q-T1 to Q-T4 (Open qu
 2. **Record.** `AppDeployDO` reads each Worker's deployments with the minted token and stores the new `version_id` and the version that was at 100% before.
 3. **Smoke test.** Tempo calls the new version at 0% with `Cloudflare-Workers-Version-Overrides` on the profile's smoke paths.
 4. **Steps.** 10% for the observe window, then 100%. Each step is one `POST /deployments` with the new and old versions.
-5. **Gate.** Between steps, Tempo checks for new Issues on the new version (L-ADR-5). A new Issue stops the rollout. What happens next is Q6.
+5. **Gate.** Between steps, Tempo checks for new Issues on the new version (L-ADR-5). A new Issue stops the rollout. When a rollback is possible (no migration deploy in between), Tempo rolls back with no owner action. Else it holds the rollout and asks the owner. This follows the owner's risk rule (L-ADR-1 step 6).
 6. **Rollback** is one action in web and Mac: `POST /deployments` with the previous version at 100%. It needs no container and no build. Tempo mints a short token for it, as for a deployment.
 7. **Match.** Tempo shows the Cloudflare deployment ID and version ID for each Tempo deployment (done-proof 2).
 8. **Many Workers.** When a target has more than one Worker, Tempo moves each Worker one step at a time, in the order of the profile's `cloudflare.workers` list, and rolls back all of them together.
@@ -197,11 +199,29 @@ Each step writes one lifecycle event (08), so loop times come from the event log
    - The resource belongs to this project (one of its Workers, databases, buckets or namespaces).
    - It is not a production target.
    - It is not on the hold list: delete a Worker, database, bucket, namespace, queue or token; change DNS, routes or a deployment's traffic.
-   - It matches the task's confirmed intent. A decision (08, Decision) compares the request (method, path, resource) with the intent's `goal` and `approach`.
+   - It matches the task's confirmed intent, and it is safe. Jev (L-ADR-9) judges the request (method, path, resource) against the intent's `goal` and `approach`.
 4. Anything else is held. The chat shows an approval card with the request and the reason. The owner allows it once or refuses it. The agent gets a 403 with `tempo: held for owner approval` until then.
 5. Every Cloudflare call is in `egress_log` with the decision.
 
 **Reduces.** CF_PERMS, ACCESS_UNAWARE.
+
+### L-ADR-9. Jev judges safety and alignment
+
+**Decision (owner-approved 2026-10-15).** Every safety and alignment check of the loop calls Jev, TypeSafe AI's System One model, directly through TypeSafe AI:
+
+| Item | Value |
+|---|---|
+| Library | `@typesafe-ai/sdk` 0.7.0 (MIT), pinned. It has no dependencies and runs in the Worker. |
+| Model | `jev-1.14.0` |
+| Endpoint | `POST https://api.typesafe.ai/v1/systemone` (through the SDK) |
+| Key | The owner's `CredentialDO`, key `typesafe.api_key`, set in Settings. It never enters a container, a log or an event. |
+| Where it runs | The Worker and DOs only. Never in a container. |
+| Timeout | 5 seconds, one retry. No answer counts as high risk: the owner decides. |
+| Checks | Intent risk (L-ADR-1), Cloudflare API calls (L-ADR-8) |
+
+- Each check stores the question ids, the answers and the model id on its event. It stores no state text beyond what the event already holds.
+- The thresholds are in the question code, one per question: a `noul` at or above 0.5, or a `score` at or above the middle level, is high.
+- Hook decisions in 08 keep using Clef. This tab does not change them.
 
 ## Targets (owner-approved 2026-10-15)
 
@@ -298,13 +318,12 @@ Tempo will not build these while this loop is the goal.
 | 2026-10-15 | Secrets in containers | D11 logins and secrets with no `hosts` are named exceptions (14) |
 | 2026-10-15 | Mac parity | Yes, every loop screen |
 | 2026-10-15 | Cloudflare API from workspaces | Allowed, when the operation is safe and matches the owner's intent |
+| 2026-10-15 | Intent check | Factor in the risk. New permissions, a security risk or a hard rollback: ask the owner. Else go on. |
+| 2026-10-15 | Judge | Jev (`jev-1.14.0`) through the TypeSafe TypeScript SDK, for safety and alignment checks |
+| 2026-10-15 | Todo app | Only the owner. Jev and the Cloudflare Web Search API. |
+| 2026-10-15 | Removed access | Running sessions that hold it end (14) |
+| 2026-10-15 | Call limits | HTTP methods are enough (14) |
 
 ## Open questions
 
-1. **Q2. Intent check scope.** Is the default in L-ADR-1 step 6 right: once per task, again only when the agent goes outside the confirmed goal, and `/go` to skip?
-2. **Q6. Failed gate.** When a new Issue appears during a rollout, does Tempo roll back by itself, or stop the rollout and wait for the owner?
-3. **Q10. "Jev".** The answer on Cloudflare API calls says "(Jev)". What does it name? L-ADR-8 assumes it means the intent check.
-4. **Q-T1. Who uses the todo app?** Only the owner, or other signed-in users too?
-5. **Q-T2. Smart tagging.** Tags from Workers AI in the app (no API key), or from an outside model?
-6. **Q-T3. Background research.** What does the research agent use: Workers AI with a web search service (which one), or a call to Claude or another model through an API key? What starts it: the owner, a tag, or an MCP call?
-7. **Q-T4. MCP access.** Which agents connect to the app's MCP server, and how do they sign in: OAuth through Better Auth, or a per-agent token?
+1. **Q-T4. MCP sign-in for the todo app.** Only the owner uses it. Do agents sign in with OAuth through Better Auth (each agent asks the owner once), or with a token the owner makes in the app?
