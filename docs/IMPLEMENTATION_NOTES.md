@@ -548,3 +548,36 @@ Tab 13, L-ADR-9. The first loop slice adds the judge module (`apps/tempo/src/jud
 | New-access question | A noul with yes and no criteria that name permissions, credentials and access, and exclude product features | A plain "new capability" question scored a harmless due-date feature 0.67. With criteria it scored 0.09; a Stripe secret scored 0.92 (live, 2026-10-15). |
 | Timeout | 10 s per attempt, one retry, no compression | 12 live calls: median 0.7 s, p90 2.2 s, max 9.1 s. The spec's first 5 s draft would drop real answers. |
 | No answer | Counts as high: the owner decides | 13, L-ADR-9. |
+
+## Loop: gradual rollout and Rollback (2026-10-15)
+
+Tab 12, Gradual rollout (13, L-ADR-4). The owner asked the agent to keep building without them, so these choices were made without asking.
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Where Workers are named | `targets.<key>.workers` in the deploy configuration, not the project profile | The deploy configuration is already owner-only and revisioned; the profile (slice 7) points to it instead of keeping a second list. |
+| Opt-in | `rollout: gradual` per target; `full` keeps 12's old behavior | A project whose `alchemy.run.ts` does not read `TEMPO_DEPLOY_TRAFFIC` would otherwise fail every deploy. |
+| Smoke test at 10% | The canary step comes first, then the smoke test with the version override header | The API needs each share to be at least 0.01%, and an override only reaches a version in the current deployment. |
+| Finding the new version | The newest version created after the deployment started | Alchemy uploads with `traffic: 0` and creates no deployment. The tag annotation depends on the app's own stack code. |
+| A Worker at 100% | Treated as a migration deploy: the others go to 100% too and the deployment completes `success` with a summary | Alchemy forces Durable Object class migrations to 100%; a half-gradual state helps no one. |
+| Owner rollback token | Minted with `workers` for 15 minutes and revoked right after; a failed revoke is left to expire | Rollback has no container and no deployment row to hang the token on. |
+| Rollback scope | Only the newest successful deployment of a target, with every Worker's previous version known | A rollback of an older deployment would skip versions that came after it. |
+| Mac | The Deploys detail shows the rollout and **Roll back**, as on the web | CLAUDE.md rule 17. |
+
+Live Cloudflare acceptance (a real gradual deploy, a smoke test, a promote and a rollback drill) has not been run. Done-proof 2 in 13 needs it.
+
+## Loop: production errors (2026-10-15)
+
+Tab 12, Production errors (13, L-ADR-5 and L-ADR-6). Choices made without the owner, as asked:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Payload | Only the Notifications envelope is parsed strictly. Worker, version and issue ID are looked up by key name at any depth of `data`. | Cloudflare documents no `data` shape for Issues. Spike L-S2 records a real payload; the key list changes then if needed. |
+| Text redaction | Bearer tokens and `token=`, `key=`, `secret=`, `password=` values become `[redacted]` | The log redactor works on field names; Issue text is free text. |
+| Gate without a version | An error with no version but a Worker in canary rolls the canary back | Safer than letting a bad version through. It can roll back for an old version's error. |
+| Settings | `auto_fix` is a deploy configuration key, and the webhook block is in the Deploys tab | Both are owner-only project settings, like the rest of the deploy configuration. |
+| Auto fix | The webhook route starts the fix after its answer (`waitUntil`), as the owner, through the same function as **Start fix** | `AppDeployDO` never creates workspaces itself, and only one path creates fix workspaces. |
+| Duplicate fixes | A two-minute claim on the error stops two callers from creating two workspaces | Rule 5. |
+| Fix base | A new branch from the error's deployment branch, not its exact SHA | `createWorkspace` starts from a branch tip. |
+
+Mac notes for both slices: the canary end time shows in UTC, because the Mac crate has no time-zone library and rule 11 needs approval to add one. The Mac production-error list reloads when the tab opens and on refresh; it does not poll every 5 seconds as the web does. `cargo test -p tempo-mac` passed 3 of 5 runs; the 2 failures were the existing `queue_controls_preserve_draft_and_reorder_the_whole_workspace` test in `workspace.rs`, which these slices do not touch.

@@ -1,6 +1,6 @@
 # 13 Loop
 
-Status: **Approved** on 2026-10-15 (Decisions log), except Q-T4 (Open questions). The owner asked to start building on 2026-10-15. The friction-log week (`docs/evidence/friction-log/`) still sets the exit baseline; it runs before any loop feature is used for real work.
+Status: **Approved** on 2026-10-15 (Decisions log). The owner asked to start building on 2026-10-15. The friction-log week (`docs/evidence/friction-log/`) still sets the exit baseline; it runs before any loop feature is used for real work.
 
 Tempo becomes the owner's command center to build and run apps on Cloudflare. This tab defines one closed loop and makes it measurable. It changes 12 (gradual deploys, rollback, deploy events) and extends 01, 04, 07 and 08. It adds no feature outside the loop (Kill list).
 
@@ -55,7 +55,7 @@ The loop is first proven on one new native (Artifacts) project, built with Tempo
 | User | Only the owner (owner-confirmed 2026-10-15) |
 | Durable Objects | The research job runs in a Durable Object, so the project exercises graceful Durable Object deploys (L-ADR-4). |
 
-The owner confirmed the user, Jev and the web search API on 2026-10-15. Q-T4 (Open questions) is still open. Tempo's own repo, `tempod`, joins the loop after the todo app meets the targets.
+The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP (through Better Auth) on 2026-10-15. Tempo's own repo, `tempod`, joins the loop after the todo app meets the targets.
 
 ## Architecture decisions
 
@@ -104,7 +104,7 @@ The owner confirmed the user, Jev and the web search API on 2026-10-15. Q-T4 (Op
 |---|---|
 | `stack` | Runtime, package manager, frameworks and libraries, with versions |
 | `services` | Each external service: name, purpose, hosts, and the name of the credential (never a value) |
-| `cloudflare` | The Workers that make up the app, and the deploy targets (12) |
+| `cloudflare` | A pointer to the deploy configuration (12), which names each target's Workers. The profile does not repeat them. |
 | `checks` | The commands that prove a change: typecheck, lint, tests, build. Each has a timeout. |
 | `screens` | Routes and the source files that change them (L-ADR-2) |
 | `notes` | At most 40 lines of free text |
@@ -121,14 +121,14 @@ The owner confirmed the user, Jev and the web search API on 2026-10-15. Q-T4 (Op
 
 **Decision. This changes 12 (owner-approved 2026-10-15).**
 
-1. **Upload.** The deploy command gets `TEMPO_DEPLOY_TRAFFIC=0`. The project's `alchemy.run.ts` passes it to each Worker's `version.traffic`, with `tag` = the commit SHA and `message` = `tempo-deploy-<number>`. Spike L-S1 confirms the same for `cf`.
+1. **Upload.** A target with `rollout: gradual` (12) gets `TEMPO_DEPLOY_TRAFFIC=0`. The project's `alchemy.run.ts` passes it to each Worker's `version.traffic`, with `tag` = the commit SHA and `message` = `tempo-deploy-<number>`. Spike L-S1 confirms the same for `cf`.
 2. **Record.** `AppDeployDO` reads each Worker's deployments with the minted token and stores the new `version_id` and the version that was at 100% before.
-3. **Smoke test.** Tempo calls the new version at 0% with `Cloudflare-Workers-Version-Overrides` on the profile's smoke paths.
+3. **Smoke test.** At the 10% step, Tempo calls the new version with `Cloudflare-Workers-Version-Overrides` on the target's smoke URLs. (The API refuses a 0% share, so the test runs at 10%.)
 4. **Steps.** 10% for the observe window, then 100%. Each step is one `POST /deployments` with the new and old versions.
 5. **Gate.** Between steps, Tempo checks for new Issues on the new version (L-ADR-5). A new Issue stops the rollout. When a rollback is possible (no migration deploy in between), Tempo rolls back with no owner action. Else it holds the rollout and asks the owner. This follows the owner's risk rule (L-ADR-1 step 6).
 6. **Rollback** is one action in web and Mac: `POST /deployments` with the previous version at 100%. It needs no container and no build. Tempo mints a short token for it, as for a deployment.
 7. **Match.** Tempo shows the Cloudflare deployment ID and version ID for each Tempo deployment (done-proof 2).
-8. **Many Workers.** When a target has more than one Worker, Tempo moves each Worker one step at a time, in the order of the profile's `cloudflare.workers` list, and rolls back all of them together.
+8. **Many Workers.** The target's `workers` list (12) names the Workers. Tempo moves them in list order at each step, and rolls back all of them together. 12, Gradual rollout has the exact steps.
 
 **Durable Objects.**
 
@@ -164,10 +164,10 @@ The owner confirmed the user, Jev and the web search API on 2026-10-15. Q-T4 (Op
 **Decision (owner-approved 2026-10-15).**
 
 1. A new Issue writes `prod.error.seen` and shows an error card in the project with **Start fix**.
-2. The project setting **Start fixes on their own** (`auto_fix`, default off) decides what happens next:
+2. The deploy configuration key `auto_fix` (12, default off), shown as **Start fixes on their own**, decides what happens next:
    - Off: the owner selects **Start fix**. That one action creates the workspace and starts the agent.
    - On: Tempo creates the workspace and starts the agent with no owner action.
-3. The workspace is on a new branch from the deployed SHA. Its first prompt holds: the Issue, counts, first and last time, the Tempo deployment, the Cloudflare version, the redacted stack, and the commit range from the previous version.
+3. The workspace is on a new branch from the deployment's branch (12, Production errors has the exact rules). Its first prompt holds: the Issue, counts, first and last time, the Tempo deployment, the Cloudflare version, the redacted stack, and the commit range from the previous version.
 4. The fix goes through the same loop: intent check, proof, merge, deploy. When the new version runs for the observe window with no new occurrence of the Issue, Tempo writes `prod.error.fixed`.
 
 **Reduces.** VERIFY, EXIT_CF_DASHBOARD. It creates the "production error → fix" step that has no baseline today.
@@ -214,7 +214,7 @@ Each step writes one lifecycle event (08), so loop times come from the event log
 | Library | `@typesafe-ai/sdk` 0.7.0 (MIT), pinned. It has no dependencies and runs in the Worker. |
 | Model | `jev-1.14.0` |
 | Endpoint | `POST https://api.typesafe.ai/v1/systemone` (through the SDK) |
-| Key | The owner's `CredentialDO`, key `typesafe.api_key`, set in Settings. It never enters a container, a log or an event. |
+| Key | The owner's `CredentialDO`, key `typesafe.api_key`. It never enters a container, a log or an event. |
 | Where it runs | The Worker and DOs only. Never in a container. |
 | Timeout | 10 seconds per attempt, one retry. Measured on 2026-10-15 over 12 calls: median 0.7 s, p90 2.2 s, max 9.1 s. No answer counts as high risk: the owner decides. |
 | Checks | Intent risk (L-ADR-1), Cloudflare API calls (L-ADR-8) |
@@ -323,7 +323,8 @@ Tempo will not build these while this loop is the goal.
 | 2026-10-15 | Todo app | Only the owner. Jev and the Cloudflare Web Search API. |
 | 2026-10-15 | Removed access | Running sessions that hold it end (14) |
 | 2026-10-15 | Call limits | HTTP methods are enough (14) |
+| 2026-10-15 | Todo app MCP sign-in | OAuth through Better Auth |
 
 ## Open questions
 
-1. **Q-T4. MCP sign-in for the todo app.** Only the owner uses it. Do agents sign in with OAuth through Better Auth (each agent asks the owner once), or with a token the owner makes in the app?
+None. The owner answered the last one on 2026-10-15 and asked the agent to keep building without the owner's involvement.

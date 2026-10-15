@@ -1,5 +1,5 @@
 //! The Deploys tab of a native repository (12, Clients): deployments, detail with the log,
-//! Deploy/Cancel/Redeploy and the owner deploy configuration.
+//! Deploy/Cancel/Redeploy/Roll back, production errors and the owner deploy configuration.
 
 use super::ci_model::{CiTone, short_sha};
 use super::deploy_model::{self as model, Action, Page};
@@ -7,15 +7,20 @@ use super::tokens::{Token, color};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputState, Textarea, TextareaState};
 use gpui_kit::component::{Disableable as _, Selectable as _, h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
-    Styled as _, Subscription, Window, div,
+    AnyElement, AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _,
+    Render, Styled as _, Subscription, Window, div,
 };
 use std::time::Duration;
 use tempo_client::Client;
 use tempo_protocol::{self as p, api};
 
 const LIVE: Duration = Duration::from_secs(5);
+
+pub enum DeploysEvent {
+    OpenWorkspace(String),
+}
 
 pub struct DeploysView {
     client: Client,
@@ -24,6 +29,9 @@ pub struct DeploysView {
     deployment: Option<p::Deployment>,
     log: Option<p::GetDeploymentLogOut>,
     config: Option<p::DeployConfig>,
+    errors: Vec<p::ProductionError>,
+    webhook: Option<p::GetIssuesWebhookOut>,
+    secret: Option<String>,
     page: Page,
     target: Option<String>,
     loading: bool,
@@ -57,6 +65,9 @@ impl DeploysView {
             deployment: None,
             log: None,
             config: None,
+            errors: vec![],
+            webhook: None,
+            secret: None,
             page: Page::default(),
             target: None,
             loading: false,
@@ -69,12 +80,15 @@ impl DeploysView {
             _subscriptions: subscriptions,
         };
         view.load_deployments(cx);
+        view.load_errors(cx);
         view.load_config(window, cx);
+        view.load_webhook(cx);
         view
     }
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.load_deployments(cx);
+        self.load_errors(cx);
         if let Some(deployment) = &self.deployment {
             let id = deployment.id.clone();
             self.open_deployment(id, cx);
@@ -98,6 +112,107 @@ impl DeploysView {
                 this.loading = false;
                 match result {
                     Ok(deployments) => this.deployments = deployments,
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn load_errors(&mut self, cx: &mut Context<Self>) {
+        let request = self
+            .client
+            .call::<api::ListProductionErrors>(p::ListProductionErrorsIn {
+                project_id: self.project_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(errors) => this.errors = errors,
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn start_fix(&mut self, error_id: String, cx: &mut Context<Self>) {
+        let Ok(error_id) = error_id.parse() else {
+            return;
+        };
+        if self.pending {
+            return;
+        }
+        self.pending = true;
+        self.error = None;
+        let request = self.client.call::<api::StartErrorFix>(p::StartErrorFixIn {
+            project_id: self.project_id.clone(),
+            error_id,
+        });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(out) => {
+                        this.load_errors(cx);
+                        cx.emit(DeploysEvent::OpenWorkspace(out.workspace_id));
+                    }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn load_webhook(&mut self, cx: &mut Context<Self>) {
+        let request = self
+            .client
+            .call::<api::GetIssuesWebhook>(p::GetIssuesWebhookIn {
+                project_id: self.project_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(webhook) => this.webhook = Some(webhook),
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn rotate_secret(&mut self, cx: &mut Context<Self>) {
+        if self.pending {
+            return;
+        }
+        self.pending = true;
+        self.error = None;
+        let request = self
+            .client
+            .call::<api::RotateIssuesWebhook>(p::RotateIssuesWebhookIn {
+                project_id: self.project_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(out) => {
+                        this.webhook = Some(p::GetIssuesWebhookOut {
+                            url: out.url,
+                            secret_set: true,
+                        });
+                        this.secret = Some(out.secret);
+                    }
                     Err(error) => this.error = Some(error.to_string()),
                 }
                 cx.notify();
@@ -272,7 +387,20 @@ impl DeploysView {
         self.mutate(request, cx);
     }
 
-    /// Runs a deploy, cancel or redeploy and opens the deployment it returns.
+    fn rollback(&mut self, cx: &mut Context<Self>) {
+        let Some(Ok(deployment_id)) = self.deployment.as_ref().map(|d| d.id.parse()) else {
+            return;
+        };
+        let request = self
+            .client
+            .call::<api::RollbackDeployment>(p::RollbackDeploymentIn {
+                project_id: self.project_id.clone(),
+                deployment_id,
+            });
+        self.mutate(request, cx);
+    }
+
+    /// Runs a deploy, cancel, redeploy or rollback and opens the deployment it returns.
     fn mutate(
         &mut self,
         request: impl std::future::Future<Output = Result<p::Deployment, tempo_client::ApiError>>
@@ -389,6 +517,7 @@ impl DeploysView {
             .unwrap_or_default();
         v_flex()
             .gap_3()
+            .children(self.render_errors(cx))
             .child(self.render_deploy(cx))
             .child(
                 h_flex()
@@ -477,7 +606,95 @@ impl DeploysView {
                     })),
             )
             .child(self.render_config(cx))
+            .children(self.render_webhook(cx))
             .into_any_element()
+    }
+
+    fn render_errors(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.errors.is_empty() {
+            return None;
+        }
+        let now = super::indicators::now_ms();
+        Some(
+            v_flex()
+                .gap_2()
+                .child(div().child("Production errors"))
+                .children(self.errors.iter().enumerate().map(|(index, error)| {
+                    let action =
+                        match error.fix_workspace_id.clone() {
+                            Some(workspace_id) => Button::new(("deploy-error-open", index))
+                                .ghost()
+                                .label("Open fix")
+                                .on_click(cx.listener(move |_, _, _, cx| {
+                                    cx.emit(DeploysEvent::OpenWorkspace(workspace_id.clone()))
+                                })),
+                            None => {
+                                let id = error.id.clone();
+                                Button::new(("deploy-error-fix", index))
+                                    .ghost()
+                                    .label("Start fix")
+                                    .disabled(self.pending)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.start_fix(id.clone(), cx)
+                                    }))
+                            }
+                        };
+                    h_flex()
+                        .gap_2()
+                        .when(error.fixed_at.is_some(), |row| row.opacity(0.6))
+                        .child(
+                            v_flex().child(div().child(error.title.clone())).child(
+                                div()
+                                    .text_xs()
+                                    .text_color(color(Token::MutedForeground, cx))
+                                    .child(model::production_error_facts(error, now)),
+                            ),
+                        )
+                        .child(action)
+                }))
+                .into_any_element(),
+        )
+    }
+
+    fn render_webhook(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let webhook = self.webhook.as_ref()?;
+        Some(
+            v_flex()
+                .gap_2()
+                .child(div().child("Production error webhook"))
+                .child(div().text_color(color(Token::MutedForeground, cx)).child(
+                    "In Cloudflare, add a generic webhook destination with this URL and secret, and an Issues automation that sends new issues to it.",
+                ))
+                .child(
+                    div()
+                        .font_family("monospace")
+                        .text_xs()
+                        .child(webhook.url.clone()),
+                )
+                .child(
+                    div()
+                        .text_color(color(Token::MutedForeground, cx))
+                        .child(if webhook.secret_set {
+                            "A secret is set."
+                        } else {
+                            "No secret yet."
+                        }),
+                )
+                .children(self.secret.clone().map(|secret| {
+                    div()
+                        .font_family("monospace")
+                        .text_xs()
+                        .child(format!("Secret (shown once): {secret}"))
+                }))
+                .child(
+                    Button::new("deploy-webhook-rotate")
+                        .ghost()
+                        .label("New secret")
+                        .disabled(self.pending)
+                        .on_click(cx.listener(|this, _, _, cx| this.rotate_secret(cx))),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_config(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -522,6 +739,25 @@ impl DeploysView {
             .into_any_element()
     }
 
+    fn render_rollout(&self, rollout: &p::DeployRollout, cx: &mut Context<Self>) -> AnyElement {
+        v_flex()
+            .gap_1()
+            .child(div().child(model::rollout_heading(rollout, super::indicators::now_ms())))
+            .children(rollout.workers.iter().map(|worker| {
+                let (share, versions) = model::rollout_worker(worker);
+                v_flex()
+                    .child(div().font_family("monospace").text_xs().child(share))
+                    .child(
+                        div()
+                            .font_family("monospace")
+                            .text_xs()
+                            .text_color(color(Token::MutedForeground, cx))
+                            .child(versions),
+                    )
+            }))
+            .into_any_element()
+    }
+
     fn render_deployment(&self, deployment: &p::Deployment, cx: &mut Context<Self>) -> AnyElement {
         let (label, tone) = model::state(deployment);
         let facts = model::facts(deployment, super::indicators::now_ms());
@@ -546,6 +782,13 @@ impl DeploysView {
                         deployment.number, deployment.target
                     )))
                     .child(div().text_color(self.tone(tone, cx)).child(label))
+                    .children(model::can_roll_back(deployment).then(|| {
+                        Button::new("deploy-rollback")
+                            .ghost()
+                            .label("Roll back")
+                            .disabled(self.pending)
+                            .on_click(cx.listener(|this, _, _, cx| this.rollback(cx)))
+                    }))
                     .child(match model::action(deployment) {
                         Action::Cancel => Button::new("deploy-cancel")
                             .ghost()
@@ -572,6 +815,12 @@ impl DeploysView {
                     )),
             )
             .children((!facts.is_empty()).then(|| div().child(facts)))
+            .children(
+                deployment
+                    .rollout
+                    .as_ref()
+                    .map(|rollout| self.render_rollout(rollout, cx)),
+            )
             .child(
                 v_flex()
                     .gap_1()
@@ -598,6 +847,8 @@ impl DeploysView {
             .into_any_element()
     }
 }
+
+impl EventEmitter<DeploysEvent> for DeploysView {}
 
 impl Render for DeploysView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

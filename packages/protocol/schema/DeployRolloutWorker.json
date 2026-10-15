@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeployRolloutWorker",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "versionId": {
+      "type": "string"
+    },
+    "previousVersionId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "percentage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "cloudflareDeploymentId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["name", "versionId", "previousVersionId", "percentage", "cloudflareDeploymentId"],
+  "additionalProperties": true
+}

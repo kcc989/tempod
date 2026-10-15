@@ -183,3 +183,21 @@ export const createWorkerDeployment = async (
     }),
   );
 };
+
+const WorkerVersion = Schema.Struct({
+  id: Schema.String,
+  metadata: Schema.Struct({ created_on: Schema.String }),
+});
+
+/** The Worker's newest uploaded versions, newest first. */
+export const listWorkerVersions = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+): Promise<ReadonlyArray<{ id: string; createdOn: string }>> =>
+  Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(WorkerVersion) }))(
+    await call(api, token, { method: "GET", path: `${script(accountId, name)}/versions?per_page=20` }),
+  )
+    .items.map((v) => ({ id: v.id, createdOn: v.metadata.created_on }))
+    .toSorted((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn));

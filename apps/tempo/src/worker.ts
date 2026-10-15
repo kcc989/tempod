@@ -1,3 +1,4 @@
+import { handleIssuesWebhook } from "./server/handlers/deploy.ts";
 import startHandler from "@tanstack/react-start/server-entry";
 import type { Env } from "./env.ts";
 import { getAuth } from "./auth/auth.ts";
@@ -52,6 +53,12 @@ export const handleRequest = async (request: Request, env: Env, ctx: ExecutionCo
     if (path === "/api/setup/status") return handleSetupStatus(env);
 
     if (path.startsWith("/api/v1/")) return handleApiV1(request, env, url);
+
+    if (path.startsWith("/api/hooks/"))
+      return (
+        (await handleIssuesWebhook(request, env, url, (work) => ctx.waitUntil(work))) ??
+        new Response("Not found", { status: 404 })
+      );
 
     const read = /^\/api\/workspaces\/([0-9a-hjkmnp-tv-z]{26})\/attachments\/([0-9a-hjkmnp-tv-z]{26})$/.exec(
       path,

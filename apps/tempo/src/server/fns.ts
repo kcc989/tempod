@@ -124,6 +124,26 @@ export const cancelDeployment = createServerFn({ method: "POST" })
   .validator((data: FnInput<"cancelDeployment">) => data)
   .handler(({ data }) => run("cancelDeployment", data));
 
+export const rollbackDeployment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rollbackDeployment">) => data)
+  .handler(({ data }) => run("rollbackDeployment", data));
+
+export const listProductionErrors = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProductionErrors">) => data)
+  .handler(({ data }) => run("listProductionErrors", data));
+
+export const startErrorFix = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startErrorFix">) => data)
+  .handler(({ data }) => run("startErrorFix", data));
+
+export const getIssuesWebhook = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getIssuesWebhook">) => data)
+  .handler(({ data }) => run("getIssuesWebhook", data));
+
+export const rotateIssuesWebhook = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rotateIssuesWebhook">) => data)
+  .handler(({ data }) => run("rotateIssuesWebhook", data));
+
 export const getDeploymentLog = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getDeploymentLog">) => data)
   .handler(({ data }) => run("getDeploymentLog", data));

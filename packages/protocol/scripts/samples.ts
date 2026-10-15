@@ -199,7 +199,19 @@ const deployConfig: P.DeployConfig = {
   permissions: ["workers", "d1"],
   timeoutMinutes: 20,
   egressAllowlist: [],
-  targets: [{ key: "production", stage: "production", branch: "main", auto: true, agent: false }],
+  targets: [
+    {
+      key: "production",
+      stage: "production",
+      branch: "main",
+      auto: true,
+      agent: false,
+      rollout: "gradual",
+      workers: ["app-web"],
+      smoke: ["https://app.example.com/health"],
+    },
+  ],
+  autoFix: false,
   updatedAt: at(1),
 };
 
@@ -222,6 +234,20 @@ const deployment: P.Deployment = {
   startedAt: at(1),
   completedAt: at(2),
   url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=deploys&deployment=${uid(130)}`,
+  rollout: {
+    phase: "promoted",
+    canaryUntil: at(2),
+    rolledBackAt: null,
+    workers: [
+      {
+        name: "app-web",
+        versionId: "7d5772fb-1054-4bd5-a6be-d213ff8b4c7b",
+        previousVersionId: "b8bea8cf-4e52-4e9b-9afc-517e0c39d29e",
+        percentage: 100,
+        cloudflareDeploymentId: "02272ad3-cab2-4688-afaa-c1bd8bf769a5",
+      },
+    ],
+  },
 };
 
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
@@ -576,7 +602,16 @@ export const SHARED_SAMPLES = {
   CiRunDetail: [{ run: ciRun, jobs: [ciJob] }],
   DeployTarget: [
     ...deployConfig.targets,
-    { key: "preview", stage: "preview", branch: null, auto: false, agent: true },
+    {
+      key: "preview",
+      stage: "preview",
+      branch: null,
+      auto: false,
+      agent: true,
+      rollout: "full",
+      workers: [],
+      smoke: [],
+    },
   ],
   DeployConfig: [
     deployConfig,
@@ -604,9 +639,55 @@ export const SHARED_SAMPLES = {
       exitCode: null,
       workspaceId: uid(131),
       completedAt: null,
+      rollout: null,
     },
-    { ...deployment, conclusion: "failure", exitCode: 1, summary: "The deploy command failed." },
+    {
+      ...deployment,
+      conclusion: "failure",
+      exitCode: 1,
+      summary: "The deploy command failed.",
+      rollout: null,
+    },
+    {
+      ...deployment,
+      status: "running",
+      conclusion: null,
+      completedAt: null,
+      rollout: {
+        phase: "canary",
+        canaryUntil: at(3),
+        rolledBackAt: null,
+        workers: [
+          {
+            name: "app-web",
+            versionId: "7d5772fb-1054-4bd5-a6be-d213ff8b4c7b",
+            previousVersionId: null,
+            percentage: 100,
+            cloudflareDeploymentId: null,
+          },
+        ],
+      },
+    },
   ],
+  DeployRolloutWorker: deployment.rollout?.workers ?? [],
+  ProductionError: [
+    {
+      id: uid(140),
+      projectId: PROJECT_ID,
+      worker: "app-web",
+      versionId: "7d5772fb-1054-4bd5-a6be-d213ff8b4c7b",
+      deploymentId: deployment.id,
+      deploymentNumber: 4,
+      title: "TypeError in app-web",
+      text: "TypeError: Cannot read properties of undefined (reading 'id') at handler (src/index.ts:42:7)",
+      occurrences: 12,
+      firstSeenAt: at(2),
+      lastSeenAt: at(3),
+      fixWorkspaceId: null,
+      fixedAt: null,
+    },
+  ],
+  DeployRollout: deployment.rollout ? [deployment.rollout] : [],
   DeploySettings: [
     { accountId: "0123456789abcdef0123456789abcdef", tokenSet: true, updatedAt: at(1) },
     { accountId: null, tokenSet: false, updatedAt: null },
@@ -954,6 +1035,11 @@ export const INPUT_SAMPLES = {
   ],
   redeploy: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
   cancelDeployment: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
+  rollbackDeployment: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
+  listProductionErrors: [{ projectId: PROJECT_ID }],
+  startErrorFix: [{ projectId: PROJECT_ID, errorId: uid(140) }],
+  getIssuesWebhook: [{ projectId: PROJECT_ID }],
+  rotateIssuesWebhook: [{ projectId: PROJECT_ID }],
   getDeploymentLog: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
   createRepositoryLabel: [
     { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
@@ -1242,6 +1328,17 @@ export const OUTPUT_SAMPLES = {
     },
   ],
   CommitAndPushOut: [{ commitSha: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d" }],
+  StartErrorFixOut: [{ workspaceId: uid(141) }],
+  GetIssuesWebhookOut: [
+    { url: `https://tempo.example.com/api/hooks/cloudflare-issues/${PROJECT_ID}`, secretSet: true },
+    { url: `https://tempo.example.com/api/hooks/cloudflare-issues/${PROJECT_ID}`, secretSet: false },
+  ],
+  RotateIssuesWebhookOut: [
+    {
+      url: `https://tempo.example.com/api/hooks/cloudflare-issues/${PROJECT_ID}`,
+      secret: "n0t-a-real-secret",
+    },
+  ],
   CreatePullRequestOut: [{ number: 43, url: "https://github.com/acme/webapp/pull/43" }],
   RefreshPullRequestOut: [
     { prNumber: 12, prState: "merged", checksState: "success", prTitle: "Keep the merged title" },

@@ -1,5 +1,6 @@
 import {
   DEPLOY_PERMISSIONS,
+  DEPLOY_ROLLOUTS,
   DEPLOY_TOOL_KINDS,
   TempoError,
   isHostPattern,
@@ -18,6 +19,9 @@ export const DEPLOY_LIMITS = {
   rootChars: 200,
   timeoutMinutes: { min: 1, max: 60, default: 20 },
   egressHosts: 50,
+  workers: 10,
+  smokeUrls: 5,
+  smokeUrlChars: 2048,
 } as const;
 
 export interface DeploySpec {
@@ -29,11 +33,14 @@ export interface DeploySpec {
   readonly timeoutMinutes: number;
   readonly egressAllowlist: ReadonlyArray<string>;
   readonly targets: ReadonlyArray<DeployTarget>;
+  readonly autoFix: boolean;
 }
 
 const KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
 const SEGMENT = /^[A-Za-z0-9._-]+$/;
+
+const WORKER = /^[a-z0-9][a-z0-9_-]{0,62}$/;
 
 const invalid = (detail: string): never => {
   throw new TempoError("DEPLOY_CONFIG_INVALID", undefined, detail);
@@ -105,7 +112,7 @@ const parseTarget = (key: string, raw: Schema.Json, isBranch: (branch: string) =
   if (!KEY.test(key)) invalid(`${path}: target keys use a-z, 0-9, "-" and "_" (at most 40)`);
 
   if (!isObj(raw)) return invalid(`${path}: must be a map`);
-  onlyKeys(raw, ["stage", "branch", "auto", "agent"], `${path}.`);
+  onlyKeys(raw, ["stage", "branch", "auto", "agent", "rollout", "workers", "smoke"], `${path}.`);
   let stage = key;
 
   if (raw["stage"] !== undefined) {
@@ -126,7 +133,39 @@ const parseTarget = (key: string, raw: Schema.Json, isBranch: (branch: string) =
 
   if (auto && branch === null) invalid(`${path}.auto: needs branch`);
 
-  return { key, stage, branch, auto, agent: flag(raw["agent"], `${path}.agent`) };
+  const rollout = raw["rollout"] ?? "full";
+
+  if (!DEPLOY_ROLLOUTS.some((r) => r === rollout)) return invalid(`${path}.rollout: full or gradual`);
+  const workers = stringList(raw["workers"], `${path}.workers`);
+
+  if (workers.length > DEPLOY_LIMITS.workers) invalid(`${path}.workers: at most ${DEPLOY_LIMITS.workers}`);
+  const badWorker = workers.find((w) => !WORKER.test(w));
+
+  if (badWorker !== undefined) invalid(`${path}.workers: "${badWorker}" is not a Worker name`);
+
+  if (rollout === "gradual" && workers.length === 0) invalid(`${path}.rollout: gradual needs workers`);
+  const smoke = stringList(raw["smoke"], `${path}.smoke`);
+
+  if (smoke.length > 0 && rollout !== "gradual") invalid(`${path}.smoke: needs rollout: gradual`);
+
+  if (smoke.length > DEPLOY_LIMITS.smokeUrls) invalid(`${path}.smoke: at most ${DEPLOY_LIMITS.smokeUrls}`);
+
+  const badUrl = smoke.find(
+    (u) => u.length > DEPLOY_LIMITS.smokeUrlChars || !URL.canParse(u) || !u.startsWith("https://"),
+  );
+
+  if (badUrl !== undefined) invalid(`${path}.smoke: "${badUrl}" is not an https URL`);
+
+  return {
+    key,
+    stage,
+    branch,
+    auto,
+    agent: flag(raw["agent"], `${path}.agent`),
+    rollout: rollout === "gradual" ? "gradual" : "full",
+    workers,
+    smoke,
+  };
 };
 
 /**
@@ -162,6 +201,7 @@ export const parseDeployConfig = (
       "timeout_minutes",
       "egress_allowlist",
       "targets",
+      "auto_fix",
     ],
     "",
   );
@@ -205,5 +245,6 @@ export const parseDeployConfig = (
     timeoutMinutes,
     egressAllowlist,
     targets: entries.map(([key, target]) => parseTarget(key, target, isBranch)),
+    autoFix: flag(raw["auto_fix"], "auto_fix"),
   };
 };

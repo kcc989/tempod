@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StartErrorFixIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "errorId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["projectId", "errorId"],
+  "additionalProperties": true
+}

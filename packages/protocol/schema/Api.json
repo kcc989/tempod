@@ -464,6 +464,89 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "rollbackDeployment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RollbackDeploymentIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProductionErrors": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProductionErrorsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProductionError.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startErrorFix": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StartErrorFixIn.json"
+        },
+        "output": {
+          "$ref": "StartErrorFixOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getIssuesWebhook": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetIssuesWebhookIn.json"
+        },
+        "output": {
+          "$ref": "GetIssuesWebhookOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotateIssuesWebhook": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotateIssuesWebhookIn.json"
+        },
+        "output": {
+          "$ref": "RotateIssuesWebhookOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getDeploymentLog": {
       "type": "object",
       "properties": {
@@ -2499,6 +2582,11 @@
     "startDeployment",
     "redeploy",
     "cancelDeployment",
+    "rollbackDeployment",
+    "listProductionErrors",
+    "startErrorFix",
+    "getIssuesWebhook",
+    "rotateIssuesWebhook",
     "getDeploymentLog",
     "listRepositoryIssues",
     "getRepositoryIssue",

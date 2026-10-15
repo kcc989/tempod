@@ -40,6 +40,7 @@ import {
   CiPipeline,
   DeployConfig,
   Deployment,
+  ProductionError,
   DeploySettings,
   CiRun,
   CiRunDetail,
@@ -182,6 +183,15 @@ export const API = {
   ),
   redeploy: fn("POST", Schema.Struct({ projectId: S, deploymentId: NonEmpty }), Deployment),
   cancelDeployment: fn("POST", Schema.Struct({ projectId: S, deploymentId: NonEmpty }), Deployment),
+  rollbackDeployment: fn("POST", Schema.Struct({ projectId: S, deploymentId: NonEmpty }), Deployment),
+  listProductionErrors: fn("GET", Schema.Struct({ projectId: S }), Schema.Array(ProductionError)),
+  startErrorFix: fn(
+    "POST",
+    Schema.Struct({ projectId: S, errorId: NonEmpty }),
+    Schema.Struct({ workspaceId: S }),
+  ),
+  getIssuesWebhook: fn("GET", Schema.Struct({ projectId: S }), Schema.Struct({ url: S, secretSet: B })),
+  rotateIssuesWebhook: fn("POST", Schema.Struct({ projectId: S }), Schema.Struct({ url: S, secret: S })),
   getDeploymentLog: fn(
     "GET",
     Schema.Struct({ projectId: S, deploymentId: NonEmpty }),

@@ -25,6 +25,8 @@ import {
   CiTrigger,
   DeployConclusion,
   DeployPermission,
+  DeployRolloutKind,
+  DeployRolloutPhase,
   DeployStatus,
   DeployTool,
   DeployTrigger,
@@ -261,6 +263,9 @@ export const DeployTarget = Schema.Struct({
   branch: N(Schema.String),
   auto: Schema.Boolean,
   agent: Schema.Boolean,
+  rollout: DeployRolloutKind,
+  workers: Schema.Array(Schema.String),
+  smoke: Schema.Array(Schema.String),
 });
 
 export type DeployTarget = typeof DeployTarget.Type;
@@ -276,10 +281,30 @@ export const DeployConfig = Schema.Struct({
   timeoutMinutes: Schema.Number,
   egressAllowlist: Schema.Array(Schema.String),
   targets: Schema.Array(DeployTarget),
+  autoFix: Schema.Boolean,
   updatedAt: N(Ms),
 });
 
 export type DeployConfig = typeof DeployConfig.Type;
+
+export const DeployRolloutWorker = Schema.Struct({
+  name: Schema.String,
+  versionId: Schema.String,
+  previousVersionId: N(Schema.String),
+  percentage: Schema.Number,
+  cloudflareDeploymentId: N(Schema.String),
+});
+
+export type DeployRolloutWorker = typeof DeployRolloutWorker.Type;
+
+export const DeployRollout = Schema.Struct({
+  phase: DeployRolloutPhase,
+  canaryUntil: N(Ms),
+  rolledBackAt: N(Ms),
+  workers: Schema.Array(DeployRolloutWorker),
+});
+
+export type DeployRollout = typeof DeployRollout.Type;
 
 export const Deployment = Schema.Struct({
   id: Schema.String,
@@ -300,6 +325,7 @@ export const Deployment = Schema.Struct({
   startedAt: N(Ms),
   completedAt: N(Ms),
   url: Schema.String,
+  rollout: N(DeployRollout),
 });
 
 export type Deployment = typeof Deployment.Type;
@@ -311,6 +337,25 @@ export const DeploySettings = Schema.Struct({
 });
 
 export type DeploySettings = typeof DeploySettings.Type;
+
+/** 12, Production errors. */
+export const ProductionError = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  worker: N(Schema.String),
+  versionId: N(Schema.String),
+  deploymentId: N(Schema.String),
+  deploymentNumber: N(Schema.Number),
+  title: Schema.String,
+  text: Schema.String,
+  occurrences: Schema.Number,
+  firstSeenAt: Ms,
+  lastSeenAt: Ms,
+  fixWorkspaceId: N(Schema.String),
+  fixedAt: N(Ms),
+});
+
+export type ProductionError = typeof ProductionError.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,

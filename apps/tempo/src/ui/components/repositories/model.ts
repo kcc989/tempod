@@ -164,10 +164,13 @@ export function selectedJob(jobs: ReadonlyArray<CiJob>, key: string | undefined)
 }
 
 /** 12, Clients: never "succeeded" before the deployment completed. */
-export function deployState(item: Pick<Deployment, "status" | "conclusion">): CiStateLabel {
+export function deployState(
+  item: Pick<Deployment, "status" | "conclusion"> & { readonly rollout?: Deployment["rollout"] },
+): CiStateLabel {
   if (item.status === "queued") return { label: "Queued", tone: "muted" };
 
-  if (item.status === "running") return { label: "Running", tone: "warning" };
+  if (item.status === "running")
+    return { label: item.rollout?.phase === "canary" ? "Canary" : "Running", tone: "warning" };
 
   switch (item.conclusion) {
     case "success":
@@ -181,6 +184,28 @@ export function deployState(item: Pick<Deployment, "status" | "conclusion">): Ci
     default:
       return { label: "Completed", tone: "muted" };
   }
+}
+
+/** 12, Gradual rollout. */
+export const ROLLOUT_PHASE_LABELS = {
+  canary: "Canary at 10%",
+  promoted: "Promoted to 100%",
+  full: "Deployed at 100%",
+  rolled_back: "Rolled back",
+} as const;
+
+/** Whether to offer Roll back. The server also checks that it is the target's newest success. */
+export function canRollBack(item: Deployment): boolean {
+  const rollout = item.rollout;
+
+  return (
+    item.status === "completed" &&
+    item.conclusion === "success" &&
+    rollout !== null &&
+    rollout.rolledBackAt === null &&
+    rollout.workers.length > 0 &&
+    rollout.workers.every((w) => w.previousVersionId !== null)
+  );
 }
 
 export function deploymentsInput(

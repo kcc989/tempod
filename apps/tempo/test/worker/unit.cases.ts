@@ -28,6 +28,7 @@ import {
   type EgressConfig,
 } from "../../src/egress/rules.ts";
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
+import { parseIssue } from "../../src/deploy/issues.ts";
 import { JEV_MODEL, jevClient, judgeCloudflareCall, judgeIntent } from "../../src/judge/jev.ts";
 import {
   CloudflareError,
@@ -2082,5 +2083,34 @@ describe("Worker deployments client (13, L-ADR-4)", () => {
     await expect(
       createWorkerDeployment(client, "t", ACCOUNT, "w", { split: rollback, message: "rollback" }),
     ).rejects.toBeInstanceOf(CloudflareError);
+  });
+});
+
+describe("Issues webhook parsing (12, Production errors)", () => {
+  it("reads the envelope, finds keys at any depth, falls back for the key and scrubs secrets", async () => {
+    expect(await parseIssue({ name: "x" })).toBeNull();
+
+    expect(
+      await parseIssue({
+        name: "Error in api",
+        text: "boom token=s3cr3t&page=2",
+        alert_correlation_id: "corr-1",
+        data: { a: [{ b: { script_name: "api", version_id: "v9", issue_id: "iss-7" } }] },
+      }),
+    ).toEqual({
+      issueKey: "iss-7",
+      worker: "api",
+      versionId: "v9",
+      title: "Error in api",
+      text: "boom token [redacted]&page=2",
+    });
+
+    expect(await parseIssue({ text: "boom", alert_correlation_id: "corr-1" })).toMatchObject({
+      issueKey: "corr-1",
+      worker: null,
+      versionId: null,
+      title: "Production error",
+    });
+    expect((await parseIssue({ text: "boom" }))!.issueKey).toMatch(/^[0-9a-f]{64}$/);
   });
 });

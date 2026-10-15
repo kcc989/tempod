@@ -742,4 +742,40 @@ export const APP_DEPLOY_MIGRATIONS: Migrations = [
 )`,
     ],
   },
+  {
+    tag: "0001_rollout",
+    when: 1792627200000,
+    statements: [
+      `ALTER TABLE deployments ADD COLUMN phase TEXT CHECK (phase IN ('canary','promoted','full','rolled_back'))`,
+      `ALTER TABLE deployments ADD COLUMN canary_until INTEGER`,
+      `ALTER TABLE deployments ADD COLUMN rolled_back_at INTEGER`,
+      `ALTER TABLE deployments ADD COLUMN gate_failure TEXT`,
+      `ALTER TABLE deployments ADD COLUMN rollout_json TEXT`,
+      `CREATE TABLE events (
+  id             TEXT PRIMARY KEY,
+  deployment_id  TEXT NOT NULL,
+  type           TEXT NOT NULL CHECK (type IN ('deploy.version.uploaded','deploy.traffic.changed','deploy.rolled_back','prod.error.seen','prod.error.fixed')),
+  at             INTEGER NOT NULL,
+  payload_json   TEXT NOT NULL
+)`,
+      `CREATE INDEX events_at ON events (at)`,
+      `CREATE TABLE errors (
+  id                TEXT PRIMARY KEY,
+  issue_key         TEXT NOT NULL UNIQUE,
+  worker            TEXT,
+  version_id        TEXT,
+  deployment_id     TEXT,
+  title             TEXT NOT NULL,
+  text              TEXT NOT NULL,
+  occurrences       INTEGER NOT NULL,
+  first_seen_at     INTEGER NOT NULL,
+  last_seen_at      INTEGER NOT NULL,
+  fix_workspace_id  TEXT,
+  fix_claimed_at    INTEGER,
+  fix_check_at      INTEGER,
+  fixed_at          INTEGER
+)`,
+      `CREATE INDEX errors_last_seen ON errors (last_seen_at)`,
+    ],
+  },
 ];

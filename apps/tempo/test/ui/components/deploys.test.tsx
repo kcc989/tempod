@@ -4,6 +4,7 @@ import {
   type DeployConfig,
   type DeploySettings,
   type Deployment,
+  type ProductionError,
   type Project,
 } from "@tempo/protocol";
 import type { ReactNode } from "react";
@@ -47,6 +48,7 @@ const deployment: Deployment = {
   startedAt: 1_000,
   completedAt: null,
   url: "/repositories?project=p1&tab=deploys&deployment=d1",
+  rollout: null,
 };
 
 const config: DeployConfig = {
@@ -60,9 +62,28 @@ const config: DeployConfig = {
   timeoutMinutes: 20,
   egressAllowlist: [],
   targets: [
-    { key: "production", stage: "prod", branch: "main", auto: true, agent: false },
-    { key: "preview", stage: "preview", branch: null, auto: false, agent: true },
+    {
+      key: "production",
+      stage: "prod",
+      branch: "main",
+      auto: true,
+      agent: false,
+      rollout: "full",
+      workers: [],
+      smoke: [],
+    },
+    {
+      key: "preview",
+      stage: "preview",
+      branch: null,
+      auto: false,
+      agent: true,
+      rollout: "full",
+      workers: [],
+      smoke: [],
+    },
   ],
+  autoFix: false,
   updatedAt: 1,
 };
 
@@ -73,6 +94,8 @@ let current = deployment;
 let settings: DeploySettings = { accountId: null, tokenSet: false, updatedAt: null };
 
 let failure: TempoError | null = null;
+
+let errors: ProductionError[] = [];
 
 const show = (child: ReactNode) => render(child, { wrapper: environment.Provider });
 
@@ -87,6 +110,7 @@ beforeEach(() => {
   current = deployment;
   settings = { accountId: null, tokenSet: false, updatedAt: null };
   failure = null;
+  errors = [];
   environment.request.mockImplementation(async (name, input) => {
     switch (name) {
       case "listProjects":
@@ -103,6 +127,16 @@ beforeEach(() => {
 
       case "getDeployment":
         return current;
+      case "listProductionErrors":
+        return errors;
+      case "startErrorFix":
+        errors = errors.map((e) => ({ ...e, fixWorkspaceId: "w-fix" }));
+
+        return { workspaceId: "w-fix" };
+      case "getIssuesWebhook":
+        return { url: "https://tempo.example.com/api/hooks/cloudflare-issues/p1", secretSet: false };
+      case "rotateIssuesWebhook":
+        return { url: "https://tempo.example.com/api/hooks/cloudflare-issues/p1", secret: "s3cr3t" };
       case "getDeploymentLog":
         return { text: "wrangler: uploaded", truncated: false };
       case "startDeployment": {
@@ -119,6 +153,13 @@ beforeEach(() => {
           conclusion: "cancelled",
           exitCode: 143,
           completedAt: 66_000,
+        };
+
+        return current;
+      case "rollbackDeployment":
+        current = {
+          ...current,
+          rollout: { ...current.rollout!, phase: "rolled_back", rolledBackAt: Date.now() },
         };
 
         return current;
@@ -239,6 +280,79 @@ describe("repository deploys (12, Clients)", () => {
       expect(navigate).toHaveBeenCalledWith({ project: "p1", tab: "deploys", deployment: "d3" }),
     );
     expect(environment.request).toHaveBeenCalledWith("redeploy", { projectId: "p1", deploymentId: "d1" });
+  });
+
+  it("shows a gradual rollout's versions and rolls it back with one action (12, Gradual rollout)", async () => {
+    current = {
+      ...deployment,
+      status: "completed",
+      conclusion: "success",
+      exitCode: 0,
+      completedAt: 66_000,
+      rollout: {
+        phase: "promoted",
+        canaryUntil: 60_000,
+        rolledBackAt: null,
+        workers: [
+          {
+            name: "app-web",
+            versionId: "v2",
+            previousVersionId: "v1",
+            percentage: 100,
+            cloudflareDeploymentId: "cf-9",
+          },
+        ],
+      },
+    };
+    show(<RepositoryHub search={{ project: "p1", tab: "deploys", deployment: "d1" }} onNavigate={vi.fn()} />);
+
+    const rollout = await screen.findByRole("region", { name: "Rollout" });
+    expect(rollout.textContent).toContain("Promoted to 100%");
+    expect(rollout.textContent).toContain("version v2 · previous v1 · Cloudflare deployment cf-9");
+
+    fireEvent.click(screen.getByRole("button", { name: "Roll back" }));
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Rollout" }).textContent).toContain("Rolled back"),
+    );
+    expect(environment.request).toHaveBeenCalledWith("rollbackDeployment", {
+      projectId: "p1",
+      deploymentId: "d1",
+    });
+    expect(screen.queryByRole("button", { name: "Roll back" })).toBeNull();
+  });
+
+  it("lists production errors, starts a fix and shows a new webhook secret once (12, Production errors)", async () => {
+    errors = [
+      {
+        id: "e1",
+        projectId: "p1",
+        worker: "app-web",
+        versionId: "v2",
+        deploymentId: "d1",
+        deploymentNumber: 4,
+        title: "TypeError in app-web",
+        text: "TypeError: x is undefined",
+        occurrences: 3,
+        firstSeenAt: Date.now() - 120_000,
+        lastSeenAt: Date.now() - 60_000,
+        fixWorkspaceId: null,
+        fixedAt: null,
+      },
+    ];
+    show(<RepositoryHub search={{ project: "p1", tab: "deploys" }} onNavigate={vi.fn()} />);
+
+    const list = await screen.findByRole("region", { name: "Production errors" });
+    expect(list.textContent).toContain("TypeError in app-web");
+    expect(list.textContent).toContain("app-web · version v2 · 3 times");
+
+    fireEvent.click(within(list).getByRole("button", { name: "Start fix" }));
+    await waitFor(() => expect(environment.history.location.pathname).toBe("/w/w-fix"));
+    expect(environment.request).toHaveBeenCalledWith("startErrorFix", { projectId: "p1", errorId: "e1" });
+
+    const hook = await screen.findByRole("region", { name: "Production error webhook" });
+    expect(hook.textContent).toContain("No secret yet.");
+    fireEvent.click(within(hook).getByRole("button", { name: "New secret" }));
+    expect((await within(hook).findByRole("status")).textContent).toBe("Secret (shown once): s3cr3t");
   });
 
   it("shows configuration problems in place and offers a reload for a stale revision", async () => {

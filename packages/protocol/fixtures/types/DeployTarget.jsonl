@@ -1,2 +1,2 @@
-{"key":"production","stage":"production","branch":"main","auto":true,"agent":false}
-{"key":"preview","stage":"preview","branch":null,"auto":false,"agent":true}
+{"key":"production","stage":"production","branch":"main","auto":true,"agent":false,"rollout":"gradual","workers":["app-web"],"smoke":["https://app.example.com/health"]}
+{"key":"preview","stage":"preview","branch":null,"auto":false,"agent":true,"rollout":"full","workers":[],"smoke":[]}

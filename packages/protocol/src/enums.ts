@@ -95,6 +95,16 @@ export const DeployConclusion = Schema.Literals(["success", "failure", "cancelle
 
 export type DeployConclusion = typeof DeployConclusion.Type;
 
+export const DEPLOY_ROLLOUTS = ["full", "gradual"] as const;
+
+export const DeployRolloutKind = Schema.Literals(DEPLOY_ROLLOUTS);
+
+export type DeployRolloutKind = typeof DeployRolloutKind.Type;
+
+export const DeployRolloutPhase = Schema.Literals(["canary", "promoted", "full", "rolled_back"]);
+
+export type DeployRolloutPhase = typeof DeployRolloutPhase.Type;
+
 export const CHECKS_STATES = ["pending", "success", "failure"] as const;
 
 export const ChecksState = Schema.Literals(CHECKS_STATES);

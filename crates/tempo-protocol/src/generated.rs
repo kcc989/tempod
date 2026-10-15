@@ -3279,6 +3279,8 @@ impl ::std::convert::TryFrom<::std::string::String> for DeployConclusion {
 ///`DeployConfig`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeployConfig {
+    #[serde(rename = "autoFix")]
+    pub auto_fix: bool,
     #[serde(rename = "egressAllowlist")]
     pub egress_allowlist: ::std::vec::Vec<::std::string::String>,
     pub enabled: bool,
@@ -3378,6 +3380,150 @@ impl ::std::convert::TryFrom<::std::string::String> for DeployPermission {
         value.parse()
     }
 }
+///`DeployRollout`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeployRollout {
+    #[serde(
+        rename = "canaryUntil",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub canary_until: ::std::option::Option<f64>,
+    pub phase: DeployRolloutPhase,
+    #[serde(
+        rename = "rolledBackAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub rolled_back_at: ::std::option::Option<f64>,
+    pub workers: ::std::vec::Vec<DeployRolloutWorker>,
+}
+///`DeployRolloutKind`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployRolloutKind {
+    #[serde(rename = "full")]
+    Full,
+    #[serde(rename = "gradual")]
+    Gradual,
+}
+impl ::std::fmt::Display for DeployRolloutKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Full => f.write_str("full"),
+            Self::Gradual => f.write_str("gradual"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployRolloutKind {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "full" => Ok(Self::Full),
+            "gradual" => Ok(Self::Gradual),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployRolloutKind {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployRolloutKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeployRolloutPhase`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployRolloutPhase {
+    #[serde(rename = "canary")]
+    Canary,
+    #[serde(rename = "promoted")]
+    Promoted,
+    #[serde(rename = "full")]
+    Full,
+    #[serde(rename = "rolled_back")]
+    RolledBack,
+}
+impl ::std::fmt::Display for DeployRolloutPhase {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Canary => f.write_str("canary"),
+            Self::Promoted => f.write_str("promoted"),
+            Self::Full => f.write_str("full"),
+            Self::RolledBack => f.write_str("rolled_back"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployRolloutPhase {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "canary" => Ok(Self::Canary),
+            "promoted" => Ok(Self::Promoted),
+            "full" => Ok(Self::Full),
+            "rolled_back" => Ok(Self::RolledBack),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployRolloutPhase {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployRolloutPhase {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeployRolloutWorker`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeployRolloutWorker {
+    #[serde(
+        rename = "cloudflareDeploymentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub cloudflare_deployment_id: ::std::option::Option<::std::string::String>,
+    pub name: ::std::string::String,
+    pub percentage: f64,
+    #[serde(
+        rename = "previousVersionId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub previous_version_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "versionId")]
+    pub version_id: ::std::string::String,
+}
 ///`DeploySettings`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeploySettings {
@@ -3457,7 +3603,10 @@ pub struct DeployTarget {
     #[serde(deserialize_with = "::std::option::Option::deserialize")]
     pub branch: ::std::option::Option<::std::string::String>,
     pub key: ::std::string::String,
+    pub rollout: DeployRolloutKind,
+    pub smoke: ::std::vec::Vec<::std::string::String>,
     pub stage: ::std::string::String,
+    pub workers: ::std::vec::Vec<::std::string::String>,
 }
 ///`DeployTool`
 #[derive(
@@ -3592,6 +3741,8 @@ pub struct Deployment {
     #[serde(rename = "projectId")]
     pub project_id: ::std::string::String,
     pub revision: f64,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub rollout: ::std::option::Option<DeployRollout>,
     pub sha: ::std::string::String,
     pub stage: ::std::string::String,
     #[serde(
@@ -4708,6 +4859,19 @@ pub struct GetFileDiffIn {
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct GetFileDiffOut {
     pub diff: ::std::string::String,
+}
+///`GetIssuesWebhookIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetIssuesWebhookIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetIssuesWebhookOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetIssuesWebhookOut {
+    #[serde(rename = "secretSet")]
+    pub secret_set: bool,
+    pub url: ::std::string::String,
 }
 ///`GetProfileIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -7078,6 +7242,12 @@ pub struct ListOpenPullRequestsItem {
     pub number: f64,
     pub title: ::std::string::String,
 }
+///`ListProductionErrorsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListProductionErrorsIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
 ///`ListProfileProjectsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ListProfileProjectsIn {
@@ -8860,6 +9030,47 @@ impl ::std::convert::TryFrom<::std::string::String> for PrState {
         value.parse()
     }
 }
+///`ProductionError`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ProductionError {
+    #[serde(
+        rename = "deploymentId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub deployment_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "deploymentNumber",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub deployment_number: ::std::option::Option<f64>,
+    #[serde(rename = "firstSeenAt")]
+    pub first_seen_at: f64,
+    #[serde(
+        rename = "fixWorkspaceId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub fix_workspace_id: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "fixedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub fixed_at: ::std::option::Option<f64>,
+    pub id: ::std::string::String,
+    #[serde(rename = "lastSeenAt")]
+    pub last_seen_at: f64,
+    pub occurrences: f64,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub text: ::std::string::String,
+    pub title: ::std::string::String,
+    #[serde(
+        rename = "versionId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub version_id: ::std::option::Option<::std::string::String>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub worker: ::std::option::Option<::std::string::String>,
+}
 ///`Profile`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Profile {
@@ -10230,6 +10441,76 @@ impl ::std::convert::TryFrom<::std::string::String> for ReviewStatus {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
+}
+///`RollbackDeploymentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RollbackDeploymentIn {
+    #[serde(rename = "deploymentId")]
+    pub deployment_id: RollbackDeploymentInDeploymentId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`RollbackDeploymentInDeploymentId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RollbackDeploymentInDeploymentId(::std::string::String);
+impl ::std::ops::Deref for RollbackDeploymentInDeploymentId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RollbackDeploymentInDeploymentId> for ::std::string::String {
+    fn from(value: RollbackDeploymentInDeploymentId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RollbackDeploymentInDeploymentId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RollbackDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RollbackDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RollbackDeploymentInDeploymentId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`RotateIssuesWebhookIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RotateIssuesWebhookIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`RotateIssuesWebhookOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RotateIssuesWebhookOut {
+    pub secret: ::std::string::String,
+    pub url: ::std::string::String,
 }
 ///`RotatePreviewKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -11982,6 +12263,70 @@ impl<'de> ::serde::Deserialize<'de> for StartDeploymentInTarget {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
     }
+}
+///`StartErrorFixIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartErrorFixIn {
+    #[serde(rename = "errorId")]
+    pub error_id: StartErrorFixInErrorId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`StartErrorFixInErrorId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct StartErrorFixInErrorId(::std::string::String);
+impl ::std::ops::Deref for StartErrorFixInErrorId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<StartErrorFixInErrorId> for ::std::string::String {
+    fn from(value: StartErrorFixInErrorId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for StartErrorFixInErrorId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for StartErrorFixInErrorId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for StartErrorFixInErrorId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for StartErrorFixInErrorId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`StartErrorFixOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartErrorFixOut {
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`StopScriptIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -14651,6 +14996,15 @@ pub mod api {
         type Input = crate::GetFileDiffIn;
         type Output = crate::GetFileDiffOut;
     }
+    /// `getIssuesWebhook`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetIssuesWebhook;
+    impl crate::Function for GetIssuesWebhook {
+        const NAME: &'static str = "getIssuesWebhook";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetIssuesWebhookIn;
+        type Output = crate::GetIssuesWebhookOut;
+    }
     /// `getProfile`
     #[derive(Clone, Copy, Debug)]
     pub struct GetProfile;
@@ -14893,6 +15247,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListOpenPullRequestsIn;
         type Output = ::std::vec::Vec<crate::ListOpenPullRequestsItem>;
+    }
+    /// `listProductionErrors`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListProductionErrors;
+    impl crate::Function for ListProductionErrors {
+        const NAME: &'static str = "listProductionErrors";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListProductionErrorsIn;
+        type Output = ::std::vec::Vec<crate::ProductionError>;
     }
     /// `listProfileProjects`
     #[derive(Clone, Copy, Debug)]
@@ -15227,6 +15590,24 @@ pub mod api {
         type Input = crate::RevertToCheckpointIn;
         type Output = crate::Empty;
     }
+    /// `rollbackDeployment`
+    #[derive(Clone, Copy, Debug)]
+    pub struct RollbackDeployment;
+    impl crate::Function for RollbackDeployment {
+        const NAME: &'static str = "rollbackDeployment";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RollbackDeploymentIn;
+        type Output = crate::Deployment;
+    }
+    /// `rotateIssuesWebhook`
+    #[derive(Clone, Copy, Debug)]
+    pub struct RotateIssuesWebhook;
+    impl crate::Function for RotateIssuesWebhook {
+        const NAME: &'static str = "rotateIssuesWebhook";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RotateIssuesWebhookIn;
+        type Output = crate::RotateIssuesWebhookOut;
+    }
     /// `rotatePreviewKey`
     #[derive(Clone, Copy, Debug)]
     pub struct RotatePreviewKey;
@@ -15443,6 +15824,15 @@ pub mod api {
         type Input = crate::StartDeploymentIn;
         type Output = crate::Deployment;
     }
+    /// `startErrorFix`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StartErrorFix;
+    impl crate::Function for StartErrorFix {
+        const NAME: &'static str = "startErrorFix";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::StartErrorFixIn;
+        type Output = crate::StartErrorFixOut;
+    }
     /// `stopScript`
     #[derive(Clone, Copy, Debug)]
     pub struct StopScript;
@@ -15610,6 +16000,7 @@ pub mod api {
         ("getDiagnostics", crate::Method::Get),
         ("getDotfiles", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
+        ("getIssuesWebhook", crate::Method::Get),
         ("getProfile", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
         ("getPublicProject", crate::Method::Get),
@@ -15637,6 +16028,7 @@ pub mod api {
         ("listMcpServers", crate::Method::Get),
         ("listModels", crate::Method::Get),
         ("listOpenPullRequests", crate::Method::Get),
+        ("listProductionErrors", crate::Method::Get),
         ("listProfileProjects", crate::Method::Get),
         ("listProjectAgents", crate::Method::Get),
         ("listProjectConversations", crate::Method::Get),
@@ -15674,6 +16066,8 @@ pub mod api {
         ("respondPermission", crate::Method::Post),
         ("restoreWorkspace", crate::Method::Post),
         ("revertToCheckpoint", crate::Method::Post),
+        ("rollbackDeployment", crate::Method::Post),
+        ("rotateIssuesWebhook", crate::Method::Post),
         ("rotatePreviewKey", crate::Method::Post),
         ("runScript", crate::Method::Post),
         ("saveAgent", crate::Method::Post),
@@ -15698,6 +16092,7 @@ pub mod api {
         ("startCiRun", crate::Method::Post),
         ("startCodexLogin", crate::Method::Post),
         ("startDeployment", crate::Method::Post),
+        ("startErrorFix", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
         ("updateCiPipeline", crate::Method::Post),
@@ -15804,6 +16199,10 @@ pub mod wire {
         "DeployConclusion",
         "DeployConfig",
         "DeployPermission",
+        "DeployRollout",
+        "DeployRolloutKind",
+        "DeployRolloutPhase",
+        "DeployRolloutWorker",
         "DeploySettings",
         "DeployStatus",
         "DeployTarget",
@@ -15839,6 +16238,8 @@ pub mod wire {
         "GetDotfilesOut",
         "GetFileDiffIn",
         "GetFileDiffOut",
+        "GetIssuesWebhookIn",
+        "GetIssuesWebhookOut",
         "GetProfileIn",
         "GetProjectConversationIn",
         "GetPublicProjectIn",
@@ -15897,6 +16298,7 @@ pub mod wire {
         "ListLifecycleEventsIn",
         "ListOpenPullRequestsIn",
         "ListOpenPullRequestsItem",
+        "ListProductionErrorsIn",
         "ListProfileProjectsIn",
         "ListProjectAgentsIn",
         "ListProjectConversationsIn",
@@ -15952,6 +16354,7 @@ pub mod wire {
         "PollCodexLoginIn",
         "PollCodexLoginOut",
         "PrState",
+        "ProductionError",
         "Profile",
         "ProfileIssue",
         "Project",
@@ -15990,6 +16393,9 @@ pub mod wire {
         "ReviewReport",
         "ReviewSide",
         "ReviewStatus",
+        "RollbackDeploymentIn",
+        "RotateIssuesWebhookIn",
+        "RotateIssuesWebhookOut",
         "RotatePreviewKeyIn",
         "Run",
         "RunContent",
@@ -16035,6 +16441,8 @@ pub mod wire {
         "StartCiRunIn",
         "StartCodexLoginOut",
         "StartDeploymentIn",
+        "StartErrorFixIn",
+        "StartErrorFixOut",
         "StopScriptIn",
         "TerminalReady",
         "TerminalResize",
@@ -16182,6 +16590,10 @@ pub mod wire {
             "DeployConclusion" => crate::roundtrip::<crate::DeployConclusion>(text),
             "DeployConfig" => crate::roundtrip::<crate::DeployConfig>(text),
             "DeployPermission" => crate::roundtrip::<crate::DeployPermission>(text),
+            "DeployRollout" => crate::roundtrip::<crate::DeployRollout>(text),
+            "DeployRolloutKind" => crate::roundtrip::<crate::DeployRolloutKind>(text),
+            "DeployRolloutPhase" => crate::roundtrip::<crate::DeployRolloutPhase>(text),
+            "DeployRolloutWorker" => crate::roundtrip::<crate::DeployRolloutWorker>(text),
             "DeploySettings" => crate::roundtrip::<crate::DeploySettings>(text),
             "DeployStatus" => crate::roundtrip::<crate::DeployStatus>(text),
             "DeployTarget" => crate::roundtrip::<crate::DeployTarget>(text),
@@ -16217,6 +16629,8 @@ pub mod wire {
             "GetDotfilesOut" => crate::roundtrip::<crate::GetDotfilesOut>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
             "GetFileDiffOut" => crate::roundtrip::<crate::GetFileDiffOut>(text),
+            "GetIssuesWebhookIn" => crate::roundtrip::<crate::GetIssuesWebhookIn>(text),
+            "GetIssuesWebhookOut" => crate::roundtrip::<crate::GetIssuesWebhookOut>(text),
             "GetProfileIn" => crate::roundtrip::<crate::GetProfileIn>(text),
             "GetProjectConversationIn" => crate::roundtrip::<crate::GetProjectConversationIn>(text),
             "GetPublicProjectIn" => crate::roundtrip::<crate::GetPublicProjectIn>(text),
@@ -16295,6 +16709,7 @@ pub mod wire {
             "ListLifecycleEventsIn" => crate::roundtrip::<crate::ListLifecycleEventsIn>(text),
             "ListOpenPullRequestsIn" => crate::roundtrip::<crate::ListOpenPullRequestsIn>(text),
             "ListOpenPullRequestsItem" => crate::roundtrip::<crate::ListOpenPullRequestsItem>(text),
+            "ListProductionErrorsIn" => crate::roundtrip::<crate::ListProductionErrorsIn>(text),
             "ListProfileProjectsIn" => crate::roundtrip::<crate::ListProfileProjectsIn>(text),
             "ListProjectAgentsIn" => crate::roundtrip::<crate::ListProjectAgentsIn>(text),
             "ListProjectConversationsIn" => {
@@ -16362,6 +16777,7 @@ pub mod wire {
             "PollCodexLoginIn" => crate::roundtrip::<crate::PollCodexLoginIn>(text),
             "PollCodexLoginOut" => crate::roundtrip::<crate::PollCodexLoginOut>(text),
             "PrState" => crate::roundtrip::<crate::PrState>(text),
+            "ProductionError" => crate::roundtrip::<crate::ProductionError>(text),
             "Profile" => crate::roundtrip::<crate::Profile>(text),
             "ProfileIssue" => crate::roundtrip::<crate::ProfileIssue>(text),
             "Project" => crate::roundtrip::<crate::Project>(text),
@@ -16402,6 +16818,9 @@ pub mod wire {
             "ReviewReport" => crate::roundtrip::<crate::ReviewReport>(text),
             "ReviewSide" => crate::roundtrip::<crate::ReviewSide>(text),
             "ReviewStatus" => crate::roundtrip::<crate::ReviewStatus>(text),
+            "RollbackDeploymentIn" => crate::roundtrip::<crate::RollbackDeploymentIn>(text),
+            "RotateIssuesWebhookIn" => crate::roundtrip::<crate::RotateIssuesWebhookIn>(text),
+            "RotateIssuesWebhookOut" => crate::roundtrip::<crate::RotateIssuesWebhookOut>(text),
             "RotatePreviewKeyIn" => crate::roundtrip::<crate::RotatePreviewKeyIn>(text),
             "Run" => crate::roundtrip::<crate::Run>(text),
             "RunContent" => crate::roundtrip::<crate::RunContent>(text),
@@ -16449,6 +16868,8 @@ pub mod wire {
             "StartCiRunIn" => crate::roundtrip::<crate::StartCiRunIn>(text),
             "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
             "StartDeploymentIn" => crate::roundtrip::<crate::StartDeploymentIn>(text),
+            "StartErrorFixIn" => crate::roundtrip::<crate::StartErrorFixIn>(text),
+            "StartErrorFixOut" => crate::roundtrip::<crate::StartErrorFixOut>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
             "TerminalReady" => crate::roundtrip::<crate::TerminalReady>(text),
             "TerminalResize" => crate::roundtrip::<crate::TerminalResize>(text),

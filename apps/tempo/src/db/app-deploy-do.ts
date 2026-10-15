@@ -31,6 +31,28 @@ export const deployments = sqliteTable("deployments", {
   createdAt: integer("created_at").notNull(),
   startedAt: integer("started_at"),
   completedAt: integer("completed_at"),
+  phase: text("phase", { enum: ["canary", "promoted", "full", "rolled_back"] }),
+  canaryUntil: integer("canary_until"),
+  rolledBackAt: integer("rolled_back_at"),
+  gateFailure: text("gate_failure"),
+  rolloutJson: text("rollout_json"),
+});
+
+/** 12, Gradual rollout: Events. */
+export const deployEvents = sqliteTable("events", {
+  id: text("id").primaryKey(),
+  deploymentId: text("deployment_id").notNull(),
+  type: text("type", {
+    enum: [
+      "deploy.version.uploaded",
+      "deploy.traffic.changed",
+      "deploy.rolled_back",
+      "prod.error.seen",
+      "prod.error.fixed",
+    ],
+  }).notNull(),
+  at: integer("at").notNull(),
+  payloadJson: text("payload_json").notNull(),
 });
 
 export const deployKv = sqliteTable("kv", {
@@ -38,4 +60,22 @@ export const deployKv = sqliteTable("kv", {
   valueJson: text("value_json").notNull(),
 });
 
-export const appDeploySchema = { deployConfigs, deployments, deployKv };
+/** 12, Production errors. */
+export const prodErrors = sqliteTable("errors", {
+  id: text("id").primaryKey(),
+  issueKey: text("issue_key").notNull(),
+  worker: text("worker"),
+  versionId: text("version_id"),
+  deploymentId: text("deployment_id"),
+  title: text("title").notNull(),
+  text: text("text").notNull(),
+  occurrences: integer("occurrences").notNull(),
+  firstSeenAt: integer("first_seen_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+  fixWorkspaceId: text("fix_workspace_id"),
+  fixClaimedAt: integer("fix_claimed_at"),
+  fixCheckAt: integer("fix_check_at"),
+  fixedAt: integer("fixed_at"),
+});
+
+export const appDeploySchema = { deployConfigs, deployments, deployKv, deployEvents, prodErrors };

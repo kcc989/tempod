@@ -49,9 +49,28 @@ describe("parseDeployConfig", () => {
       timeoutMinutes: 30,
       egressAllowlist: ["pkg.example.com"],
       targets: [
-        { key: "production", stage: "prod", branch: "main", auto: true, agent: false },
-        { key: "preview", stage: "preview", branch: null, auto: false, agent: true },
+        {
+          key: "production",
+          stage: "prod",
+          branch: "main",
+          auto: true,
+          agent: false,
+          rollout: "full",
+          workers: [],
+          smoke: [],
+        },
+        {
+          key: "preview",
+          stage: "preview",
+          branch: null,
+          auto: false,
+          agent: true,
+          rollout: "full",
+          workers: [],
+          smoke: [],
+        },
       ],
+      autoFix: false,
     });
     expect(parseDeployConfig(`${base}targets:\n  live: {}\n`, isBranch)).toMatchObject({
       root: "",
@@ -60,6 +79,32 @@ describe("parseDeployConfig", () => {
       permissions: ["workers"],
       timeoutMinutes: 20,
     });
+  });
+
+  it("reads a gradual rollout with its Workers and smoke URLs (12, Gradual rollout)", () => {
+    const spec = parseDeployConfig(
+      `${base}targets:\n  live:\n    rollout: gradual\n    workers: [app-web, app-api]\n    smoke: ['https://app.example.com/health']\n`,
+      isBranch,
+    );
+
+    expect(spec?.targets[0]).toMatchObject({
+      rollout: "gradual",
+      workers: ["app-web", "app-api"],
+      smoke: ["https://app.example.com/health"],
+    });
+    expect(detail(`${base}targets:\n  a:\n    rollout: gradual\n`)).toBe(
+      "targets.a.rollout: gradual needs workers",
+    );
+    expect(detail(`${base}targets:\n  a:\n    rollout: canary\n`)).toBe("targets.a.rollout: full or gradual");
+    expect(detail(`${base}targets:\n  a:\n    workers: [App]\n`)).toBe(
+      'targets.a.workers: "App" is not a Worker name',
+    );
+    expect(detail(`${base}targets:\n  a:\n    workers: [w]\n    smoke: ['https://x.dev']\n`)).toBe(
+      "targets.a.smoke: needs rollout: gradual",
+    );
+    expect(
+      detail(`${base}targets:\n  a:\n    rollout: gradual\n    workers: [w]\n    smoke: ['http://x.dev']\n`),
+    ).toBe('targets.a.smoke: "http://x.dev" is not an https URL');
   });
 
   it("treats a blank source as disabled deploys", () => {

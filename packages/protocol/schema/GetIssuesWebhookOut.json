@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetIssuesWebhookOut",
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string"
+    },
+    "secretSet": {
+      "type": "boolean"
+    }
+  },
+  "required": ["url", "secretSet"],
+  "additionalProperties": true
+}
