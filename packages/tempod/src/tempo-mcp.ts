@@ -223,6 +223,28 @@ const describeSummary = (s: EnvironmentSummary | null): string => {
   return JSON.stringify(s, null, 2);
 };
 
+const Grants = Schema.Struct({
+  result: Schema.Struct({
+    read: Schema.Array(Schema.String),
+    deploy: Schema.Array(Schema.Struct({ target: Schema.String })),
+  }),
+});
+
+/** 14, Delivery 3: the chat's granted reads and deploy targets, or null when Tempo does not answer. */
+const chatGrants = async (call: Call, sessionId: string) => {
+  try {
+    const res = await call("/agent-tools", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "get_capabilities", sessionId, params: {} }),
+    });
+
+    return res.ok ? Schema.decodeUnknownSync(Grants)(await res.json()).result : null;
+  } catch {
+    return null;
+  }
+};
+
 /** Handles one JSON-RPC message; returns the response, or null for a notification. */
 /** MCP clients require `type: "object"`; Effect renders a struct with no fields as any non-null value. */
 const toolInputSchema = (input: Schema.Struct<Schema.Struct.Fields>) =>
@@ -253,16 +275,24 @@ export const handleMcpMessage = async (
       });
     case "ping":
       return reply({});
-    case "tools/list":
+    case "tools/list": {
+      const grants = !runId && sessionId ? await chatGrants(call, sessionId) : null;
+      const issues = !grants || grants.read.includes("issues");
+      const deploys = !grants || grants.read.includes("deployments");
+
+      const deployNames = DEPLOY_TOOL_NAMES.filter(
+        (name) => deploys && (name !== "deploy_app" || !grants || grants.deploy.length > 0),
+      );
+
       return reply({
         tools: [
           ...TOOLS,
-          ...ISSUE_TOOL_NAMES.map((name) => ({
+          ...(issues ? ISSUE_TOOL_NAMES : []).map((name) => ({
             name,
             description: ISSUE_TOOLS[name].description,
             inputSchema: toolInputSchema(ISSUE_TOOLS[name].input),
           })),
-          ...DEPLOY_TOOL_NAMES.map((name) => ({
+          ...deployNames.map((name) => ({
             name,
             description: DEPLOY_TOOLS[name].description,
             inputSchema: JsonSchema.toDocumentDraft07(
@@ -370,6 +400,8 @@ export const handleMcpMessage = async (
             : []),
         ],
       });
+    }
+
     case "tools/call": {
       const params = Schema.is(JsonObject)(msg["params"]) ? msg["params"] : {};
       const args = Schema.is(JsonObject)(params["arguments"]) ? params["arguments"] : {};

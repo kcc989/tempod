@@ -618,7 +618,7 @@ Tab 14. Choices made without the owner:
 | Reads | `repo`, `issues`, `pull_requests` and `ci_runs` always; `deployments` and `prod_errors` when deploys are on | These follow the project's features; tools are not hidden yet (below). |
 | Revision | `AppDeployDO.manifests` maps the hash of the project part of the manifest to the next number | `revision` counts project changes; the session part changes `sha256` only. |
 | Removed access | Checked when the workspace refreshes its environment: after an environment, secret, profile or deploy configuration change, and on each egress config read | The outbound cache keeps an old config for up to 60 seconds, so a script outside a session may still use a removed capability for that long. Agent sessions end at once. |
-| Not built yet | Hiding `tempo` MCP tools that are not granted (Delivery 3) | Tools check their own access today. |
+| Tool list | In a chat, `tools/list` asks `get_capabilities`: issue tools need `read: issues`, deploy tools `read: deployments`, and `deploy_app` a `deploy` entry. When Tempo does not answer, every tool is listed | Each tool still checks access when called; `deploy_app` checks the session's `deploy` entries first (`FORBIDDEN`, `tempo: capability deploy:<target> not granted`). |
 | Cloudflare token | One token per workspace, for 1 hour, not one per session | A request carries no session (above). The token is revoked when the manifest loses `cloudflare`; otherwise it expires. |
 
 ## Loop report (2026-10-15)

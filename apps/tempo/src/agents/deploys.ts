@@ -10,6 +10,7 @@ import {
 } from "@tempo/protocol";
 import { Schema } from "effect";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
+import { sessionManifest } from "../do/workspace/manifest.ts";
 import { requireProject } from "../server/handlers/common.ts";
 import * as handlers from "../server/handlers/deploy.ts";
 import { authorizeProjectTool } from "./issues.ts";
@@ -67,6 +68,11 @@ export const deployTool = async (core: WorkspaceCore, request: ToolReq): Promise
     switch (name) {
       case "deploy_app": {
         const { target } = Schema.decodeUnknownSync(DEPLOY_TOOLS.deploy_app.input, decode)(request.params);
+        // 14, Enforcement: deploy_app checks the session's deploy capability first.
+        const manifest = await sessionManifest(core, core.sessionRow(request.sessionId));
+
+        if (!manifest.deploy.some((d) => d.target === target))
+          throw new TempoError("FORBIDDEN", undefined, `tempo: capability deploy:${target} not granted`);
         const project = await requireProject(core.env, ws.userId, projectId);
 
         if (project.provider !== "artifacts")
