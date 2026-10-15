@@ -88,6 +88,9 @@ export class RepositoryCiDO extends DurableObject<Env> {
   branchTips = (p: ProjectInfo) => artifactBranchTips(this.bindings, p.repoName, p.artifactRepoId);
   headSha = (p: ProjectInfo, branch: string) =>
     artifactHeadSha(this.bindings, p.repoName, branch, p.artifactRepoId);
+  /** The project's deploy coordinator, for the auto trigger (12, Triggers); tests replace it. */
+  deploys = (): { autoDeploy(input: { branch: string; sha: string }): Promise<void> } =>
+    this.bindings.APP_DEPLOY.getByName(this.projectId);
   private pumping: Promise<void> | null = null;
   private repump = false;
 
@@ -231,7 +234,15 @@ export class RepositoryCiDO extends DurableObject<Env> {
       validateArtifactBranch(input.branch);
       const spec = this.spec(this.latestRevision());
 
-      if (!spec || !SHA.test(input.sha)) return;
+      if (!SHA.test(input.sha)) return;
+
+      // Without CI, a Tempo push or merge is the auto deploy trigger (12, Triggers).
+      if (!spec) {
+        await this.deploys().autoDeploy(input);
+
+        return;
+      }
+
       this.db
         .insert(ciBranches)
         .values({ name: input.branch, sha: input.sha })
@@ -486,6 +497,15 @@ export class RepositoryCiDO extends DurableObject<Env> {
       .where(eq(ciRuns.id, runId))
       .run();
     this.notify(run.branch);
+
+    if (conclusion === "success" && run.trigger === "push")
+      this.ctx.waitUntil(
+        this.deploys()
+          .autoDeploy({ branch: run.branch, sha: run.sha })
+          .catch((e) =>
+            log("warn", "auto deploy trigger failed", { projectId: this.projectId, error: errorText(e) }),
+          ),
+      );
   }
 
   /** Admits queued jobs whose needs succeeded, at most CI.parallelJobs at once. */

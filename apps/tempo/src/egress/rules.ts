@@ -46,6 +46,8 @@ export interface EgressConfig {
   readonly injectors?: ReadonlyArray<Injector>;
   /** A CI job's container (10, Egress): read-only repository access and no credentials. */
   readonly ci?: boolean;
+  /** A deployment's container (12, Egress): CI's repository rule plus the Cloudflare token swap. */
+  readonly deploy?: boolean;
   /** The owner's dotfiles remote (01, Shell and dotfiles); read side only. */
   readonly dotfiles?: { readonly cloneUrl: string } | null;
 }
@@ -148,6 +150,7 @@ export type Decision =
           | "github-bearer"
           | "artifact-bearer"
           | "dotfiles-bearer"
+          | "deploy-bearer"
           | "openrouter"
           | "anthropic"
           | "openai";
@@ -171,7 +174,7 @@ export const decide = (url: URL, headers: Headers, appHost: string, config: Egre
 
   if (url.protocol === "http:") return policy(8, host, config);
 
-  if (config.ci) return decideForCi(url, headers, host, config);
+  if (config.ci || config.deploy) return decideForCi(url, headers, host, config);
 
   if (config.dotfiles && isDotfilesRead(url, config.dotfiles.cloneUrl))
     return { rule: 2, action: "forward", set: { name: "authorization", value: "dotfiles-bearer" } };
@@ -246,7 +249,13 @@ const isDotfilesRead = (url: URL, cloneUrl: string): boolean => {
   );
 };
 
-/** 10, Egress: only fetches from the project's remote get a (read) token; nothing else gets a credential. */
+/** Built-in hosts a deploy container may also reach (12, Egress rule 5). */
+export const DEPLOY_HOSTS = ["api.cloudflare.com", "*.workers.dev"] as const;
+
+/**
+ * 10 and 12, Egress: only fetches from the project's remote get a (read) token. A deploy container's
+ * placeholder Cloudflare token becomes its minted token for api.cloudflare.com; nothing else gets one.
+ */
 const decideForCi = (url: URL, headers: Headers, host: string, config: EgressConfig): Decision => {
   if (config.cloneUrl) {
     const remote = new URL(config.cloneUrl);
@@ -265,9 +274,26 @@ const decideForCi = (url: URL, headers: Headers, host: string, config: EgressCon
     }
   }
 
+  if (
+    config.deploy &&
+    host === "api.cloudflare.com" &&
+    url.protocol === "https:" &&
+    headers.get("authorization") === `Bearer ${PLACEHOLDER}`
+  ) {
+    const rest = new Headers(headers);
+    rest.delete("authorization");
+
+    if (!carriesPlaceholder(rest, url))
+      return { rule: 3, action: "forward", set: { name: "authorization", value: "deploy-bearer" } };
+  }
+
   if (carriesPlaceholder(headers, url)) return PLACEHOLDER_REFUSED;
 
-  return policy(8, host, { ...config, mcp: [] });
+  return policy(8, host, {
+    ...config,
+    mcp: [],
+    allowlist: config.deploy ? [...DEPLOY_HOSTS, ...config.allowlist] : config.allowlist,
+  });
 };
 
 const PLACEHOLDER_REFUSED: Decision = {

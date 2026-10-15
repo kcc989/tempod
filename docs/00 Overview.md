@@ -47,6 +47,7 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 09 Git Forge | Artifacts-hosted repositories, browsing, pull requests, issues, comments and labels |
 | 10 Project CI | Project CI pipelines and runs |
 | 11 Public Profile | Public projects, the owner's profile and pinned projects |
+| 12 App Deploy | Deploying the owner's apps to Cloudflare with Alchemy v2 or `cloudflare.config.ts` |
 
 ## Goals and non-goals
 

@@ -211,7 +211,11 @@ export const unlinkProject = async (
 
   await env.CREDENTIALS.getByName(user.id).deleteProjectEnv(projectId);
 
-  if (project.provider === "artifacts") await env.REPOSITORY_CI.getByName(projectId).destroy();
+  if (project.provider === "artifacts") {
+    await env.REPOSITORY_CI.getByName(projectId).destroy();
+    await env.APP_DEPLOY.getByName(projectId).destroy();
+  }
+
   await d1(env).delete(projects).where(eq(projects.id, projectId)).run();
 
   return {};

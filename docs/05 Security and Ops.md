@@ -56,6 +56,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 | `TEMPO_SETUP_TOKEN` | Worker secret | Deploy; saved privately for the setup link |
 | GitHub App id, slug, private key, client id, client secret | CredentialDO named `system`, keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id`, `github_app.client_secret` | The manifest flow (Deployment, below) |
 | Agent logins, API keys, project secrets, environment secrets | The owner's CredentialDO (02) | The owner, in Settings |
+| Cloudflare deploy master token; per-deployment minted tokens | The owner's CredentialDO, keys `cloudflare.deploy_token`, `cloudflare.account_id` and `deploy.<deploymentId>.token` (12) | The owner, in Settings; `AppDeployDO` mints and revokes each deployment's token |
 
 **Rules**
 

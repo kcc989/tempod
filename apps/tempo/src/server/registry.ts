@@ -10,6 +10,7 @@ import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
 import * as pullRequests from "./handlers/pull-requests.ts";
 import * as ci from "./handlers/ci.ts";
+import * as deploy from "./handlers/deploy.ts";
 import * as profile from "./handlers/profile.ts";
 import {
   createSession,
@@ -50,6 +51,17 @@ const own = {
   rerunCiRun: ci.rerunCiRun,
   cancelCiRun: ci.cancelCiRun,
   getCiJobLog: ci.getCiJobLog,
+  getDeploySettings: deploy.getDeploySettings,
+  updateDeploySettings: deploy.updateDeploySettings,
+  deleteDeploySettings: deploy.deleteDeploySettings,
+  getDeployConfig: deploy.getDeployConfig,
+  updateDeployConfig: deploy.updateDeployConfig,
+  listDeployments: deploy.listDeployments,
+  getDeployment: deploy.getDeployment,
+  startDeployment: deploy.startDeployment,
+  redeploy: deploy.redeploy,
+  cancelDeployment: deploy.cancelDeployment,
+  getDeploymentLog: deploy.getDeploymentLog,
   listRepositoryIssues: issues.listRepositoryIssues,
   getRepositoryIssue: issues.getRepositoryIssue,
   createRepositoryIssue: issues.createRepositoryIssue,

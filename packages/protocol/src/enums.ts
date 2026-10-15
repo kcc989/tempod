@@ -61,6 +61,40 @@ export const CiJobConclusion = Schema.Literals(["success", "failure", "cancelled
 
 export type CiJobConclusion = typeof CiJobConclusion.Type;
 
+export const DEPLOY_TOOL_KINDS = ["alchemy", "cloudflare-config"] as const;
+
+export const DeployTool = Schema.Literals(DEPLOY_TOOL_KINDS);
+
+export type DeployTool = typeof DeployTool.Type;
+
+export const DEPLOY_PERMISSIONS = [
+  "workers",
+  "kv",
+  "d1",
+  "r2",
+  "queues",
+  "vectorize",
+  "hyperdrive",
+  "secrets_store",
+  "routes",
+] as const;
+
+export const DeployPermission = Schema.Literals(DEPLOY_PERMISSIONS);
+
+export type DeployPermission = typeof DeployPermission.Type;
+
+export const DeployTrigger = Schema.Literals(["manual", "agent", "auto", "redeploy"]);
+
+export type DeployTrigger = typeof DeployTrigger.Type;
+
+export const DeployStatus = Schema.Literals(["queued", "running", "completed"]);
+
+export type DeployStatus = typeof DeployStatus.Type;
+
+export const DeployConclusion = Schema.Literals(["success", "failure", "cancelled", "timed_out"]);
+
+export type DeployConclusion = typeof DeployConclusion.Type;
+
 export const CHECKS_STATES = ["pending", "success", "failure"] as const;
 
 export const ChecksState = Schema.Literals(CHECKS_STATES);

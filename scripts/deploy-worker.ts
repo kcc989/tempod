@@ -160,10 +160,11 @@ const config = {
       { name: "WORKSPACE", class_name: "WorkspaceDO" },
       { name: "USER_HUB", class_name: "UserHubDO" },
       { name: "REPOSITORY_CI", class_name: "RepositoryCiDO" },
+      { name: "APP_DEPLOY", class_name: "AppDeployDO" },
       { name: "CREDENTIALS", class_name: "CredentialDO" },
     ],
   },
-  exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO, RepositoryCiDO: DO },
+  exports: { WorkspaceDO: DO, UserHubDO: DO, CredentialDO: DO, RepositoryCiDO: DO, AppDeployDO: DO },
   d1_databases: [
     { binding: "DB", database_name: env("TEMPO_D1_DATABASE_NAME"), database_id: env("TEMPO_D1_DATABASE_ID") },
   ],

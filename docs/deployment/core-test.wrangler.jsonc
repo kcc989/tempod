@@ -54,6 +54,10 @@
       {
         "name": "REPOSITORY_CI",
         "class_name": "RepositoryCiDO"
+      },
+      {
+        "name": "APP_DEPLOY",
+        "class_name": "AppDeployDO"
       }
     ]
   },
@@ -71,6 +75,10 @@
       "storage": "sqlite"
     },
     "RepositoryCiDO": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "AppDeployDO": {
       "type": "durable-object",
       "storage": "sqlite"
     }

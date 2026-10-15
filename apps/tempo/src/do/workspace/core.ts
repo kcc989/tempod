@@ -1,5 +1,6 @@
 import { proposalRecords } from "../../agents/proposals.ts";
 import type { CiCoordinator } from "../../ci/types.ts";
+import type { DeployCoordinator } from "../../deploy/types.ts";
 import { Lifecycle } from "./lifecycle.ts";
 import type { OpResult } from "./runner.ts";
 import { and, asc, desc, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
@@ -196,6 +197,8 @@ export class WorkspaceCore {
     | undefined;
   /** The project's CI coordinator, for a CI runner's result (10); tests replace it. */
   ciCoordinator = (projectId: string): CiCoordinator => this.env.REPOSITORY_CI.getByName(projectId);
+  /** The project's deploy coordinator, for a deploy runner's result (12); tests replace it. */
+  deployCoordinator = (projectId: string): DeployCoordinator => this.env.APP_DEPLOY.getByName(projectId);
   /** BrowserOutbound for this workspace: Browser Run's route to `localhost`. */
   browserOutbound: () => Fetcher = () =>
     this.ctx.exports.BrowserOutbound({ props: { workspaceId: this.workspaceId } });
@@ -229,12 +232,16 @@ export class WorkspaceCore {
 
     if (userId && this.ctx.id.name === `models:${userId}`) return this.ctx.id.name;
 
-    if (this.ciUserId() && this.ctx.id.name?.startsWith("ci:")) return this.ctx.id.name;
+    if (this.ciUserId() && /^(ci|deploy):/.test(this.ctx.id.name ?? "")) return this.ctx.id.name!;
     throw new TempoError("NOT_FOUND");
   }
-  /** The owner of the CI job this instance runs (10, Components), if any. */
+  /** The owner of the CI job (10) or deployment (12) this runner instance runs, if any. */
   ciUserId(): string | undefined {
-    return this.kv<{ userId: string }>("ciJob")?.userId;
+    if (this.ctx.id.name?.startsWith("ci:")) return this.kv<{ userId: string }>("ciJob")?.userId;
+
+    if (this.ctx.id.name?.startsWith("deploy:")) return this.kv<{ userId: string }>("deployJob")?.userId;
+
+    return undefined;
   }
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
     this.db.update(workspace).set(patch).where(eq(workspace.id, 1)).run();

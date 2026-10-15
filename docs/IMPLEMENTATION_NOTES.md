@@ -503,3 +503,19 @@ Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and 
 ## Deploy pins the workspace image (2026-10-14)
 
 A deploy updated the Worker but new workspaces kept the previous image: tempod reported `0.1.0`, so native repos could not bootstrap (`CLONE_FAILED`). `scripts/deploy-worker.ts` now always builds and pushes the image and pins its digest; `TEMPO_BUILD_CA` only adds the CA secret. The deploy fails if the image's tempod does not contain the deploy's build id. tempod read `process.env["TEMPO_BUILD_ID"]`, which `bun build --env` does not inline, so every image reported the `package.json` version; it now reads `process.env.TEMPO_BUILD_ID`. `--prepare` still writes the Dockerfile-based config without building.
+
+## App deploy (2026-10-15)
+
+The owner asked for a Cloudflare control plane that deploys apps from Tempo with Alchemy v2 and `cloudflare.config.ts`. They chose: a dedicated deploy container like CI, a master token that mints a token per project from what the project needs, all three triggers (agent tool, UI button, CI on merge), and spec plus full implementation in one change. Tab 12 App Deploy defines the contracts. Choices:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Coordinator | `AppDeployDO` (one per native project) owns configuration revisions and deployments with its own SQLite and alarm. Each deployment runs in a `WorkspaceDO` instance named `deploy:<deploymentId>`, like a CI runner. | Same model as 10; one container class. |
+| Minted tokens | One account-owned token per deployment, scoped to the project's declared permissions, with `expires_on` and revocation at completion. | "Per project" scoping without a long-lived token that can go stale or outlive an unlink. |
+| What the project needs | The owner declares `permissions` in the deploy configuration; Tempo maps them to permission groups. | Reading needs from `alchemy.run.ts` or `cloudflare.config.ts` would mean running branch code in a trusted process. |
+| Token in the container | Never. The container gets `CLOUDFLARE_API_TOKEN=tempo-placeholder`; `TempoOutbound` swaps it only for `api.cloudflare.com`. | Rule 10. |
+| Tool binaries | From the project's own dependencies through `npx --no`; nothing added to `container/versions.json`. | `cf` and `alchemy` are pinned by each project. |
+| tempod | No new request. Deploys reuse `ci.checkout` and `script.start` (`scriptId: "deploy"`). | Smallest daemon change. |
+| GitHub projects, app secrets, containers, rollback, events | Not in this stage (12, Scope). | Kept the first stage bounded. |
+
+Live Cloudflare acceptance (a real token mint and revoke, an Alchemy v2 deploy with `Cloudflare.state()`, a `cloudflare.config.ts` deploy, and `cf`/`alchemy` accepting an account-owned token) has not been run.

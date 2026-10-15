@@ -301,6 +301,185 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getDeploySettings": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "DeploySettings.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateDeploySettings": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateDeploySettingsIn.json"
+        },
+        "output": {
+          "$ref": "DeploySettings.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteDeploySettings": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "DeploySettings.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getDeployConfig": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetDeployConfigIn.json"
+        },
+        "output": {
+          "$ref": "DeployConfig.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateDeployConfig": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateDeployConfigIn.json"
+        },
+        "output": {
+          "$ref": "DeployConfig.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listDeployments": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListDeploymentsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "Deployment.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getDeployment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetDeploymentIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startDeployment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StartDeploymentIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "redeploy": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RedeployIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "cancelDeployment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CancelDeploymentIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getDeploymentLog": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetDeploymentLogIn.json"
+        },
+        "output": {
+          "$ref": "GetDeploymentLogOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listRepositoryIssues": {
       "type": "object",
       "properties": {
@@ -2310,6 +2489,17 @@
     "rerunCiRun",
     "cancelCiRun",
     "getCiJobLog",
+    "getDeploySettings",
+    "updateDeploySettings",
+    "deleteDeploySettings",
+    "getDeployConfig",
+    "updateDeployConfig",
+    "listDeployments",
+    "getDeployment",
+    "startDeployment",
+    "redeploy",
+    "cancelDeployment",
+    "getDeploymentLog",
     "listRepositoryIssues",
     "getRepositoryIssue",
     "createRepositoryIssue",

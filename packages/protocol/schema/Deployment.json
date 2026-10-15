@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deployment",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "stage": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "sha": {
+      "type": "string"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "trigger": {
+      "$ref": "DeployTrigger.json"
+    },
+    "status": {
+      "$ref": "DeployStatus.json"
+    },
+    "conclusion": {
+      "anyOf": [
+        {
+          "$ref": "DeployConclusion.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exitCode": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "workspaceId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "startedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "completedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "url": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "projectId",
+    "number",
+    "target",
+    "stage",
+    "branch",
+    "sha",
+    "revision",
+    "trigger",
+    "status",
+    "conclusion",
+    "exitCode",
+    "summary",
+    "workspaceId",
+    "createdAt",
+    "startedAt",
+    "completedAt",
+    "url"
+  ],
+  "additionalProperties": true
+}

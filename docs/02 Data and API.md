@@ -1071,6 +1071,11 @@ Every error a user can see has one code and one message. Codes are exact; messag
 | `CI_PIPELINE_INVALID` | The project CI pipeline breaks a rule of 10; detail names the first problem | The CI pipeline is not valid. |
 | `CI_PIPELINE_CHANGED` | The pipeline revision changed since it was read | The CI pipeline changed. Reload it and try again. |
 | `CI_NOT_CONFIGURED` | A CI run needs an enabled pipeline | Add a CI pipeline for this repository first. |
+| `DEPLOY_CONFIG_INVALID` | The deploy configuration breaks a rule of 12; detail names the first problem | The deploy configuration is not valid. |
+| `DEPLOY_CONFIG_CHANGED` | The deploy configuration revision changed since it was read | The deploy configuration changed. Reload it and try again. |
+| `DEPLOY_NOT_CONFIGURED` | A deployment needs an enabled deploy configuration | Add a deploy configuration for this repository first. |
+| `DEPLOY_ACCOUNT_NOT_SET` | A deployment needs the owner's Cloudflare account and token (12) | Add a Cloudflare account and token in Settings first. |
+| `DEPLOY_TOKEN_INVALID` | Cloudflare refused the master token on save | Cloudflare did not accept the deploy token. |
 | `GITHUB_API_ERROR` | Any other GitHub API failure | GitHub returned an error. |
 | `FILE_TOO_LARGE` | File over the read limit | This file is too large to show. |
 | `PATH_OUTSIDE_WORKSPACE` | Path escapes the allowed folders | That path is outside the workspace. |

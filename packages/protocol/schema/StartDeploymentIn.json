@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StartDeploymentIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1
+    },
+    "branch": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["projectId", "target"],
+  "additionalProperties": true
+}

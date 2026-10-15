@@ -189,6 +189,41 @@ const ciJob: P.CiJob = {
   completedAt: at(2),
 };
 
+const deployConfig: P.DeployConfig = {
+  projectId: PROJECT_ID,
+  revision: 3,
+  source: "version: 1\ntool: alchemy\ntargets:\n  production:\n    branch: main\n    auto: true\n",
+  enabled: true,
+  tool: "alchemy",
+  root: "",
+  permissions: ["workers", "d1"],
+  timeoutMinutes: 20,
+  egressAllowlist: [],
+  targets: [{ key: "production", stage: "production", branch: "main", auto: true, agent: false }],
+  updatedAt: at(1),
+};
+
+const deployment: P.Deployment = {
+  id: uid(130),
+  projectId: PROJECT_ID,
+  number: 4,
+  target: "production",
+  stage: "production",
+  branch: "main",
+  sha: "d".repeat(40),
+  revision: 3,
+  trigger: "auto",
+  status: "completed",
+  conclusion: "success",
+  exitCode: 0,
+  summary: null,
+  workspaceId: null,
+  createdAt: at(0),
+  startedAt: at(1),
+  completedAt: at(2),
+  url: `https://tempo.example.com/repositories?project=${PROJECT_ID}&tab=deploys&deployment=${uid(130)}`,
+};
+
 /** Hand-written samples of the shared types. Enums and unions of named types are filled in by gen-fixtures. */
 const ENV_ID = uid(901);
 
@@ -539,6 +574,43 @@ export const SHARED_SAMPLES = {
     { ...ciJob, conclusion: "timed_out", exitCode: null, summary: "The job ran out of time." },
   ],
   CiRunDetail: [{ run: ciRun, jobs: [ciJob] }],
+  DeployTarget: [
+    ...deployConfig.targets,
+    { key: "preview", stage: "preview", branch: null, auto: false, agent: true },
+  ],
+  DeployConfig: [
+    deployConfig,
+    {
+      ...deployConfig,
+      revision: 0,
+      source: "",
+      enabled: false,
+      tool: null,
+      permissions: [],
+      targets: [],
+      updatedAt: null,
+    },
+  ],
+  Deployment: [
+    deployment,
+    {
+      ...deployment,
+      trigger: "agent",
+      target: "preview",
+      stage: "preview",
+      branch: "feature/search",
+      status: "running",
+      conclusion: null,
+      exitCode: null,
+      workspaceId: uid(131),
+      completedAt: null,
+    },
+    { ...deployment, conclusion: "failure", exitCode: 1, summary: "The deploy command failed." },
+  ],
+  DeploySettings: [
+    { accountId: "0123456789abcdef0123456789abcdef", tokenSet: true, updatedAt: at(1) },
+    { accountId: null, tokenSet: false, updatedAt: null },
+  ],
   WorkspaceSummary: [w.lisbon, w.oslo, w.kyoto],
   OpProgress: [w.opProgress],
   ChangedFile: w.changedFiles,
@@ -869,6 +941,20 @@ export const INPUT_SAMPLES = {
   rerunCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
   cancelCiRun: [{ projectId: PROJECT_ID, runId: ciRun.id }],
   getCiJobLog: [{ projectId: PROJECT_ID, runId: ciRun.id, job: "test" }],
+  getDeploySettings: [{}],
+  updateDeploySettings: [{ accountId: "0123456789abcdef0123456789abcdef", token: "cf-master-token" }],
+  deleteDeploySettings: [{}],
+  getDeployConfig: [{ projectId: PROJECT_ID }],
+  updateDeployConfig: [{ projectId: PROJECT_ID, source: deployConfig.source, revision: 2 }],
+  listDeployments: [{ projectId: PROJECT_ID }, { projectId: PROJECT_ID, target: "production", offset: 50 }],
+  getDeployment: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
+  startDeployment: [
+    { projectId: PROJECT_ID, target: "production" },
+    { projectId: PROJECT_ID, target: "preview", branch: "feature/search" },
+  ],
+  redeploy: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
+  cancelDeployment: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
+  getDeploymentLog: [{ projectId: PROJECT_ID, deploymentId: deployment.id }],
   createRepositoryLabel: [
     { projectId: PROJECT_ID, name: "bug", color: "d73a4a", description: "Something is broken" },
   ],
@@ -1128,6 +1214,10 @@ export const OUTPUT_SAMPLES = {
   GetCiJobLogOut: [
     { text: "$ bun test\n12 pass\n", truncated: false },
     { text: "[tempo: earlier output dropped]\nok\n", truncated: true },
+  ],
+  GetDeploymentLogOut: [
+    { text: "$ npx --no -- alchemy deploy --stage production --yes\nDeployed\n", truncated: false },
+    { text: "[tempo: earlier output dropped]\nDeployed\n", truncated: true },
   ],
   ListInstallationReposItem: [
     { repoId: 812345678, owner: "acme", name: "webapp", defaultBranch: "main", private: true },
