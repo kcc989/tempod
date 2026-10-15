@@ -94,7 +94,7 @@ const setup = async () => {
         },
         log: async ({ ref = "HEAD", limit = 50 } = {}) => {
           calls.push(`log:${ref}:${limit}`);
-          const hash = refs.get(ref.replace(/^refs\/heads\//, ""));
+          const hash = refs.get(ref);
 
           return hash ? [metadata(hash)] : [];
         },
@@ -180,13 +180,7 @@ describe("Tempo native pull requests (08, Git Forge)", () => {
     expect(pr.url).toBe(`https://tempo.test/repositories?project=${s.project.id}&tab=pulls&pull=1`);
     expect(await getArtifactPullRequest(s.env, s.project, 1)).toEqual(pr);
     expect(await findArtifactOpenPullRequest(s.env, s.project, "feature")).toEqual(pr);
-    expect(s.calls).toEqual([
-      "get:native-app",
-      "info",
-      "log:refs/heads/feature:1",
-      "log:refs/heads/main:1",
-      "dispose",
-    ]);
+    expect(s.calls).toEqual(["get:native-app", "info", "log:feature:1", "log:main:1", "dispose"]);
     expect(artifactPullRequestToGithub(pr, s.project)).toMatchObject({
       state: "open",
       merged: false,
