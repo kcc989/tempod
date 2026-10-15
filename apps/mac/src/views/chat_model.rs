@@ -991,6 +991,37 @@ pub fn intent_reason_text(reasons: &[String]) -> String {
         .join(", ")
 }
 
+/// 13, L-ADR-8: the Cloudflare hold card's header.
+pub fn hold_status_text(status: p::CloudflareHoldContentStatus) -> &'static str {
+    match status {
+        p::CloudflareHoldContentStatus::Pending => {
+            "Cloudflare request held: allow it once or refuse it"
+        }
+        p::CloudflareHoldContentStatus::Allowed => "Cloudflare request allowed once",
+        p::CloudflareHoldContentStatus::Used => "Cloudflare request allowed once and sent",
+        p::CloudflareHoldContentStatus::Refused => "Cloudflare request refused",
+    }
+}
+
+/// 13, L-ADR-8: why Tempo held a Cloudflare request.
+pub fn hold_reason_text(reasons: &[String]) -> String {
+    reasons
+        .iter()
+        .map(|reason| match reason.as_str() {
+            "not_project" => "it is not a resource of this project",
+            "production" => "it changes a production resource",
+            "hold_list" => "it deletes a resource or changes tokens, DNS, routes or traffic",
+            "no_intent" => "no confirmed intent covers it",
+            "not_aligned" => "it does not match the confirmed intent",
+            "security_risk" => "it could lose or expose data, or widen access",
+            "hard_rollback" => "it is hard to undo",
+            "no_answer" => "the judge did not answer",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 pub const ADD_TO_CHECKLIST: &str = "Add to checklist";
 pub const ON_CHECKLIST: &str = "On checklist";
 pub const REOPEN_CHECKLIST_ITEM: &str = "Reopen";
@@ -1144,6 +1175,46 @@ mod tests {
         assert_eq!(
             intent_reason_text(&["new_access".into(), "hard_rollback".into(), "custom".into()]),
             "it needs new access, it is hard to roll back, custom"
+        );
+    }
+    #[test]
+    fn hold_texts_match_the_web_card() {
+        assert_eq!(
+            hold_status_text(p::CloudflareHoldContentStatus::Pending),
+            "Cloudflare request held: allow it once or refuse it"
+        );
+        assert_eq!(
+            hold_status_text(p::CloudflareHoldContentStatus::Allowed),
+            "Cloudflare request allowed once"
+        );
+        assert_eq!(
+            hold_status_text(p::CloudflareHoldContentStatus::Used),
+            "Cloudflare request allowed once and sent"
+        );
+        assert_eq!(
+            hold_status_text(p::CloudflareHoldContentStatus::Refused),
+            "Cloudflare request refused"
+        );
+        let reasons: Vec<String> = [
+            "not_project",
+            "production",
+            "hold_list",
+            "no_intent",
+            "not_aligned",
+            "security_risk",
+            "hard_rollback",
+            "no_answer",
+            "custom",
+        ]
+        .map(String::from)
+        .into();
+        assert_eq!(
+            hold_reason_text(&reasons),
+            "it is not a resource of this project; it changes a production resource; \
+             it deletes a resource or changes tokens, DNS, routes or traffic; \
+             no confirmed intent covers it; it does not match the confirmed intent; \
+             it could lose or expose data, or widen access; it is hard to undo; \
+             the judge did not answer; custom"
         );
     }
     #[test]

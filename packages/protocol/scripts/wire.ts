@@ -21,6 +21,7 @@ export const SHARED = {
   AgentProposalContent: P.AgentProposalContent,
   IntentContent: P.IntentContent,
   ProofContent: P.ProofContent,
+  CloudflareHoldContent: P.CloudflareHoldContent,
   LifecycleRunDecidedPayload: P.LifecycleRunDecidedPayload,
   LifecycleEvent: P.LifecycleEvent,
   LifecycleTempoSource: P.LifecycleTempoSource,

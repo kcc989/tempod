@@ -328,6 +328,73 @@
         },
         "kind": {
           "type": "string",
+          "enum": ["cloudflare_hold"]
+        },
+        "content": {
+          "$ref": "CloudflareHoldContent.json"
+        }
+      },
+      "required": ["id", "sessionId", "turnId", "status", "rev", "createdAt", "updatedAt", "kind", "content"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["streaming", "pending", "in_progress", "completed", "failed", "cancelled"]
+        },
+        "rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        "createdAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        "updatedAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
           "enum": ["user_message"]
         },
         "content": {

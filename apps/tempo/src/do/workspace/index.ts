@@ -1,5 +1,6 @@
 import { eq, lte, isNull } from "drizzle-orm";
-import { endSessionForAccess, enforceRemovedAccess, workspaceCalls } from "./manifest.ts";
+import { endSessionForAccess, enforceRemovedAccess, workspaceManifest } from "./manifest.ts";
+import { agentCloudflareToken, cloudflareGate, type GateAnswer } from "./cloudflare-gate.ts";
 import {
   TempoError,
   capture,
@@ -452,8 +453,23 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
       dotfiles: await this.dotfilesEgress(),
-      calls: await workspaceCalls(this.core),
+      ...(await this.capabilityConfig()),
     };
+  }
+
+  private async capabilityConfig(): Promise<Pick<EgressConfig, "calls" | "cloudflare">> {
+    const manifest = await workspaceManifest(this.core);
+
+    return { calls: manifest.call, cloudflare: manifest.cloudflare !== null };
+  }
+
+  /** 13, L-ADR-8: TempoOutbound asks before it forwards an agent's Cloudflare API request. */
+  async cloudflareGate(method: string, path: string): Promise<GateAnswer> {
+    return cloudflareGate(this.core, method, path);
+  }
+
+  async getAgentCloudflareToken(): Promise<string | null> {
+    return agentCloudflareToken(this.core);
   }
 
   private async dotfilesEgress(): Promise<{ cloneUrl: string } | null> {

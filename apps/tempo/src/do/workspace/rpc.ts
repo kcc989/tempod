@@ -1,5 +1,6 @@
 import { confirmIntent, correctIntent } from "./intent.ts";
 import { addChecklistItem, reopenChecklistItem } from "./proof.ts";
+import { decideCloudflareHold } from "./cloudflare-gate.ts";
 import { resolveAgentProposal } from "../../agents/proposals.ts";
 import { Schema } from "effect";
 import { promptSlug } from "@tempo/cities";
@@ -384,6 +385,12 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       notArchived(core);
       rt.ensureAwake();
       correctIntent(core, intentId, text);
+
+      return {};
+    },
+    decideCloudflareHold: async ({ holdId, allow }) => {
+      notArchived(core);
+      decideCloudflareHold(core, holdId, allow);
 
       return {};
     },

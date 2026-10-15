@@ -17,6 +17,7 @@
     "run",
     "agent_proposal",
     "intent",
-    "proof"
+    "proof",
+    "cloudflare_hold"
   ]
 }

@@ -51,6 +51,8 @@ export interface EgressConfig {
   readonly deploy?: boolean;
   /** The workspace's `call` capabilities (14, Enforcement); absent means no capability checks. */
   readonly calls?: ReadonlyArray<CapabilityCall>;
+  /** The manifest grants `cloudflare` (13, L-ADR-8). */
+  readonly cloudflare?: boolean;
   /** The owner's dotfiles remote (01, Shell and dotfiles); read side only. */
   readonly dotfiles?: { readonly cloneUrl: string } | null;
 }
@@ -143,6 +145,7 @@ export type Decision = Rule & { readonly capability?: string };
 type Rule =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
   | { readonly rule: 11; readonly action: "browser" }
+  | { readonly rule: 15; readonly action: "cloudflare" }
   | { readonly rule: 13; readonly action: "inject"; readonly injector: Injector }
   | { readonly rule: 14; readonly action: "swap"; readonly names: ReadonlyArray<string> }
   | {
@@ -237,6 +240,13 @@ const decideRule = (url: URL, headers: Headers, appHost: string, config: EgressC
     return { rule: 6, action: "forward", set: { name: "authorization", value: "openai" } };
   }
 
+  if (
+    config.cloudflare &&
+    host === "api.cloudflare.com" &&
+    headers.get("authorization") === `Bearer ${PLACEHOLDER}` &&
+    !carriesPlaceholder(withoutAuthorization(headers), url)
+  )
+    return { rule: 15, action: "cloudflare", capability: "cloudflare" };
   const mcp = mcpSwaps(host, headers, config);
 
   if (mcp.length > 0) return { rule: 12, action: "forward", mcp };
@@ -313,6 +323,13 @@ const decideForCi = (url: URL, headers: Headers, host: string, config: EgressCon
     mcp: [],
     allowlist: config.deploy ? [...DEPLOY_HOSTS, ...config.allowlist] : config.allowlist,
   });
+};
+
+const withoutAuthorization = (headers: Headers): Headers => {
+  const rest = new Headers(headers);
+  rest.delete("authorization");
+
+  return rest;
 };
 
 const PLACEHOLDER_REFUSED: Decision = {

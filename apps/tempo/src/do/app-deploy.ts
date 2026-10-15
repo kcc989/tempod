@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import type { ProjectResources } from "../deploy/cf-gate.ts";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
@@ -35,6 +36,7 @@ import {
   deleteToken,
   permissionGroups,
   tokenPolicies,
+  workerResources,
   type CloudflareApi,
 } from "../deploy/cloudflare.ts";
 import {
@@ -53,6 +55,7 @@ import {
   deployLogKey,
   deployRunnerName,
   deployTokenKey,
+  agentCloudflareTokenKey,
   type DeployJobResult,
   type DeployJobStart,
   type DeployPlan,
@@ -62,6 +65,8 @@ import { errorText, log } from "../log.ts";
 import type { ProjectInfo } from "./repository-ci.ts";
 
 /** 12, Deployments and Tokens. */
+export const AGENT_CF = { resourcesTtlMs: 10 * 60_000, tokenMs: 60 * 60_000 } as const;
+
 export const DEPLOY = {
   keptDeployments: 200,
   keptRevisions: 20,
@@ -77,6 +82,8 @@ type EventType = typeof deployEvents.$inferInsert.type;
 
 /** An event payload (12, Gradual rollout: Events). Never a token. */
 interface EventPayload {
+  readonly occurredAt?: number | null;
+  readonly requestedAt?: number;
   readonly worker?: string;
   readonly versionId?: string;
   readonly previousVersionId?: string | null;
@@ -282,6 +289,7 @@ export class AppDeployDO extends DurableObject<Env> {
   /** 12, Gradual rollout: Owner rollback. */
   async rollbackDeployment(deploymentId: string): Promise<Result<Deployment>> {
     return capture(async () => {
+      const requestedAt = Date.now();
       const row = this.require(deploymentId);
       const nothing = () => new TempoError("VALIDATION_FAILED", undefined, "Nothing to roll back to.");
 
@@ -345,7 +353,7 @@ export class AppDeployDO extends DurableObject<Env> {
         })
         .where(eq(deployments.id, row.id))
         .run();
-      this.event(row.id, "deploy.rolled_back", { by: "owner", workers: restored, errors });
+      this.event(row.id, "deploy.rolled_back", { by: "owner", workers: restored, errors, requestedAt });
 
       return this.wire(this.require(row.id));
     });
@@ -359,6 +367,94 @@ export class AppDeployDO extends DurableObject<Env> {
     this.db.update(deployments).set({ gateFailure: reason }).where(eq(deployments.id, row.id)).run();
     await this.rollback(this.require(row.id), reason, "failure");
     await this.pump();
+  }
+
+  // ---------- agent Cloudflare API access (13, L-ADR-8) ----------
+  /** The project's account and resources: its Workers and what they bind. Cached for 10 minutes. */
+  async cloudflareResources(): Promise<Result<ProjectResources | null>> {
+    return capture(async () => {
+      const config = this.configWire();
+
+      if (!config.enabled) return null;
+      const cached = this.kv<{ at: number; value: ProjectResources }>("cfResources");
+
+      if (cached && Date.now() - cached.at < AGENT_CF.resourcesTtlMs) return cached.value;
+      const project = await this.project();
+      const creds = this.bindings.CREDENTIALS.getByName(project.userId);
+
+      const [master, accountId] = await Promise.all([
+        creds.getSecret(DEPLOY_MASTER_KEY),
+        creds.getSecret(DEPLOY_ACCOUNT_KEY),
+      ]);
+
+      if (!master || !accountId) return null;
+      const resources = new Map<string, boolean>();
+
+      for (const target of config.targets) {
+        const production = target.key === "production" || target.stage === "production";
+
+        for (const worker of target.workers) {
+          for (const id of [
+            `worker:${worker}`,
+            ...(await workerResources(this.cloudflare, master, accountId, worker)),
+          ])
+            resources.set(id, (resources.get(id) ?? false) || production);
+        }
+      }
+
+      const value: ProjectResources = {
+        accountId,
+        resources: [...resources].map(([id, production]) => ({ id, production })),
+      };
+
+      this.setJsonKv("cfResources", JSON.stringify({ at: Date.now(), value }));
+
+      return value;
+    });
+  }
+
+  /** Mints the workspace's Cloudflare token from the deploy permissions; the value goes to CredentialDO only. */
+  async mintAgentToken(workspaceId: string): Promise<Result<{ tokenId: string; expiresAt: number } | null>> {
+    return capture(async () => {
+      const config = this.configWire();
+
+      if (!config.enabled) return null;
+      const project = await this.project();
+      const creds = this.bindings.CREDENTIALS.getByName(project.userId);
+
+      const [master, accountId] = await Promise.all([
+        creds.getSecret(DEPLOY_MASTER_KEY),
+        creds.getSecret(DEPLOY_ACCOUNT_KEY),
+      ]);
+
+      if (!master || !accountId) return null;
+      const expiresAt = Date.now() + AGENT_CF.tokenMs;
+      const groups = await permissionGroups(this.cloudflare, master, accountId);
+
+      const minted = await createToken(this.cloudflare, master, accountId, {
+        name: `tempo-agent-${workspaceId}`,
+        expiresAt,
+        policies: tokenPolicies(groups, config.permissions, accountId),
+      });
+
+      await creds.putSecret(agentCloudflareTokenKey(workspaceId), minted.value);
+
+      return { tokenId: minted.id, expiresAt };
+    });
+  }
+
+  async revokeAgentToken(tokenId: string): Promise<Result<boolean>> {
+    return capture(async () => {
+      const project = await this.project();
+      const creds = this.bindings.CREDENTIALS.getByName(project.userId);
+
+      const [master, accountId] = await Promise.all([
+        creds.getSecret(DEPLOY_MASTER_KEY),
+        creds.getSecret(DEPLOY_ACCOUNT_KEY),
+      ]);
+
+      return master && accountId ? deleteToken(this.cloudflare, master, accountId, tokenId) : true;
+    });
   }
 
   // ---------- capability manifests (14, C-ADR-1) ----------
@@ -439,7 +535,11 @@ export class AppDeployDO extends DurableObject<Env> {
         .run();
 
       if (existing.fixedAt !== null)
-        this.event(existing.deploymentId ?? "", "prod.error.seen", { errorId, title: issue.title });
+        this.event(existing.deploymentId ?? "", "prod.error.seen", {
+          errorId,
+          title: issue.title,
+          occurredAt: issue.occurredAt,
+        });
     } else {
       errorId = newId();
       this.db
@@ -464,6 +564,7 @@ export class AppDeployDO extends DurableObject<Env> {
       this.event(this.require0(errorId).deploymentId ?? "", "prod.error.seen", {
         errorId,
         title: issue.title,
+        occurredAt: issue.occurredAt,
       });
       this.pruneErrors();
     }
@@ -1462,6 +1563,14 @@ export class AppDeployDO extends DurableObject<Env> {
 
     // SAFETY: each key is written by setKv with one fixed JSON type and read with that type.
     return row ? (JSON.parse(row.valueJson) as T) : undefined;
+  }
+
+  private setJsonKv(key: string, valueJson: string): void {
+    this.db
+      .insert(deployKv)
+      .values({ key, valueJson })
+      .onConflictDoUpdate({ target: deployKv.key, set: { valueJson } })
+      .run();
   }
 
   private setKv(key: string, value: number | string | boolean | null): void {

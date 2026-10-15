@@ -2589,6 +2589,77 @@ pub struct CloseSessionIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`CloudflareHoldContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CloudflareHoldContent {
+    #[serde(rename = "holdId")]
+    pub hold_id: ::std::string::String,
+    pub method: ::std::string::String,
+    pub path: ::std::string::String,
+    pub reasons: ::std::vec::Vec<::std::string::String>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub resource: ::std::option::Option<::std::string::String>,
+    pub status: CloudflareHoldContentStatus,
+}
+///`CloudflareHoldContentStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CloudflareHoldContentStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "allowed")]
+    Allowed,
+    #[serde(rename = "refused")]
+    Refused,
+    #[serde(rename = "used")]
+    Used,
+}
+impl ::std::fmt::Display for CloudflareHoldContentStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pending => f.write_str("pending"),
+            Self::Allowed => f.write_str("allowed"),
+            Self::Refused => f.write_str("refused"),
+            Self::Used => f.write_str("used"),
+        }
+    }
+}
+impl ::std::str::FromStr for CloudflareHoldContentStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "allowed" => Ok(Self::Allowed),
+            "refused" => Ok(Self::Refused),
+            "used" => Ok(Self::Used),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CloudflareHoldContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CloudflareHoldContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
 ///`CommitAndPushIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CommitAndPushIn {
@@ -3559,6 +3630,15 @@ pub struct CustomInstance {
     pub memory_mib: i64,
     pub vcpu: ::std::num::NonZeroU64,
 }
+///`DecideCloudflareHoldIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DecideCloudflareHoldIn {
+    pub allow: bool,
+    #[serde(rename = "holdId")]
+    pub hold_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
+}
 ///`DeleteAgentIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DeleteAgentIn {
@@ -4305,6 +4385,8 @@ pub struct DiagnosticsContainerSnapshotsItem {
 ///`DiagnosticsEgressItem`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct DiagnosticsEgressItem {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub capability: ::std::option::Option<::std::string::String>,
     pub host: ::std::string::String,
     pub method: ::std::string::String,
     pub ms: f64,
@@ -6486,6 +6568,8 @@ pub enum ItemKind {
     Intent,
     #[serde(rename = "proof")]
     Proof,
+    #[serde(rename = "cloudflare_hold")]
+    CloudflareHold,
 }
 impl ::std::fmt::Display for ItemKind {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -6505,6 +6589,7 @@ impl ::std::fmt::Display for ItemKind {
             Self::AgentProposal => f.write_str("agent_proposal"),
             Self::Intent => f.write_str("intent"),
             Self::Proof => f.write_str("proof"),
+            Self::CloudflareHold => f.write_str("cloudflare_hold"),
         }
     }
 }
@@ -6527,6 +6612,7 @@ impl ::std::str::FromStr for ItemKind {
             "agent_proposal" => Ok(Self::AgentProposal),
             "intent" => Ok(Self::Intent),
             "proof" => Ok(Self::Proof),
+            "cloudflare_hold" => Ok(Self::CloudflareHold),
             _ => Err("invalid value".into()),
         }
     }
@@ -16098,6 +16184,15 @@ pub mod api {
         type Input = crate::CreateWorkspaceIn;
         type Output = crate::WorkspaceSummary;
     }
+    /// `decideCloudflareHold`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DecideCloudflareHold;
+    impl crate::Function for DecideCloudflareHold {
+        const NAME: &'static str = "decideCloudflareHold";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DecideCloudflareHoldIn;
+        type Output = crate::Empty;
+    }
     /// `deleteAgent`
     #[derive(Clone, Copy, Debug)]
     pub struct DeleteAgent;
@@ -17391,6 +17486,7 @@ pub mod api {
         ("createRepositoryPullRequest", crate::Method::Post),
         ("createSession", crate::Method::Post),
         ("createWorkspace", crate::Method::Post),
+        ("decideCloudflareHold", crate::Method::Post),
         ("deleteAgent", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
         ("deleteDeploySettings", crate::Method::Post),
@@ -17589,6 +17685,7 @@ pub mod wire {
         "CiRunDetail",
         "ClientPing",
         "CloseSessionIn",
+        "CloudflareHoldContent",
         "CommitAndPushIn",
         "CommitAndPushOut",
         "ConfigOption",
@@ -17614,6 +17711,7 @@ pub mod wire {
         "CredentialState",
         "CredentialStatus",
         "CustomInstance",
+        "DecideCloudflareHoldIn",
         "DeleteAgentIn",
         "DeleteCredentialIn",
         "DeleteEnvironmentIn",
@@ -17990,6 +18088,7 @@ pub mod wire {
             "CiRunDetail" => crate::roundtrip::<crate::CiRunDetail>(text),
             "ClientPing" => crate::roundtrip::<crate::ClientPing>(text),
             "CloseSessionIn" => crate::roundtrip::<crate::CloseSessionIn>(text),
+            "CloudflareHoldContent" => crate::roundtrip::<crate::CloudflareHoldContent>(text),
             "CommitAndPushIn" => crate::roundtrip::<crate::CommitAndPushIn>(text),
             "CommitAndPushOut" => crate::roundtrip::<crate::CommitAndPushOut>(text),
             "ConfigOption" => crate::roundtrip::<crate::ConfigOption>(text),
@@ -18021,6 +18120,7 @@ pub mod wire {
             "CredentialState" => crate::roundtrip::<crate::CredentialState>(text),
             "CredentialStatus" => crate::roundtrip::<crate::CredentialStatus>(text),
             "CustomInstance" => crate::roundtrip::<crate::CustomInstance>(text),
+            "DecideCloudflareHoldIn" => crate::roundtrip::<crate::DecideCloudflareHoldIn>(text),
             "DeleteAgentIn" => crate::roundtrip::<crate::DeleteAgentIn>(text),
             "DeleteCredentialIn" => crate::roundtrip::<crate::DeleteCredentialIn>(text),
             "DeleteEnvironmentIn" => crate::roundtrip::<crate::DeleteEnvironmentIn>(text),

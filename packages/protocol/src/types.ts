@@ -609,6 +609,18 @@ export const RunContent = Schema.Struct({ runId: Schema.String });
 
 export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
 
+/** 13, L-ADR-8: a Cloudflare API request held for the owner. */
+export const CloudflareHoldContent = Schema.Struct({
+  holdId: Schema.String,
+  method: Schema.String,
+  path: Schema.String,
+  resource: N(Schema.String),
+  reasons: Schema.Array(Schema.String),
+  status: Schema.Literals(["pending", "allowed", "refused", "used"]),
+});
+
+export type CloudflareHoldContent = typeof CloudflareHoldContent.Type;
+
 /** 13, L-ADR-1: the intent card. Updated in place as the intent changes. */
 export const IntentContent = Schema.Struct({
   intentId: Schema.String,
@@ -658,6 +670,7 @@ export const ITEM_CONTENT = {
   agent_proposal: AgentProposalContent,
   intent: IntentContent,
   proof: ProofContent,
+  cloudflare_hold: CloudflareHoldContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -689,6 +702,7 @@ export const Item = Schema.Union([
   itemOf("agent_proposal"),
   itemOf("intent"),
   itemOf("proof"),
+  itemOf("cloudflare_hold"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),

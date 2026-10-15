@@ -733,6 +733,16 @@ export const SHARED_SAMPLES = {
       createdAt: at(2),
     },
   ],
+  CloudflareHoldContent: [
+    {
+      holdId: uid(1018),
+      method: "DELETE",
+      path: "/client/v4/accounts/acc/d1/database/db-1",
+      resource: "d1:db-1",
+      reasons: ["hold_list"],
+      status: "pending",
+    },
+  ],
   ProofContent: [
     {
       proofId: uid(1013),
@@ -1100,6 +1110,7 @@ export const INPUT_SAMPLES = {
   updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
   resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
   confirmIntent: [{ workspaceId: W1, intentId: uid(1012) }],
+  decideCloudflareHold: [{ workspaceId: W1, holdId: uid(1018), allow: true }],
   addChecklistItem: [{ workspaceId: W1, itemId: uid(1001) }],
   reopenChecklistItem: [{ workspaceId: W1, checklistId: uid(1016) }],
   correctIntent: [

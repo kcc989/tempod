@@ -276,6 +276,20 @@ Each step writes one lifecycle event (08), so loop times come from the event log
 
 **Reduces.** CF_PERMS, ACCESS_UNAWARE.
 
+**Exact rules (these are what the code does).**
+
+| Rule | Value |
+| --- | --- |
+| Egress rule | Rule 15 of 01: `api.cloudflare.com` over HTTPS with `Authorization: Bearer tempo-placeholder` and no other placeholder, when the manifest has `cloudflare` (14). It logs capability `cloudflare`. Without `cloudflare`, rule 7 refuses the placeholder as before. |
+| Token | `AppDeployDO.mintAgentToken` mints one token per workspace with the deploy configuration's `permissions` (12, Tokens), named `tempo-agent-<workspaceId>`, for 1 hour. The value is stored in CredentialDO under `agent.<workspaceId>.cloudflare_token`; the WorkspaceDO keeps the token id and expiry. A new token is minted when less than 5 minutes are left, and the old one is revoked. The token is revoked when the manifest loses `cloudflare`. |
+| Project resources | Each Worker named in a deploy target, and each D1 database, KV namespace, R2 bucket and queue that it binds (from `GET /workers/scripts/<name>/settings` with the master token), as `worker:<name>`, `d1:<id>`, `kv:<id>`, `r2:<name>` and `queue:<name>`. A resource is production when a target with key or stage `production` uses it. Cached for 10 minutes. |
+| Account | A path under `/accounts/<id>` with another account is refused: `tempo: Cloudflare account <id> is not this project's`. |
+| Reads | `GET`, `HEAD` and `OPTIONS` pass for project resources and for paths that name no resource (lists, the account, the user). A read of another resource is held (`not_project`). |
+| Hold list | Any change under `/zones`, `/user/tokens` or `/accounts/<id>/tokens`, Workers routes and domains; `DELETE` of a whole Worker, database, namespace, bucket or queue; and a change to a Worker's `deployments`, `routes`, `subdomain` or `domains`. Reason `hold_list`. |
+| Changes | A change to a resource that is not the project's, or to no resource, is held (`not_project`); to a production resource, held (`production`). Otherwise Jev judges `{method, path, resource}` against the confirmed intent of the chat whose turn is running. With no confirmed intent the request is held (`no_intent`); a high-risk answer holds it with Jev's reasons (`not_aligned`, `security_risk`, `hard_rollback`, `no_answer`). |
+| Hold | WorkspaceDO table `cloudflare_holds`: `id`, `session_id`, `item_id`, `method`, `path`, `resource`, `reasons_json`, `status` (`pending`, `allowed`, `refused`, `used`), `created_at`, `decided_at`. One `cloudflare_hold` item in the running (or newest open) chat. The same method and path while a hold is open reuse it. The workspace needs input while a hold is pending. |
+| Owner answer | `decideCloudflareHold {workspaceId, holdId, allow}`. Allowed: the next same request passes once, then the hold is `used`. Refused: the same request gets `tempo: the owner refused this request`. A pending hold answers `tempo: held for owner approval`. |
+
 ### L-ADR-9. Jev judges safety and alignment
 
 **Decision (owner-approved 2026-10-15).** Every safety and alignment check of the loop calls Jev, TypeSafe AI's System One model, directly through TypeSafe AI:

@@ -286,6 +286,7 @@ export const API = {
   listRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(Run)),
   resolveAgentProposal: fn("POST", Schema.Struct({ ...W, proposalId: S, apply: B }), Empty),
   confirmIntent: fn("POST", Schema.Struct({ ...W, intentId: S }), Empty),
+  decideCloudflareHold: fn("POST", Schema.Struct({ ...W, holdId: S, allow: B }), Empty),
   addChecklistItem: fn("POST", Schema.Struct({ ...W, itemId: S }), ChecklistItem),
   reopenChecklistItem: fn("POST", Schema.Struct({ ...W, checklistId: S }), Empty),
   correctIntent: fn(

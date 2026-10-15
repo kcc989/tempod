@@ -164,6 +164,10 @@ export const correctIntent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"correctIntent">) => data)
   .handler(({ data }) => run("correctIntent", data));
 
+export const decideCloudflareHold = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"decideCloudflareHold">) => data)
+  .handler(({ data }) => run("decideCloudflareHold", data));
+
 export const addChecklistItem = createServerFn({ method: "POST" })
   .validator((data: FnInput<"addChecklistItem">) => data)
   .handler(({ data }) => run("addChecklistItem", data));

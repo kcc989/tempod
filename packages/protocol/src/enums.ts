@@ -174,6 +174,7 @@ export const ITEM_KINDS = [
   "agent_proposal",
   "intent",
   "proof",
+  "cloudflare_hold",
 ] as const;
 
 /** 13, L-ADR-2. */

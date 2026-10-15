@@ -17,6 +17,7 @@ import { mcpToEgress } from "../../lib/mcp.ts";
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { dropQueuedTurnsOf, finishTurn } from "./queue.ts";
+import { releaseAgentToken } from "./cloudflare-gate.ts";
 
 export const MANIFEST_SUMMARY_LINES = 30;
 
@@ -382,8 +383,11 @@ export const endSessionForAccess = async (
 };
 
 /** The workspace-wide manifest TempoOutbound enforces, after ending sessions that lost access. */
-export const workspaceCalls = async (core: WorkspaceCore): Promise<ReadonlyArray<CapabilityCall>> => {
+export const workspaceManifest = async (core: WorkspaceCore): Promise<CapabilityManifest> => {
   await enforceRemovedAccess(core, (id, removed) => endSessionForAccess(core, id, removed));
+  const manifest = await compileManifest(core, { kind: "chat", access: "write", agent: null });
 
-  return (await compileManifest(core, { kind: "chat", access: "write", agent: null })).call;
+  if (manifest.cloudflare === null) await releaseAgentToken(core);
+
+  return manifest;
 };

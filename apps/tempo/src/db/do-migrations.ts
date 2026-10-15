@@ -635,6 +635,18 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
   complete        INTEGER,
   created_at      INTEGER NOT NULL
 )`,
+      `CREATE TABLE cloudflare_holds (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT,
+  item_id       TEXT,
+  method        TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  resource      TEXT,
+  reasons_json  TEXT NOT NULL,
+  status        TEXT NOT NULL CHECK (status IN ('pending','allowed','refused','used')),
+  created_at    INTEGER NOT NULL,
+  decided_at    INTEGER
+)`,
       `CREATE TABLE checklist (
   id              TEXT PRIMARY KEY,
   text            TEXT NOT NULL,
@@ -646,7 +658,7 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "ALTER TABLE sessions ADD COLUMN manifest_json TEXT",
       "ALTER TABLE egress_log ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
       `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
-        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof')),
+        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof','cloudflare_hold')),
         status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
       "INSERT INTO items_new SELECT * FROM items",
       "DROP TABLE items",

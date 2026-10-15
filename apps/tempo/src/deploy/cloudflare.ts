@@ -201,3 +201,40 @@ export const listWorkerVersions = async (
   )
     .items.map((v) => ({ id: v.id, createdOn: v.metadata.created_on }))
     .toSorted((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn));
+
+const Binding = Schema.Struct({
+  type: Schema.String,
+  id: Schema.optional(Schema.String),
+  namespace_id: Schema.optional(Schema.String),
+  bucket_name: Schema.optional(Schema.String),
+  queue_name: Schema.optional(Schema.String),
+});
+
+const BINDING_IDS = new Map<string, (b: typeof Binding.Type) => string | undefined>([
+  ["d1", (b) => (b.id ? `d1:${b.id}` : undefined)],
+  ["kv_namespace", (b) => (b.namespace_id ? `kv:${b.namespace_id}` : undefined)],
+  ["r2_bucket", (b) => (b.bucket_name ? `r2:${b.bucket_name}` : undefined)],
+  ["queue", (b) => (b.queue_name ? `queue:${b.queue_name}` : undefined)],
+]);
+
+/** 13, L-ADR-8: the databases, namespaces, buckets and queues a Worker binds, as `kind:id`. Empty when the Worker is missing. */
+export const workerResources = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  worker: string,
+): Promise<string[]> => {
+  try {
+    const result = Schema.decodeUnknownSync(Schema.Struct({ bindings: Schema.Array(Binding) }))(
+      await call(api, token, {
+        method: "GET",
+        path: `/accounts/${accountId}/workers/scripts/${encodeURIComponent(worker)}/settings`,
+      }),
+    );
+
+    return result.bindings.flatMap((b) => BINDING_IDS.get(b.type)?.(b) ?? []);
+  } catch (e) {
+    if (e instanceof CloudflareError && e.status === 404) return [];
+    throw e;
+  }
+};

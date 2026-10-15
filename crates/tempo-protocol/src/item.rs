@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AgentMessageContent, AgentProposalContent, AgentThoughtContent, ArtifactItemContent,
-    ErrorContent, HandoffContent, IntentContent, ItemKind, ItemStatus, NoticeContent,
-    PermissionContent, PlanContent, ProofContent, RevertMarkerContent, RunContent,
+    CloudflareHoldContent, ErrorContent, HandoffContent, IntentContent, ItemKind, ItemStatus,
+    NoticeContent, PermissionContent, PlanContent, ProofContent, RevertMarkerContent, RunContent,
     ToolCallItemContent, UserMessageContent,
 };
 
@@ -34,6 +34,7 @@ pub enum ItemContent {
     AgentProposal(AgentProposalContent),
     Intent(IntentContent),
     Proof(ProofContent),
+    CloudflareHold(CloudflareHoldContent),
     UserMessage(UserMessageContent),
     AgentMessage(AgentMessageContent),
     AgentThought(AgentThoughtContent),
@@ -60,6 +61,7 @@ impl ItemContent {
             Self::AgentProposal(_) => ItemKind::AgentProposal,
             Self::Intent(_) => ItemKind::Intent,
             Self::Proof(_) => ItemKind::Proof,
+            Self::CloudflareHold(_) => ItemKind::CloudflareHold,
             Self::UserMessage(_) => ItemKind::UserMessage,
             Self::AgentMessage(_) => ItemKind::AgentMessage,
             Self::AgentThought(_) => ItemKind::AgentThought,

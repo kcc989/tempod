@@ -128,6 +128,10 @@ pub enum TranscriptEvent {
     ReopenChecklistItem {
         checklist_id: String,
     },
+    DecideCloudflareHold {
+        hold_id: String,
+        allow: bool,
+    },
 }
 
 impl TranscriptEvent {
@@ -217,6 +221,8 @@ pub struct TranscriptView {
     /// The workspace checklist (13, L-ADR-2).
     checklist: Vec<tempo_protocol::ChecklistItem>,
     checklist_pending: HashSet<String>,
+    /// Cloudflare holds with a decision in flight (13, L-ADR-8).
+    hold_pending: HashSet<String>,
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
@@ -251,6 +257,7 @@ impl TranscriptView {
             intent_pending: HashSet::new(),
             checklist: Vec::new(),
             checklist_pending: HashSet::new(),
+            hold_pending: HashSet::new(),
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
@@ -644,6 +651,27 @@ impl TranscriptView {
 
     pub fn checklist_finished(&mut self, key: &str, cx: &mut Context<Self>) {
         self.checklist_pending.remove(key);
+        cx.notify();
+    }
+
+    pub(crate) fn decide_hold(&mut self, hold_id: &str, allow: bool, cx: &mut Context<Self>) {
+        if self.read_only || !self.hold_pending.insert(hold_id.to_string()) {
+            return;
+        }
+        cx.emit(TranscriptEvent::DecideCloudflareHold {
+            hold_id: hold_id.to_string(),
+            allow,
+        });
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn hold_busy(&self, hold_id: &str) -> bool {
+        self.hold_pending.contains(hold_id)
+    }
+
+    pub fn hold_finished(&mut self, hold_id: &str, cx: &mut Context<Self>) {
+        self.hold_pending.remove(hold_id);
         cx.notify();
     }
 
@@ -1235,6 +1263,83 @@ fn intent_card(
     card.into_any_element()
 }
 
+/// 13, L-ADR-8: a Cloudflare API request that waits for the owner.
+fn hold_card(
+    id: &SharedString,
+    hold: &tempo_protocol::CloudflareHoldContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (writable, busy) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            (!v.read_only, v.hold_pending.contains(&hold.hold_id))
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let pending = hold.status == tempo_protocol::CloudflareHoldContentStatus::Pending;
+    let button = |label: &'static str, allow: bool| {
+        let view = view.clone();
+        let hold_id = hold.hold_id.clone();
+        let button = Button::new(SharedString::from(format!(
+            "{id}:{}",
+            if allow { "allow" } else { "refuse" }
+        )))
+        .small()
+        .label(label)
+        .disabled(busy)
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| this.decide_hold(&hold_id, allow, cx));
+        });
+        if allow {
+            button.primary()
+        } else {
+            button.outline()
+        }
+    };
+    v_flex()
+        .id(SharedString::from(format!("{id}:hold")))
+        .role(Role::Group)
+        .aria_label("Cloudflare request")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::hold_status_text(hold.status)),
+        )
+        .child(
+            div()
+                .font_family("monospace")
+                .text_xs()
+                .whitespace_normal()
+                .child(format!("{} {}", hold.method, hold.path)),
+        )
+        .when(!hold.reasons.is_empty(), |card| {
+            card.child(div().text_xs().text_color(muted).child(format!(
+                "Held because: {}",
+                chat_model::hold_reason_text(&hold.reasons)
+            )))
+        })
+        .when(writable && pending, |card| {
+            card.child(
+                h_flex()
+                    .gap_2()
+                    .child(button("Allow once", true))
+                    .child(button("Refuse", false)),
+            )
+        })
+        .into_any_element()
+}
+
 /// 13, L-ADR-2: a proof with its screens, Tempo's check results and what is missing.
 fn proof_card(
     id: &SharedString,
@@ -1654,6 +1759,7 @@ fn render_native_row(
                 ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
                 ItemContent::Intent(intent) => intent_card(&id, intent, view.clone(), cx),
                 ItemContent::Proof(proof) => proof_card(&id, proof, view.clone(), cx),
+                ItemContent::CloudflareHold(hold) => hold_card(&id, hold, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let key: SharedString = format!("{}:block:{index}", id).into();

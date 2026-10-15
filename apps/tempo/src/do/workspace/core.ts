@@ -1,4 +1,5 @@
 import { pendingIntent } from "./intent.ts";
+import { pendingHold } from "./cloudflare-gate.ts";
 import { listChecklist } from "./proof.ts";
 import { proposalRecords } from "../../agents/proposals.ts";
 import type { CiCoordinator } from "../../ci/types.ts";
@@ -452,7 +453,7 @@ export class WorkspaceCore {
       .where(eq(permissions.status, "pending"))
       .get();
 
-    if (pending || pendingIntent(this)) return "needs_input";
+    if (pending || pendingIntent(this) || pendingHold(this)) return "needs_input";
 
     const newest = this.db
       .select()

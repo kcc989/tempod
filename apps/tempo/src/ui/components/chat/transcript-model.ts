@@ -9,6 +9,7 @@ import {
   type Item,
   type ItemOf,
   type PermissionOption,
+  type CloudflareHoldContent,
   type ProofContent,
   type Turn,
 } from "@tempo/protocol";
@@ -523,3 +524,27 @@ export const proofCheckText = (check: ProofContent["checks"][number]): string =>
         : `${check.name}: failed (exit ${check.exitCode})`;
   }
 };
+
+const HOLD_STATUS = new Map<CloudflareHoldContent["status"], string>([
+  ["pending", "Cloudflare request held: allow it once or refuse it"],
+  ["allowed", "Cloudflare request allowed once"],
+  ["used", "Cloudflare request allowed once and sent"],
+  ["refused", "Cloudflare request refused"],
+]);
+
+export const holdStatusText = (status: CloudflareHoldContent["status"]): string =>
+  HOLD_STATUS.get(status) ?? status;
+
+const HOLD_REASONS = new Map([
+  ["not_project", "it is not a resource of this project"],
+  ["production", "it changes a production resource"],
+  ["hold_list", "it deletes a resource or changes tokens, DNS, routes or traffic"],
+  ["no_intent", "no confirmed intent covers it"],
+  ["not_aligned", "it does not match the confirmed intent"],
+  ["security_risk", "it could lose or expose data, or widen access"],
+  ["hard_rollback", "it is hard to undo"],
+  ["no_answer", "the judge did not answer"],
+]);
+
+export const holdReasonText = (reasons: ReadonlyArray<string>): string =>
+  reasons.map((r) => HOLD_REASONS.get(r) ?? r).join("; ");

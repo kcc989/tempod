@@ -618,4 +618,5 @@ Tab 14. Choices made without the owner:
 | Reads | `repo`, `issues`, `pull_requests` and `ci_runs` always; `deployments` and `prod_errors` when deploys are on | These follow the project's features; tools are not hidden yet (below). |
 | Revision | `AppDeployDO.manifests` maps the hash of the project part of the manifest to the next number | `revision` counts project changes; the session part changes `sha256` only. |
 | Removed access | Checked when the workspace refreshes its environment: after an environment, secret, profile or deploy configuration change, and on each egress config read | The outbound cache keeps an old config for up to 60 seconds, so a script outside a session may still use a removed capability for that long. Agent sessions end at once. |
-| Not built yet | Hiding `tempo` MCP tools that are not granted (Delivery 3); the Cloudflare API gate (13, L-ADR-8) | `api.cloudflare.com` with the placeholder is still refused, as before. |
+| Not built yet | Hiding `tempo` MCP tools that are not granted (Delivery 3) | Tools check their own access today. |
+| Cloudflare token | One token per workspace, for 1 hour, not one per session | A request carries no session (above). The token is revoked when the manifest loses `cloudflare`; otherwise it expires. |

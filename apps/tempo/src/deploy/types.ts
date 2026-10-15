@@ -28,6 +28,10 @@ export const deployLogKey = (projectId: string, deploymentId: string): string =>
 /** The CredentialDO key of a deployment's minted token (12, Tokens). */
 export const deployTokenKey = (deploymentId: string): string => `deploy.${deploymentId}.token`;
 
+/** 13, L-ADR-8: the workspace's minted Cloudflare API token. */
+export const agentCloudflareTokenKey = (workspaceId: string): string =>
+  `agent.${workspaceId}.cloudflare_token`;
+
 /** The owner's CredentialDO keys of 12, Owner settings. */
 export const DEPLOY_MASTER_KEY = "cloudflare.deploy_token";
 

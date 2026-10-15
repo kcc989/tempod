@@ -900,6 +900,32 @@ impl WorkspaceView {
         })
         .detach();
     }
+    /// Allow once or Refuse on a Cloudflare hold card (13, L-ADR-8).
+    fn decide_hold(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        hold_id: String,
+        allow: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let request = self
+            .client
+            .call::<api::DecideCloudflareHold>(p::DecideCloudflareHoldIn {
+                workspace_id: self.store.read(cx).workspace_id.clone(),
+                hold_id: hold_id.clone(),
+                allow,
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                transcript.update(cx, |t, cx| t.hold_finished(&hold_id, cx));
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
     fn operation(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -1522,6 +1548,9 @@ impl WorkspaceView {
                         input,
                         cx,
                     )
+                }
+                TranscriptEvent::DecideCloudflareHold { hold_id, allow } => {
+                    this.decide_hold(transcript.clone(), hold_id.clone(), *allow, cx)
                 }
                 TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
                     p::RequestAgentIn {
@@ -4412,6 +4441,61 @@ mod tests {
                 (
                     "/api/v1/rpc/reopenChecklistItem".to_string(),
                     serde_json::json!({"workspaceId": workspace_id, "checklistId": "checklist-1"})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn hold_actions_send_allow_and_refuse_once(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        for (hold_id, allow) in [("hold-1", true), ("hold-2", false)] {
+            cx.update_window(window, |_, _, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.decide_hold(hold_id, allow, cx);
+                    assert!(t.hold_busy(hold_id));
+                    t.decide_hold(hold_id, !allow, cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.hold_busy(hold_id)) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "hold call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/decideCloudflareHold"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/decideCloudflareHold".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "holdId": "hold-1", "allow": true})
+                ),
+                (
+                    "/api/v1/rpc/decideCloudflareHold".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "holdId": "hold-2", "allow": false})
                 ),
             ]
         );

@@ -406,6 +406,7 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 | 12 | Checked after rule 6. Host equals the `host` of a server in `mcp`, and a header named in that server's `secretHeaders` has exactly the value `tempo-placeholder:mcp:<serverId>:<name>` | Replace each such header with the value of `mcp.<serverId>.header.<name>`. If one is not set, return 403, body `tempo: credential not set`. |
 | 13 | Host matches the `hosts` of an injector of the environment (first match in list order) | Run the injector (Environments, below) and return its response |
 | 14 | The request carries `tempo-secret-<NAME>`, every such name is a secret of the environment with a stored value, and the host matches the `hosts` of each | Replace each placeholder with its value and forward |
+| 15 | Checked after rule 6. Host is `api.cloudflare.com` over HTTPS, `Authorization` is exactly `Bearer tempo-placeholder`, no other placeholder, and the manifest has `cloudflare` (14) | Ask the WorkspaceDO (13, L-ADR-8). If allowed, replace `Authorization` with the workspace's minted token and forward; else return 403 with its reason. |
 | 7 | Any request that still carries `tempo-placeholder` or `tempo-secret-` | Return 403. MUST NOT forward the placeholder. |
 | 8 | Egress policy `open` | Pass through unchanged |
 | 9 | Egress policy `allowlist`, host matches an environment pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |

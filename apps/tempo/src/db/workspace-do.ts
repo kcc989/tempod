@@ -396,6 +396,19 @@ export const proofs = sqliteTable("proofs", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const cloudflareHolds = sqliteTable("cloudflare_holds", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id"),
+  itemId: text("item_id"),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  resource: text("resource"),
+  reasonsJson: text("reasons_json").notNull(),
+  status: text("status", { enum: ["pending", "allowed", "refused", "used"] }).notNull(),
+  createdAt: integer("created_at").notNull(),
+  decidedAt: integer("decided_at"),
+});
+
 export const checklist = sqliteTable("checklist", {
   id: text("id").primaryKey(),
   text: text("text").notNull(),
@@ -409,6 +422,7 @@ export const workspaceSchema = {
   intents,
   proofs,
   checklist,
+  cloudflareHolds,
   lifecycleEvents,
   runs,
   artifacts,
@@ -445,6 +459,8 @@ export type IntentRow = typeof intents.$inferSelect;
 export type ProofRow = typeof proofs.$inferSelect;
 
 export type ChecklistRow = typeof checklist.$inferSelect;
+
+export type CloudflareHoldRow = typeof cloudflareHolds.$inferSelect;
 
 export type TurnRow = typeof turns.$inferSelect;
 

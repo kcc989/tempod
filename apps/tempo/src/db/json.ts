@@ -135,6 +135,7 @@ const ITEM_DEFAULTS = {
     missingChecklist: [],
     status: "checking",
   },
+  cloudflare_hold: { holdId: "", method: "", path: "", resource: null, reasons: [], status: "pending" },
   artifact: {
     artifactId: "",
     version: 1,

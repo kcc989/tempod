@@ -32,6 +32,12 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("confirmIntent", input);
   }
 
+  decideCloudflareHold(
+    input: MethodInput<"decideCloudflareHold">,
+  ): Promise<Result<FnOutput<"decideCloudflareHold">>> {
+    return this.rpc("decideCloudflareHold", input);
+  }
+
   addChecklistItem(input: MethodInput<"addChecklistItem">): Promise<Result<FnOutput<"addChecklistItem">>> {
     return this.rpc("addChecklistItem", input);
   }

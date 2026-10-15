@@ -1061,6 +1061,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "decideCloudflareHold": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DecideCloudflareHoldIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "addChecklistItem": {
       "type": "object",
       "properties": {
@@ -2762,6 +2778,7 @@
     "listRuns",
     "resolveAgentProposal",
     "confirmIntent",
+    "decideCloudflareHold",
     "addChecklistItem",
     "reopenChecklistItem",
     "correctIntent",

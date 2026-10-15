@@ -3016,6 +3016,10 @@ describe("manifest", async () => {
   await import("./manifest.cases.ts");
 });
 
+describe("cloudflare gate", async () => {
+  await import("./cloudflare-gate.cases.ts");
+});
+
 describe("protocol-additions", async () => {
   await import("./protocol-additions.cases.ts");
 });

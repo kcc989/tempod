@@ -1,6 +1,7 @@
 import { AgentProposalCard } from "./AgentProposalCard";
 import { IntentCard } from "./IntentCard";
 import { AddToChecklist, ProofCard } from "./ProofCard";
+import { CloudflareHoldCard } from "./CloudflareHoldCard";
 import { RunCard } from "./RunCard";
 import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
@@ -110,6 +111,8 @@ export const ItemView = memo(function ItemView({
       return <IntentCard workspaceId={ctx.workspaceId} intent={item.content} writable={ctx.writable} />;
     case "proof":
       return <ProofCard workspaceId={ctx.workspaceId} proof={item.content} writable={ctx.writable} />;
+    case "cloudflare_hold":
+      return <CloudflareHoldCard workspaceId={ctx.workspaceId} hold={item.content} writable={ctx.writable} />;
     case "user_message":
       return <UserMessage ctx={ctx} item={item} turn={turn} />;
     case "agent_message":
