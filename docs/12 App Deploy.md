@@ -230,7 +230,7 @@ New error codes:
 
 ## Agent tools
 
-The `tempo` MCP server (01) adds four tools. They act on the workspace's project, like the issue tools (08), and follow the same session, run and profile rules. Tool names match profile patterns as `<name>`, `tempo.<name>`, `mcp__tempo__<name>` and `mcp:tempo:<name>`.
+The `tempo` MCP server (01) adds four tools. They act on the workspace's project, like the issue tools (09), and follow the same session, run and profile rules. Tool names match profile patterns as `<name>`, `tempo.<name>`, `mcp__tempo__<name>` and `mcp:tempo:<name>`.
 
 | Tool | Input | Result | Mutates |
 | --- | --- | --- | --- |
