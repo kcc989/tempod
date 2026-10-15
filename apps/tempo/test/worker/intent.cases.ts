@@ -111,6 +111,7 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
 
     expect(first.content.map((c) => c.text)).toEqual([
       expect.any(String),
+      expect.any(String),
       INTENT_TEXT.rule,
       "Add due dates to todos",
     ]);
@@ -172,7 +173,11 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
     unwrap(await other.prompt("/go fix the typo in the footer"));
     const go = await other.sent(0);
 
-    expect(go.content.map((c) => c.text)).toEqual([expect.any(String), "fix the typo in the footer"]);
+    expect(go.content.map((c) => c.text)).toEqual([
+      expect.any(String),
+      expect.any(String),
+      "fix the typo in the footer",
+    ]);
     expect(other.modes()).toEqual([]);
     expect(text(await other.propose(INTENT))).toBe(INTENT_TEXT.byOwner);
   });

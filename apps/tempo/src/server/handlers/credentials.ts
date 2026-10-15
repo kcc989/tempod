@@ -119,7 +119,7 @@ export const deleteCredential = async (
   return {};
 };
 
-const refreshProjectEnv = async (c: HandlerCtx, projectId: string) => {
+export const refreshProjectEnv = async (c: HandlerCtx, projectId: string) => {
   const ids = await d1(c.env)
     .select({ id: workspaces.id })
     .from(workspaces)

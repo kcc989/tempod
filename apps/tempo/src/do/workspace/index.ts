@@ -1,4 +1,5 @@
 import { eq, lte, isNull } from "drizzle-orm";
+import { endSessionForAccess, enforceRemovedAccess, workspaceCalls } from "./manifest.ts";
 import {
   TempoError,
   capture,
@@ -451,6 +452,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
       dotfiles: await this.dotfilesEgress(),
+      calls: await workspaceCalls(this.core),
     };
   }
 
@@ -518,6 +520,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     status: number;
     ms: number;
     rule: number;
+    capability?: string;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
     const blocked = row.rule === 7 || row.rule === 10;
@@ -615,6 +618,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (!this.core.wsOrNull()) return;
     await this.core.project(true).catch(() => undefined);
     this.core.broadcastDetailSoon();
+    await enforceRemovedAccess(this.core, (id, removed) => endSessionForAccess(this.core, id, removed)).catch(
+      (e) =>
+        log("warn", "manifest check failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+    );
 
     if (!this.core.tempod?.open) return;
     await sendEnv(this.core);

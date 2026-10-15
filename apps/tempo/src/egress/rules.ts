@@ -5,6 +5,7 @@ import {
   SECRET_PLACEHOLDER_PREFIX,
   SECRET_PLACEHOLDER_RE,
   hostMatches,
+  type CapabilityCall,
   type EgressPolicy,
   type Injector,
   type SecretBinding,
@@ -48,6 +49,8 @@ export interface EgressConfig {
   readonly ci?: boolean;
   /** A deployment's container (12, Egress): CI's repository rule plus the Cloudflare token swap. */
   readonly deploy?: boolean;
+  /** The workspace's `call` capabilities (14, Enforcement); absent means no capability checks. */
+  readonly calls?: ReadonlyArray<CapabilityCall>;
   /** The owner's dotfiles remote (01, Shell and dotfiles); read side only. */
   readonly dotfiles?: { readonly cloneUrl: string } | null;
 }
@@ -135,7 +138,9 @@ export const swapSecrets = (url: URL, headers: Headers, values: Readonly<Record<
   return { url: next, headers: out } satisfies { url: URL; headers: Headers };
 };
 
-export type Decision =
+export type Decision = Rule & { readonly capability?: string };
+
+type Rule =
   | { readonly rule: number; readonly action: "block"; readonly status: number; readonly body: string }
   | { readonly rule: 11; readonly action: "browser" }
   | { readonly rule: 13; readonly action: "inject"; readonly injector: Injector }
@@ -164,7 +169,21 @@ export type Decision =
  * 13 and 14 right after rule 6. Pure: credential lookup happens in the caller.
  * `set` names the credential to add; the caller fetches it and replaces the header.
  */
-export const decide = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
+export const decide = (
+  url: URL,
+  headers: Headers,
+  appHost: string,
+  config: EgressConfig,
+  method = "GET",
+): Decision => {
+  const decision = decideRule(url, headers, appHost, config);
+
+  return config.calls
+    ? gate(decision, url.hostname.toLowerCase(), method.toUpperCase(), config.calls)
+    : decision;
+};
+
+const decideRule = (url: URL, headers: Headers, appHost: string, config: EgressConfig): Decision => {
   const host = url.hostname.toLowerCase();
 
   if (host === appHost.toLowerCase())
@@ -372,4 +391,60 @@ const policy = (_from: number, host: string, config: EgressConfig): Decision => 
     return { rule: 9, action: "forward" };
 
   return { rule: 10, action: "block", status: 403, body: `tempo: egress blocked for ${host}` };
+};
+
+/** The call entry a request uses: the first whose hosts match and that passes `test`. */
+export const callFor = (
+  calls: ReadonlyArray<CapabilityCall>,
+  host: string,
+  test: (c: CapabilityCall) => boolean,
+): CapabilityCall | undefined => calls.find((c) => test(c) && c.hosts.some((p) => hostMatches(host, p)));
+
+const BUILTIN_RULES = new Map([
+  [4, "openrouter"],
+  [5, "anthropic"],
+  [6, "openai"],
+]);
+
+const refused = (host: string, id?: string): Decision => ({
+  rule: 10,
+  action: "block",
+  status: 403,
+  body: id ? `tempo: capability ${id} not granted for ${host}` : `tempo: no capability for ${host}`,
+});
+
+/** 14, Enforcement: each rule that adds a credential or passes a host needs a granted capability. */
+const gate = (
+  decision: Decision,
+  host: string,
+  method: string,
+  calls: ReadonlyArray<CapabilityCall>,
+): Decision => {
+  const use = (test: (c: CapabilityCall) => boolean, id?: string): Decision => {
+    const call = callFor(calls, host, test);
+
+    if (!call) return refused(host, id);
+
+    if (call.methods.length > 0 && !call.methods.includes(method)) return refused(host, call.id);
+
+    return { ...decision, capability: call.id };
+  };
+
+  const builtin = BUILTIN_RULES.get(decision.rule);
+
+  if (builtin && decision.action === "forward") return use((c) => c.builtin && c.id === builtin, builtin);
+
+  if (decision.rule === 12) return use((c) => c.id.startsWith("mcp:"));
+
+  if (decision.action === "inject") return use((c) => c.id === `injector:${decision.injector.name}`);
+
+  if (decision.action === "swap") {
+    const [first, ...rest] = decision.names.map((n) => use((c) => c.credential?.ref === n));
+
+    return rest.find((d) => d.action === "block") ?? first ?? refused(host);
+  }
+
+  if (decision.rule === 9 && !AGENT_HOSTS.some((p) => hostMatches(host, p))) return use(() => true);
+
+  return decision;
 };

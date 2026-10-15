@@ -606,3 +606,16 @@ Tab 13, L-ADR-2 (Exact rules). Choices made without the owner:
 | Checklist text | The user message text, trimmed; a repeat of Add to checklist returns the same item | The spec has the 2,000-character limit and no rule for repeats. |
 | Reopen | Shown on a proof card next to each item that this proof resolved | It is where the owner sees the result. |
 | Not built yet | The proof above the preview pane, and the "routes named by the agent" note for changed files in no `screens` entry | The transcript card shows the proof; the Exact rules table has no field for the agent's routes. |
+
+## Capability manifest (2026-10-15)
+
+Tab 14. Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Enforcement scope | `TempoOutbound` enforces one workspace manifest: the project's current `call` list plus a built-in entry for each model key the owner has | All sessions of a workspace share one container network, so a request carries no session. Each session still stores its own frozen manifest, which the agent reads and which decides when the session ends. A `run` session with read-only access is limited to `GET` and `HEAD` in its own manifest, but not at the network. |
+| Call ids | Profile services keep their `name`. Environment secrets with hosts become `secret:<NAME>`, injectors `injector:<name>`, MCP servers `mcp:<name>`, the egress allowlist `allowlist`, model keys `anthropic`, `openai` and `openrouter` | Every rule of 01 that passes a host or adds a credential needs an entry. A profile service that names a secret replaces that secret's own entry, so its `methods` apply. |
+| Reads | `repo`, `issues`, `pull_requests` and `ci_runs` always; `deployments` and `prod_errors` when deploys are on | These follow the project's features; tools are not hidden yet (below). |
+| Revision | `AppDeployDO.manifests` maps the hash of the project part of the manifest to the next number | `revision` counts project changes; the session part changes `sha256` only. |
+| Removed access | Checked when the workspace refreshes its environment: after an environment, secret, profile or deploy configuration change, and on each egress config read | The outbound cache keeps an old config for up to 60 seconds, so a script outside a session may still use a removed capability for that long. Agent sessions end at once. |
+| Not built yet | Hiding `tempo` MCP tools that are not granted (Delivery 3); the Cloudflare API gate (13, L-ADR-8) | `api.cloudflare.com` with the placeholder is still refused, as before. |

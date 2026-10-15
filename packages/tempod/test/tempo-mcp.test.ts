@@ -59,6 +59,7 @@ describe("tempo MCP server (01, Environments)", () => {
       ...DEPLOY_TOOL_NAMES,
       "get_project_profile",
       "propose_intent",
+      "get_capabilities",
       "submit_proof",
       "list_agents",
       "propose_agent_change",

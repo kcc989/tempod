@@ -25,6 +25,7 @@ import {
   deployments,
   prodErrors,
   profiles,
+  manifests,
 } from "../db/app-deploy-do.ts";
 import { ISSUES, type ParsedIssue } from "../deploy/issues.ts";
 import { projects } from "../db/d1.ts";
@@ -358,6 +359,21 @@ export class AppDeployDO extends DurableObject<Env> {
     this.db.update(deployments).set({ gateFailure: reason }).where(eq(deployments.id, row.id)).run();
     await this.rollback(this.require(row.id), reason, "failure");
     await this.pump();
+  }
+
+  // ---------- capability manifests (14, C-ADR-1) ----------
+  /** The project's manifest revision for this hash: the same hash keeps its number, a new one gets the next. */
+  async manifestRevision(sha256: string): Promise<Result<number>> {
+    return capture(async () => {
+      const known = this.db.select().from(manifests).where(eq(manifests.sha256, sha256)).get();
+
+      if (known) return known.revision;
+      const last = this.db.select().from(manifests).orderBy(desc(manifests.revision)).get();
+      const revision = (last?.revision ?? 0) + 1;
+      this.db.insert(manifests).values({ sha256, revision, createdAt: Date.now() }).run();
+
+      return revision;
+    });
   }
 
   // ---------- project profile (13, L-ADR-3) ----------

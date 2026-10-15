@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { refreshProjectEnv } from "./credentials.ts";
 import { Schema } from "effect";
 import { TempoError, unwrap, type DeploySettings, type FnInput, type FnOutput } from "@tempo/protocol";
 import type { DeploymentQuery } from "../../do/app-deploy.ts";
@@ -83,8 +84,12 @@ export const getDeployConfig = async (
 export const updateDeployConfig = async (
   ctx: HandlerCtx,
   { projectId, source, revision }: FnInput<"updateDeployConfig">,
-): Promise<FnOutput<"updateDeployConfig">> =>
-  unwrap(await (await coordinator(ctx, projectId)).updateConfig({ source, revision }));
+): Promise<FnOutput<"updateDeployConfig">> => {
+  const config = unwrap(await (await coordinator(ctx, projectId)).updateConfig({ source, revision }));
+  await refreshProjectEnv(ctx, projectId);
+
+  return config;
+};
 
 export const listDeployments = async (
   ctx: HandlerCtx,

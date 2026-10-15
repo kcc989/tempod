@@ -151,6 +151,7 @@ export const SHARED = {
   ProductionError: P.ProductionError,
   ProjectProfile: P.ProjectProfile,
   ChecklistItem: P.ChecklistItem,
+  CapabilityManifest: P.CapabilityManifest,
   ConversationSummary: P.ConversationSummary,
   ConversationArtifact: P.ConversationArtifact,
   WorkspaceSummary: P.WorkspaceSummary,

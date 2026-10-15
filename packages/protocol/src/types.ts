@@ -828,6 +828,8 @@ export const Diagnostics = Schema.Struct({
       status: Schema.Number,
       ms: Schema.Number,
       rule: Schema.Number,
+      /** 14, Enforcement: the capability id the request used, or empty. */
+      capability: Schema.optional(Schema.String),
     }),
   ),
   sessions: Schema.Array(

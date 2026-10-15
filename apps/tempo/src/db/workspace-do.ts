@@ -106,6 +106,7 @@ export const sessions = sqliteTable("sessions", {
   agentSha: text("agent_sha"),
   profileJson: text("profile_json"),
   profileIssuesJson: text("profile_issues_json").notNull().default("[]"),
+  manifestJson: text("manifest_json"),
   sortOrder: integer("sort_order").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -254,6 +255,7 @@ export const egressLog = sqliteTable("egress_log", {
   status: integer("status").notNull(),
   ms: integer("ms").notNull(),
   rule: integer("rule").notNull(),
+  capability: text("capability").notNull().default(""),
 });
 
 export const fileCache = sqliteTable("file_cache", {

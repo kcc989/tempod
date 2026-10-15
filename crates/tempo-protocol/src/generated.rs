@@ -1581,6 +1581,340 @@ impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json:
         Self(value)
     }
 }
+///`CapabilityManifest`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifest {
+    pub call: ::std::vec::Vec<CapabilityManifestCallItem>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub cloudflare: ::std::option::Option<CapabilityManifestCloudflare>,
+    pub deploy: ::std::vec::Vec<CapabilityManifestDeployItem>,
+    pub exceptions: ::std::vec::Vec<CapabilityManifestExceptionsItem>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub read: ::std::vec::Vec<CapabilityManifestReadItem>,
+    pub revision: f64,
+    #[serde(rename = "schemaVersion")]
+    pub schema_version: CapabilityManifestSchemaVersion,
+    pub session: CapabilityManifestSession,
+    pub sha256: ::std::string::String,
+    pub stack: CapabilityManifestStack,
+}
+///`CapabilityManifestCallItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestCallItem {
+    pub builtin: bool,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub credential: ::std::option::Option<CapabilityManifestCallItemCredential>,
+    pub hosts: ::std::vec::Vec<::std::string::String>,
+    pub id: ::std::string::String,
+    pub methods: ::std::vec::Vec<::std::string::String>,
+}
+///`CapabilityManifestCallItemCredential`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestCallItemCredential {
+    pub placeholder: ::std::string::String,
+    #[serde(rename = "ref")]
+    pub ref_: ::std::string::String,
+}
+///`CapabilityManifestCloudflare`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestCloudflare {
+    pub permissions: ::std::vec::Vec<DeployPermission>,
+    pub resources: ::std::vec::Vec<::std::string::String>,
+}
+///`CapabilityManifestDeployItem`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestDeployItem {
+    pub agent: bool,
+    pub cloudflare: ::std::vec::Vec<DeployPermission>,
+    pub target: ::std::string::String,
+    pub workers: ::std::vec::Vec<::std::string::String>,
+}
+///`CapabilityManifestExceptionsItem`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CapabilityManifestExceptionsItem {
+    #[serde(rename = "claude_login")]
+    ClaudeLogin,
+    #[serde(rename = "codex_login")]
+    CodexLogin,
+    #[serde(rename = "secrets_without_hosts")]
+    SecretsWithoutHosts,
+}
+impl ::std::fmt::Display for CapabilityManifestExceptionsItem {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::ClaudeLogin => f.write_str("claude_login"),
+            Self::CodexLogin => f.write_str("codex_login"),
+            Self::SecretsWithoutHosts => f.write_str("secrets_without_hosts"),
+        }
+    }
+}
+impl ::std::str::FromStr for CapabilityManifestExceptionsItem {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "claude_login" => Ok(Self::ClaudeLogin),
+            "codex_login" => Ok(Self::CodexLogin),
+            "secrets_without_hosts" => Ok(Self::SecretsWithoutHosts),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CapabilityManifestExceptionsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CapabilityManifestExceptionsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CapabilityManifestReadItem`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CapabilityManifestReadItem {
+    #[serde(rename = "repo")]
+    Repo,
+    #[serde(rename = "deployments")]
+    Deployments,
+    #[serde(rename = "prod_errors")]
+    ProdErrors,
+    #[serde(rename = "issues")]
+    Issues,
+    #[serde(rename = "pull_requests")]
+    PullRequests,
+    #[serde(rename = "ci_runs")]
+    CiRuns,
+}
+impl ::std::fmt::Display for CapabilityManifestReadItem {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Repo => f.write_str("repo"),
+            Self::Deployments => f.write_str("deployments"),
+            Self::ProdErrors => f.write_str("prod_errors"),
+            Self::Issues => f.write_str("issues"),
+            Self::PullRequests => f.write_str("pull_requests"),
+            Self::CiRuns => f.write_str("ci_runs"),
+        }
+    }
+}
+impl ::std::str::FromStr for CapabilityManifestReadItem {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "repo" => Ok(Self::Repo),
+            "deployments" => Ok(Self::Deployments),
+            "prod_errors" => Ok(Self::ProdErrors),
+            "issues" => Ok(Self::Issues),
+            "pull_requests" => Ok(Self::PullRequests),
+            "ci_runs" => Ok(Self::CiRuns),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CapabilityManifestReadItem {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CapabilityManifestReadItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CapabilityManifestSchemaVersion`
+#[derive(::serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(transparent)]
+pub struct CapabilityManifestSchemaVersion(f64);
+impl ::std::ops::Deref for CapabilityManifestSchemaVersion {
+    type Target = f64;
+    fn deref(&self) -> &f64 {
+        &self.0
+    }
+}
+impl ::std::convert::From<CapabilityManifestSchemaVersion> for f64 {
+    fn from(value: CapabilityManifestSchemaVersion) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::TryFrom<f64> for CapabilityManifestSchemaVersion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: f64) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if ![1_f64].contains(&value) {
+            Err("invalid value".into())
+        } else {
+            Ok(Self(value))
+        }
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CapabilityManifestSchemaVersion {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        Self::try_from(<f64>::deserialize(deserializer)?)
+            .map_err(|e| <D::Error as ::serde::de::Error>::custom(e.to_string()))
+    }
+}
+///`CapabilityManifestSession`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestSession {
+    pub access: CapabilityManifestSessionAccess,
+    pub kind: CapabilityManifestSessionKind,
+}
+///`CapabilityManifestSessionAccess`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CapabilityManifestSessionAccess {
+    #[serde(rename = "write")]
+    Write,
+    #[serde(rename = "read-only")]
+    ReadOnly,
+}
+impl ::std::fmt::Display for CapabilityManifestSessionAccess {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Write => f.write_str("write"),
+            Self::ReadOnly => f.write_str("read-only"),
+        }
+    }
+}
+impl ::std::str::FromStr for CapabilityManifestSessionAccess {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "write" => Ok(Self::Write),
+            "read-only" => Ok(Self::ReadOnly),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CapabilityManifestSessionAccess {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CapabilityManifestSessionAccess {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CapabilityManifestSessionKind`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CapabilityManifestSessionKind {
+    #[serde(rename = "chat")]
+    Chat,
+    #[serde(rename = "run")]
+    Run,
+    #[serde(rename = "deploy")]
+    Deploy,
+    #[serde(rename = "ci")]
+    Ci,
+}
+impl ::std::fmt::Display for CapabilityManifestSessionKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Chat => f.write_str("chat"),
+            Self::Run => f.write_str("run"),
+            Self::Deploy => f.write_str("deploy"),
+            Self::Ci => f.write_str("ci"),
+        }
+    }
+}
+impl ::std::str::FromStr for CapabilityManifestSessionKind {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "chat" => Ok(Self::Chat),
+            "run" => Ok(Self::Run),
+            "deploy" => Ok(Self::Deploy),
+            "ci" => Ok(Self::Ci),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CapabilityManifestSessionKind {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CapabilityManifestSessionKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CapabilityManifestStack`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CapabilityManifestStack {
+    pub frameworks: ::std::vec::Vec<::std::string::String>,
+    pub libraries: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "packageManager",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub package_manager: ::std::option::Option<::std::string::String>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub runtime: ::std::option::Option<::std::string::String>,
+}
 ///`ChangedFile`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct ChangedFile {
@@ -17240,6 +17574,7 @@ pub mod wire {
         "CancelRunIn",
         "CancelTurnIn",
         "Capabilities",
+        "CapabilityManifest",
         "ChangedFile",
         "ChangesSummary",
         "CheckRun",
@@ -17640,6 +17975,7 @@ pub mod wire {
             "CancelRunIn" => crate::roundtrip::<crate::CancelRunIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
+            "CapabilityManifest" => crate::roundtrip::<crate::CapabilityManifest>(text),
             "ChangedFile" => crate::roundtrip::<crate::ChangedFile>(text),
             "ChangesSummary" => crate::roundtrip::<crate::ChangesSummary>(text),
             "CheckRun" => crate::roundtrip::<crate::CheckRun>(text),

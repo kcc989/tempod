@@ -40,6 +40,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     const workspace = this.env.WORKSPACE.getByName(workspaceId);
     let rule = injectorName ? 13 : 10;
     let status = 0;
+    let capability = "";
 
     try {
       const config: EgressConfig = this.ctx.props.catalog
@@ -58,10 +59,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
           : { rule: 13, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
       } else {
-        decision = decide(url, request.headers, this.env.APP_HOST, config);
+        decision = decide(url, request.headers, this.env.APP_HOST, config, request.method);
       }
 
       rule = decision.rule;
+      capability = decision.capability ?? "";
       const acted = await this.act(decision, request, config, userId, workspace);
       rule = acted.rule ?? rule;
       status = acted.response.status;
@@ -88,6 +90,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
               status,
               ms: Date.now() - started,
               rule,
+              capability,
             })
             .catch(() => undefined),
         );

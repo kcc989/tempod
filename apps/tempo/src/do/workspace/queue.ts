@@ -1,5 +1,6 @@
 import { INTENT_TEXT, intentBeforeTurn, intentRuleDue } from "./intent.ts";
 import { checklistBlock } from "./proof.ts";
+import { manifestSummary, sessionManifest, storedManifest } from "./manifest.ts";
 import { syncIdleCredentials } from "./credential-sync.ts";
 import { Match, Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
@@ -187,6 +188,7 @@ export const ensureSessionLive = async (
   if (model) input = { ...input, model };
 
   if (session.profileJson) input = { ...input, profile: json.profile.read(session.profileJson, undefined) };
+  await sessionManifest(core, session);
   const res = await tempod.request("session.start", input, opts);
 
   core.liveSessions.add(session.id);
@@ -300,6 +302,9 @@ export const buildContent = async (
   let handoff: string | null = null;
 
   if (session.generalPromptSent === 0) {
+    const manifest = storedManifest(core.sessionRow(session.id));
+
+    if (manifest) blocks.push(text(manifestSummary(manifest)));
     blocks.push(text(TURN_SUMMARY_RULE));
 
     if (settings.prompts.general) blocks.push(text(settings.prompts.general));

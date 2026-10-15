@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CapabilityManifest",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "enum": [1]
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "enum": ["Infinity", "-Infinity", "NaN"]
+        }
+      ]
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["chat", "run", "deploy", "ci"]
+        },
+        "access": {
+          "type": "string",
+          "enum": ["write", "read-only"]
+        }
+      },
+      "required": ["kind", "access"],
+      "additionalProperties": true
+    },
+    "stack": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "packageManager": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "libraries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["runtime", "packageManager", "frameworks", "libraries"],
+      "additionalProperties": true
+    },
+    "read": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["repo", "deployments", "prod_errors", "issues", "pull_requests", "ci_runs"]
+      }
+    },
+    "call": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "credential": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "placeholder": {
+                    "type": "string"
+                  }
+                },
+                "required": ["ref", "placeholder"],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "builtin": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "hosts", "credential", "methods", "builtin"],
+        "additionalProperties": true
+      }
+    },
+    "cloudflare": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "resources": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "permissions": {
+              "type": "array",
+              "items": {
+                "$ref": "DeployPermission.json"
+              }
+            }
+          },
+          "required": ["resources", "permissions"],
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["claude_login", "codex_login", "secrets_without_hosts"]
+      }
+    },
+    "deploy": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "workers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cloudflare": {
+            "type": "array",
+            "items": {
+              "$ref": "DeployPermission.json"
+            }
+          },
+          "agent": {
+            "type": "boolean"
+          }
+        },
+        "required": ["target", "workers", "cloudflare", "agent"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "revision",
+    "sha256",
+    "session",
+    "stack",
+    "read",
+    "call",
+    "cloudflare",
+    "exceptions",
+    "deploy"
+  ],
+  "additionalProperties": true
+}

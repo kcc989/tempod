@@ -643,6 +643,8 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
   resolved_by     TEXT,
   created_at      INTEGER NOT NULL
 )`,
+      "ALTER TABLE sessions ADD COLUMN manifest_json TEXT",
+      "ALTER TABLE egress_log ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
       `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
         kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof')),
         status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
@@ -836,6 +838,11 @@ export const APP_DEPLOY_MIGRATIONS: Migrations = [
       `CREATE TABLE profiles (
   revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
   source      TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+)`,
+      `CREATE TABLE manifests (
+  sha256      TEXT PRIMARY KEY,
+  revision    INTEGER NOT NULL UNIQUE,
   created_at  INTEGER NOT NULL
 )`,
     ],

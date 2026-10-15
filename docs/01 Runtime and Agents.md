@@ -456,7 +456,7 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Send a prompt**
 
 - The WorkspaceDO sends `session.prompt {sessionId, turnId, content}`. `content` is a list of ACP content blocks built in this order:
-  1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set, then the project profile block (13, L-ADR-3), if the project has a saved profile.
+  1. On the first prompt of a session only: a text block with the capability summary (14, Delivery to the agent), then a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set, then the project profile block (13, L-ADR-3), if the project has a saved profile.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
   4. On the first prompt of a chat that starts the intent check (13, L-ADR-1): the intent rule text block. A first prompt that starts with `/go` has no rule, and `/go` is removed.

@@ -85,4 +85,18 @@ export const profiles = sqliteTable("profiles", {
   createdAt: integer("created_at").notNull(),
 });
 
-export const appDeploySchema = { deployConfigs, deployments, deployKv, deployEvents, prodErrors, profiles };
+export const manifests = sqliteTable("manifests", {
+  sha256: text("sha256").primaryKey(),
+  revision: integer("revision").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const appDeploySchema = {
+  deployConfigs,
+  deployments,
+  deployKv,
+  deployEvents,
+  prodErrors,
+  profiles,
+  manifests,
+};

@@ -293,6 +293,12 @@ export const handleMcpMessage = async (
                   },
                 },
                 {
+                  name: "get_capabilities",
+                  description:
+                    "Get this chat's capability manifest: what you can read, which services you can call and how, the Cloudflare access and the deploy targets. Requests outside it are refused.",
+                  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                },
+                {
                   name: "submit_proof",
                   description:
                     "Submit proof that the preview works: a summary of at most 5 lines, one screen per changed route (images you published with publish_artifact in this chat), and a note for each open design checklist item. Tempo runs the project's checks itself. Then end your turn.",
@@ -493,7 +499,12 @@ export const handleMcpMessage = async (
           );
         }
 
-        if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {
+        if (
+          !runId &&
+          (params["name"] === "list_agents" ||
+            params["name"] === "propose_agent_change" ||
+            params["name"] === "get_capabilities")
+        ) {
           const res = await call("/agent-tools", {
             method: "POST",
             headers: { "content-type": "application/json" },

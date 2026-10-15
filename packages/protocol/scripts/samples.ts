@@ -747,6 +747,30 @@ export const SHARED_SAMPLES = {
   ],
   LifecycleProofPayload: [{ proofId: uid(1013), complete: false }],
   LifecycleChecklistPayload: [{ checklistId: uid(1016) }],
+  CapabilityManifest: [
+    {
+      schemaVersion: 1,
+      projectId: uid(2),
+      revision: 3,
+      sha256: "a".repeat(64),
+      session: { kind: "chat", access: "write" },
+      stack: { runtime: "bun 1.3", packageManager: null, frameworks: ["TanStack Start"], libraries: [] },
+      read: ["repo", "issues", "deployments"],
+      call: [
+        {
+          id: "stripe",
+          hosts: ["api.stripe.com"],
+          credential: { ref: "STRIPE_KEY", placeholder: "tempo-secret-STRIPE_KEY" },
+          methods: ["GET", "POST"],
+          builtin: false,
+        },
+        { id: "anthropic", hosts: ["api.anthropic.com"], credential: null, methods: [], builtin: true },
+      ],
+      cloudflare: { resources: ["todo-web"], permissions: ["workers", "d1"] },
+      exceptions: ["claude_login"],
+      deploy: [{ target: "preview", workers: ["todo-web"], cloudflare: ["workers", "d1"], agent: true }],
+    },
+  ],
   ProjectProfile: [
     {
       projectId: PROJECT_ID,
