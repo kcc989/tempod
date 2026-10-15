@@ -23,6 +23,11 @@ import {
   CiRunConclusion,
   CiStatus,
   CiTrigger,
+  DeployConclusion,
+  DeployPermission,
+  DeployStatus,
+  DeployTool,
+  DeployTrigger,
   IssueState,
   NoticeLevel,
   OpKind,
@@ -249,6 +254,63 @@ export type CiJob = typeof CiJob.Type;
 export const CiRunDetail = Schema.Struct({ run: CiRun, jobs: Schema.Array(CiJob) });
 
 export type CiRunDetail = typeof CiRunDetail.Type;
+
+export const DeployTarget = Schema.Struct({
+  key: Schema.String,
+  stage: Schema.String,
+  branch: N(Schema.String),
+  auto: Schema.Boolean,
+  agent: Schema.Boolean,
+});
+
+export type DeployTarget = typeof DeployTarget.Type;
+
+export const DeployConfig = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  enabled: Schema.Boolean,
+  tool: N(DeployTool),
+  root: Schema.String,
+  permissions: Schema.Array(DeployPermission),
+  timeoutMinutes: Schema.Number,
+  egressAllowlist: Schema.Array(Schema.String),
+  targets: Schema.Array(DeployTarget),
+  updatedAt: N(Ms),
+});
+
+export type DeployConfig = typeof DeployConfig.Type;
+
+export const Deployment = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  number: Schema.Number,
+  target: Schema.String,
+  stage: Schema.String,
+  branch: Schema.String,
+  sha: Schema.String,
+  revision: Schema.Number,
+  trigger: DeployTrigger,
+  status: DeployStatus,
+  conclusion: N(DeployConclusion),
+  exitCode: N(Schema.Number),
+  summary: N(Schema.String),
+  workspaceId: N(Schema.String),
+  createdAt: Ms,
+  startedAt: N(Ms),
+  completedAt: N(Ms),
+  url: Schema.String,
+});
+
+export type Deployment = typeof Deployment.Type;
+
+export const DeploySettings = Schema.Struct({
+  accountId: N(Schema.String),
+  tokenSet: Schema.Boolean,
+  updatedAt: N(Ms),
+});
+
+export type DeploySettings = typeof DeploySettings.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,

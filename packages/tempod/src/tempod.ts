@@ -1,4 +1,4 @@
-import { IssueToolName } from "@tempo/protocol";
+import { DeployToolName, IssueToolName } from "@tempo/protocol";
 import type { ToolReq } from "@tempo/protocol";
 import { mkdirSync } from "node:fs";
 import {
@@ -239,7 +239,7 @@ export class Tempod {
           const runId = this.agents.toolRunId(input.sessionId);
 
           if (
-            Schema.is(IssueToolName)(input.op)
+            Schema.is(IssueToolName)(input.op) || Schema.is(DeployToolName)(input.op)
               ? runId !== input.runId
               : (input.op === "report_result" && (!runId || runId !== input.runId)) ||
                 (input.op !== "report_result" && runId)

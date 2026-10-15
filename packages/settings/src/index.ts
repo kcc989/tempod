@@ -300,3 +300,5 @@ export const defaultRunScriptId = (settings: Settings): string | null => {
 };
 
 export { CI_LIMITS, parseCiPipeline, type CiJobDefinition, type CiPipelineSpec } from "./ci.ts";
+
+export { DEPLOY_LIMITS, parseDeployConfig, type DeploySpec } from "./deploy.ts";

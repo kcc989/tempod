@@ -1475,6 +1475,64 @@ impl<'de> ::serde::Deserialize<'de> for CancelCodexLoginInLoginId {
             })
     }
 }
+///`CancelDeploymentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CancelDeploymentIn {
+    #[serde(rename = "deploymentId")]
+    pub deployment_id: CancelDeploymentInDeploymentId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`CancelDeploymentInDeploymentId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CancelDeploymentInDeploymentId(::std::string::String);
+impl ::std::ops::Deref for CancelDeploymentInDeploymentId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CancelDeploymentInDeploymentId> for ::std::string::String {
+    fn from(value: CancelDeploymentInDeploymentId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CancelDeploymentInDeploymentId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CancelDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CancelDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CancelDeploymentInDeploymentId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`CancelRunIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CancelRunIn {
@@ -3159,6 +3217,400 @@ pub struct DeleteWorkspaceIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`DeployConclusion`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployConclusion {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "failure")]
+    Failure,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "timed_out")]
+    TimedOut,
+}
+impl ::std::fmt::Display for DeployConclusion {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Success => f.write_str("success"),
+            Self::Failure => f.write_str("failure"),
+            Self::Cancelled => f.write_str("cancelled"),
+            Self::TimedOut => f.write_str("timed_out"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployConclusion {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "success" => Ok(Self::Success),
+            "failure" => Ok(Self::Failure),
+            "cancelled" => Ok(Self::Cancelled),
+            "timed_out" => Ok(Self::TimedOut),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployConclusion {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeployConfig`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeployConfig {
+    #[serde(rename = "egressAllowlist")]
+    pub egress_allowlist: ::std::vec::Vec<::std::string::String>,
+    pub enabled: bool,
+    pub permissions: ::std::vec::Vec<DeployPermission>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub root: ::std::string::String,
+    pub source: ::std::string::String,
+    pub targets: ::std::vec::Vec<DeployTarget>,
+    #[serde(rename = "timeoutMinutes")]
+    pub timeout_minutes: f64,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub tool: ::std::option::Option<DeployTool>,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
+///`DeployPermission`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployPermission {
+    #[serde(rename = "workers")]
+    Workers,
+    #[serde(rename = "kv")]
+    Kv,
+    #[serde(rename = "d1")]
+    D1,
+    #[serde(rename = "r2")]
+    R2,
+    #[serde(rename = "queues")]
+    Queues,
+    #[serde(rename = "vectorize")]
+    Vectorize,
+    #[serde(rename = "hyperdrive")]
+    Hyperdrive,
+    #[serde(rename = "secrets_store")]
+    SecretsStore,
+    #[serde(rename = "routes")]
+    Routes,
+}
+impl ::std::fmt::Display for DeployPermission {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Workers => f.write_str("workers"),
+            Self::Kv => f.write_str("kv"),
+            Self::D1 => f.write_str("d1"),
+            Self::R2 => f.write_str("r2"),
+            Self::Queues => f.write_str("queues"),
+            Self::Vectorize => f.write_str("vectorize"),
+            Self::Hyperdrive => f.write_str("hyperdrive"),
+            Self::SecretsStore => f.write_str("secrets_store"),
+            Self::Routes => f.write_str("routes"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployPermission {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "workers" => Ok(Self::Workers),
+            "kv" => Ok(Self::Kv),
+            "d1" => Ok(Self::D1),
+            "r2" => Ok(Self::R2),
+            "queues" => Ok(Self::Queues),
+            "vectorize" => Ok(Self::Vectorize),
+            "hyperdrive" => Ok(Self::Hyperdrive),
+            "secrets_store" => Ok(Self::SecretsStore),
+            "routes" => Ok(Self::Routes),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployPermission {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployPermission {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeploySettings`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeploySettings {
+    #[serde(
+        rename = "accountId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub account_id: ::std::option::Option<::std::string::String>,
+    #[serde(rename = "tokenSet")]
+    pub token_set: bool,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
+///`DeployStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployStatus {
+    #[serde(rename = "queued")]
+    Queued,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "completed")]
+    Completed,
+}
+impl ::std::fmt::Display for DeployStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Queued => f.write_str("queued"),
+            Self::Running => f.write_str("running"),
+            Self::Completed => f.write_str("completed"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" => Ok(Self::Completed),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeployTarget`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DeployTarget {
+    pub agent: bool,
+    pub auto: bool,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub branch: ::std::option::Option<::std::string::String>,
+    pub key: ::std::string::String,
+    pub stage: ::std::string::String,
+}
+///`DeployTool`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployTool {
+    #[serde(rename = "alchemy")]
+    Alchemy,
+    #[serde(rename = "cloudflare-config")]
+    CloudflareConfig,
+}
+impl ::std::fmt::Display for DeployTool {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Alchemy => f.write_str("alchemy"),
+            Self::CloudflareConfig => f.write_str("cloudflare-config"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployTool {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "alchemy" => Ok(Self::Alchemy),
+            "cloudflare-config" => Ok(Self::CloudflareConfig),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployTool {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployTool {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`DeployTrigger`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum DeployTrigger {
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "agent")]
+    Agent,
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "redeploy")]
+    Redeploy,
+}
+impl ::std::fmt::Display for DeployTrigger {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Manual => f.write_str("manual"),
+            Self::Agent => f.write_str("agent"),
+            Self::Auto => f.write_str("auto"),
+            Self::Redeploy => f.write_str("redeploy"),
+        }
+    }
+}
+impl ::std::str::FromStr for DeployTrigger {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "manual" => Ok(Self::Manual),
+            "agent" => Ok(Self::Agent),
+            "auto" => Ok(Self::Auto),
+            "redeploy" => Ok(Self::Redeploy),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for DeployTrigger {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for DeployTrigger {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`Deployment`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct Deployment {
+    pub branch: ::std::string::String,
+    #[serde(
+        rename = "completedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub completed_at: ::std::option::Option<f64>,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub conclusion: ::std::option::Option<DeployConclusion>,
+    #[serde(rename = "createdAt")]
+    pub created_at: f64,
+    #[serde(
+        rename = "exitCode",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub exit_code: ::std::option::Option<f64>,
+    pub id: ::std::string::String,
+    pub number: f64,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub sha: ::std::string::String,
+    pub stage: ::std::string::String,
+    #[serde(
+        rename = "startedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub started_at: ::std::option::Option<f64>,
+    pub status: DeployStatus,
+    #[serde(deserialize_with = "::std::option::Option::deserialize")]
+    pub summary: ::std::option::Option<::std::string::String>,
+    pub target: ::std::string::String,
+    pub trigger: DeployTrigger,
+    pub url: ::std::string::String,
+    #[serde(
+        rename = "workspaceId",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub workspace_id: ::std::option::Option<::std::string::String>,
+}
 ///`Diagnostics`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct Diagnostics {
@@ -3637,6 +4089,16 @@ pub enum ErrorCode {
     CiPipelineChanged,
     #[serde(rename = "CI_NOT_CONFIGURED")]
     CiNotConfigured,
+    #[serde(rename = "DEPLOY_CONFIG_INVALID")]
+    DeployConfigInvalid,
+    #[serde(rename = "DEPLOY_CONFIG_CHANGED")]
+    DeployConfigChanged,
+    #[serde(rename = "DEPLOY_NOT_CONFIGURED")]
+    DeployNotConfigured,
+    #[serde(rename = "DEPLOY_ACCOUNT_NOT_SET")]
+    DeployAccountNotSet,
+    #[serde(rename = "DEPLOY_TOKEN_INVALID")]
+    DeployTokenInvalid,
     #[serde(rename = "GITHUB_API_ERROR")]
     GithubApiError,
     #[serde(rename = "FILE_TOO_LARGE")]
@@ -3726,6 +4188,11 @@ impl ::std::fmt::Display for ErrorCode {
             Self::CiPipelineInvalid => f.write_str("CI_PIPELINE_INVALID"),
             Self::CiPipelineChanged => f.write_str("CI_PIPELINE_CHANGED"),
             Self::CiNotConfigured => f.write_str("CI_NOT_CONFIGURED"),
+            Self::DeployConfigInvalid => f.write_str("DEPLOY_CONFIG_INVALID"),
+            Self::DeployConfigChanged => f.write_str("DEPLOY_CONFIG_CHANGED"),
+            Self::DeployNotConfigured => f.write_str("DEPLOY_NOT_CONFIGURED"),
+            Self::DeployAccountNotSet => f.write_str("DEPLOY_ACCOUNT_NOT_SET"),
+            Self::DeployTokenInvalid => f.write_str("DEPLOY_TOKEN_INVALID"),
             Self::GithubApiError => f.write_str("GITHUB_API_ERROR"),
             Self::FileTooLarge => f.write_str("FILE_TOO_LARGE"),
             Self::PathOutsideWorkspace => f.write_str("PATH_OUTSIDE_WORKSPACE"),
@@ -3796,6 +4263,11 @@ impl ::std::str::FromStr for ErrorCode {
             "CI_PIPELINE_INVALID" => Ok(Self::CiPipelineInvalid),
             "CI_PIPELINE_CHANGED" => Ok(Self::CiPipelineChanged),
             "CI_NOT_CONFIGURED" => Ok(Self::CiNotConfigured),
+            "DEPLOY_CONFIG_INVALID" => Ok(Self::DeployConfigInvalid),
+            "DEPLOY_CONFIG_CHANGED" => Ok(Self::DeployConfigChanged),
+            "DEPLOY_NOT_CONFIGURED" => Ok(Self::DeployNotConfigured),
+            "DEPLOY_ACCOUNT_NOT_SET" => Ok(Self::DeployAccountNotSet),
+            "DEPLOY_TOKEN_INVALID" => Ok(Self::DeployTokenInvalid),
             "GITHUB_API_ERROR" => Ok(Self::GithubApiError),
             "FILE_TOO_LARGE" => Ok(Self::FileTooLarge),
             "PATH_OUTSIDE_WORKSPACE" => Ok(Self::PathOutsideWorkspace),
@@ -4055,6 +4527,134 @@ impl<'de> ::serde::Deserialize<'de> for GetCiRunInRunId {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
     }
+}
+///`GetDeployConfigIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDeployConfigIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetDeploymentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDeploymentIn {
+    #[serde(rename = "deploymentId")]
+    pub deployment_id: GetDeploymentInDeploymentId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetDeploymentInDeploymentId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetDeploymentInDeploymentId(::std::string::String);
+impl ::std::ops::Deref for GetDeploymentInDeploymentId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetDeploymentInDeploymentId> for ::std::string::String {
+    fn from(value: GetDeploymentInDeploymentId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetDeploymentInDeploymentId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetDeploymentInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetDeploymentInDeploymentId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`GetDeploymentLogIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDeploymentLogIn {
+    #[serde(rename = "deploymentId")]
+    pub deployment_id: GetDeploymentLogInDeploymentId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`GetDeploymentLogInDeploymentId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct GetDeploymentLogInDeploymentId(::std::string::String);
+impl ::std::ops::Deref for GetDeploymentLogInDeploymentId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<GetDeploymentLogInDeploymentId> for ::std::string::String {
+    fn from(value: GetDeploymentLogInDeploymentId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for GetDeploymentLogInDeploymentId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for GetDeploymentLogInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for GetDeploymentLogInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for GetDeploymentLogInDeploymentId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`GetDeploymentLogOut`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct GetDeploymentLogOut {
+    pub text: ::std::string::String,
+    pub truncated: bool,
 }
 ///`GetDiagnosticsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6288,6 +6888,66 @@ impl ::std::convert::TryFrom<::std::string::String> for ListCiRunsInBranch {
     }
 }
 impl<'de> ::serde::Deserialize<'de> for ListCiRunsInBranch {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`ListDeploymentsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListDeploymentsIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub offset: ::std::option::Option<f64>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub target: ::std::option::Option<ListDeploymentsInTarget>,
+}
+///`ListDeploymentsInTarget`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ListDeploymentsInTarget(::std::string::String);
+impl ::std::ops::Deref for ListDeploymentsInTarget {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ListDeploymentsInTarget> for ::std::string::String {
+    fn from(value: ListDeploymentsInTarget) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ListDeploymentsInTarget {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ListDeploymentsInTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ListDeploymentsInTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ListDeploymentsInTarget {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -8759,6 +9419,64 @@ impl ::std::convert::TryFrom<::std::string::String> for ReadFileOutEncoding {
         value.parse()
     }
 }
+///`RedeployIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RedeployIn {
+    #[serde(rename = "deploymentId")]
+    pub deployment_id: RedeployInDeploymentId,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+}
+///`RedeployInDeploymentId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct RedeployInDeploymentId(::std::string::String);
+impl ::std::ops::Deref for RedeployInDeploymentId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<RedeployInDeploymentId> for ::std::string::String {
+    fn from(value: RedeployInDeploymentId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for RedeployInDeploymentId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for RedeployInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for RedeployInDeploymentId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for RedeployInDeploymentId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`RefreshPullRequestIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct RefreshPullRequestIn {
@@ -11156,6 +11874,115 @@ pub struct StartCodexLoginOut {
     #[serde(rename = "verificationUrl")]
     pub verification_url: ::std::string::String,
 }
+///`StartDeploymentIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct StartDeploymentIn {
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub branch: ::std::option::Option<StartDeploymentInBranch>,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub target: StartDeploymentInTarget,
+}
+///`StartDeploymentInBranch`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct StartDeploymentInBranch(::std::string::String);
+impl ::std::ops::Deref for StartDeploymentInBranch {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<StartDeploymentInBranch> for ::std::string::String {
+    fn from(value: StartDeploymentInBranch) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for StartDeploymentInBranch {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for StartDeploymentInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for StartDeploymentInBranch {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for StartDeploymentInBranch {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`StartDeploymentInTarget`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct StartDeploymentInTarget(::std::string::String);
+impl ::std::ops::Deref for StartDeploymentInTarget {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<StartDeploymentInTarget> for ::std::string::String {
+    fn from(value: StartDeploymentInTarget) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for StartDeploymentInTarget {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for StartDeploymentInTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for StartDeploymentInTarget {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for StartDeploymentInTarget {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 ///`StopScriptIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct StopScriptIn {
@@ -11468,6 +12295,121 @@ pub struct UpdateCiPipelineIn {
     pub project_id: ::std::string::String,
     pub revision: f64,
     pub source: ::std::string::String,
+}
+///`UpdateDeployConfigIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateDeployConfigIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
+    pub revision: f64,
+    pub source: ::std::string::String,
+}
+///`UpdateDeploySettingsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct UpdateDeploySettingsIn {
+    #[serde(rename = "accountId")]
+    pub account_id: UpdateDeploySettingsInAccountId,
+    pub token: UpdateDeploySettingsInToken,
+}
+///`UpdateDeploySettingsInAccountId`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct UpdateDeploySettingsInAccountId(::std::string::String);
+impl ::std::ops::Deref for UpdateDeploySettingsInAccountId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<UpdateDeploySettingsInAccountId> for ::std::string::String {
+    fn from(value: UpdateDeploySettingsInAccountId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for UpdateDeploySettingsInAccountId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for UpdateDeploySettingsInAccountId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for UpdateDeploySettingsInAccountId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for UpdateDeploySettingsInAccountId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+///`UpdateDeploySettingsInToken`
+#[derive(::serde::Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct UpdateDeploySettingsInToken(::std::string::String);
+impl ::std::ops::Deref for UpdateDeploySettingsInToken {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<UpdateDeploySettingsInToken> for ::std::string::String {
+    fn from(value: UpdateDeploySettingsInToken) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for UpdateDeploySettingsInToken {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for UpdateDeploySettingsInToken {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for UpdateDeploySettingsInToken {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for UpdateDeploySettingsInToken {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
 }
 ///`UpdateDotfilesIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -13313,6 +14255,15 @@ pub mod api {
         type Input = crate::CancelCodexLoginIn;
         type Output = crate::Empty;
     }
+    /// `cancelDeployment`
+    #[derive(Clone, Copy, Debug)]
+    pub struct CancelDeployment;
+    impl crate::Function for CancelDeployment {
+        const NAME: &'static str = "cancelDeployment";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::CancelDeploymentIn;
+        type Output = crate::Deployment;
+    }
     /// `cancelRun`
     #[derive(Clone, Copy, Debug)]
     pub struct CancelRun;
@@ -13456,6 +14407,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::DeleteCredentialIn;
         type Output = crate::Empty;
+    }
+    /// `deleteDeploySettings`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DeleteDeploySettings;
+    impl crate::Function for DeleteDeploySettings {
+        const NAME: &'static str = "deleteDeploySettings";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::Empty;
+        type Output = crate::DeploySettings;
     }
     /// `deleteEnvironment`
     #[derive(Clone, Copy, Debug)]
@@ -13627,6 +14587,42 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::Empty;
         type Output = crate::CredentialStatus;
+    }
+    /// `getDeployConfig`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetDeployConfig;
+    impl crate::Function for GetDeployConfig {
+        const NAME: &'static str = "getDeployConfig";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetDeployConfigIn;
+        type Output = crate::DeployConfig;
+    }
+    /// `getDeploySettings`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetDeploySettings;
+    impl crate::Function for GetDeploySettings {
+        const NAME: &'static str = "getDeploySettings";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = crate::DeploySettings;
+    }
+    /// `getDeployment`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetDeployment;
+    impl crate::Function for GetDeployment {
+        const NAME: &'static str = "getDeployment";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetDeploymentIn;
+        type Output = crate::Deployment;
+    }
+    /// `getDeploymentLog`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetDeploymentLog;
+    impl crate::Function for GetDeploymentLog {
+        const NAME: &'static str = "getDeploymentLog";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::GetDeploymentLogIn;
+        type Output = crate::GetDeploymentLogOut;
     }
     /// `getDiagnostics`
     #[derive(Clone, Copy, Debug)]
@@ -13816,6 +14812,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ListCiRunsIn;
         type Output = ::std::vec::Vec<crate::CiRun>;
+    }
+    /// `listDeployments`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListDeployments;
+    impl crate::Function for ListDeployments {
+        const NAME: &'static str = "listDeployments";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListDeploymentsIn;
+        type Output = ::std::vec::Vec<crate::Deployment>;
     }
     /// `listEnvironments`
     #[derive(Clone, Copy, Debug)]
@@ -14095,6 +15100,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Get;
         type Input = crate::ReadFileAtIn;
         type Output = crate::ReadFileAtOut;
+    }
+    /// `redeploy`
+    #[derive(Clone, Copy, Debug)]
+    pub struct Redeploy;
+    impl crate::Function for Redeploy {
+        const NAME: &'static str = "redeploy";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RedeployIn;
+        type Output = crate::Deployment;
     }
     /// `refreshPullRequest`
     #[derive(Clone, Copy, Debug)]
@@ -14420,6 +15434,15 @@ pub mod api {
         type Input = crate::Empty;
         type Output = crate::StartCodexLoginOut;
     }
+    /// `startDeployment`
+    #[derive(Clone, Copy, Debug)]
+    pub struct StartDeployment;
+    impl crate::Function for StartDeployment {
+        const NAME: &'static str = "startDeployment";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::StartDeploymentIn;
+        type Output = crate::Deployment;
+    }
     /// `stopScript`
     #[derive(Clone, Copy, Debug)]
     pub struct StopScript;
@@ -14446,6 +15469,24 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::UpdateCiPipelineIn;
         type Output = crate::CiPipeline;
+    }
+    /// `updateDeployConfig`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UpdateDeployConfig;
+    impl crate::Function for UpdateDeployConfig {
+        const NAME: &'static str = "updateDeployConfig";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UpdateDeployConfigIn;
+        type Output = crate::DeployConfig;
+    }
+    /// `updateDeploySettings`
+    #[derive(Clone, Copy, Debug)]
+    pub struct UpdateDeploySettings;
+    impl crate::Function for UpdateDeploySettings {
+        const NAME: &'static str = "updateDeploySettings";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::UpdateDeploySettingsIn;
+        type Output = crate::DeploySettings;
     }
     /// `updateDotfiles`
     #[derive(Clone, Copy, Debug)]
@@ -14525,6 +15566,7 @@ pub mod api {
         ("archiveWorkspace", crate::Method::Post),
         ("cancelCiRun", crate::Method::Post),
         ("cancelCodexLogin", crate::Method::Post),
+        ("cancelDeployment", crate::Method::Post),
         ("cancelRun", crate::Method::Post),
         ("cancelTurn", crate::Method::Post),
         ("closeSession", crate::Method::Post),
@@ -14541,6 +15583,7 @@ pub mod api {
         ("createWorkspace", crate::Method::Post),
         ("deleteAgent", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
+        ("deleteDeploySettings", crate::Method::Post),
         ("deleteEnvironment", crate::Method::Post),
         ("deleteEnvironmentSecret", crate::Method::Post),
         ("deleteMcpServer", crate::Method::Post),
@@ -14560,6 +15603,10 @@ pub mod api {
         ("getCiPipeline", crate::Method::Get),
         ("getCiRun", crate::Method::Get),
         ("getCredentialStatus", crate::Method::Get),
+        ("getDeployConfig", crate::Method::Get),
+        ("getDeploySettings", crate::Method::Get),
+        ("getDeployment", crate::Method::Get),
+        ("getDeploymentLog", crate::Method::Get),
         ("getDiagnostics", crate::Method::Get),
         ("getDotfiles", crate::Method::Get),
         ("getFileDiff", crate::Method::Get),
@@ -14581,6 +15628,7 @@ pub mod api {
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
         ("listCiRuns", crate::Method::Get),
+        ("listDeployments", crate::Method::Get),
         ("listEnvironments", crate::Method::Get),
         ("listFiles", crate::Method::Get),
         ("listInstallationRepos", crate::Method::Get),
@@ -14612,6 +15660,7 @@ pub mod api {
         ("putProjectAgent", crate::Method::Post),
         ("readFile", crate::Method::Get),
         ("readFileAt", crate::Method::Get),
+        ("redeploy", crate::Method::Post),
         ("refreshPullRequest", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
         ("renameSession", crate::Method::Post),
@@ -14648,9 +15697,12 @@ pub mod api {
         ("sleepWorkspace", crate::Method::Post),
         ("startCiRun", crate::Method::Post),
         ("startCodexLogin", crate::Method::Post),
+        ("startDeployment", crate::Method::Post),
         ("stopScript", crate::Method::Post),
         ("unlinkProject", crate::Method::Post),
         ("updateCiPipeline", crate::Method::Post),
+        ("updateDeployConfig", crate::Method::Post),
+        ("updateDeploySettings", crate::Method::Post),
         ("updateDotfiles", crate::Method::Post),
         ("updateEnvironment", crate::Method::Post),
         ("updateProjectSettings", crate::Method::Post),
@@ -14696,6 +15748,7 @@ pub mod wire {
         "AvailableCommand",
         "CancelCiRunIn",
         "CancelCodexLoginIn",
+        "CancelDeploymentIn",
         "CancelRunIn",
         "CancelTurnIn",
         "Capabilities",
@@ -14748,6 +15801,15 @@ pub mod wire {
         "DeleteRepositoryLabelIn",
         "DeleteReviewCommentIn",
         "DeleteWorkspaceIn",
+        "DeployConclusion",
+        "DeployConfig",
+        "DeployPermission",
+        "DeploySettings",
+        "DeployStatus",
+        "DeployTarget",
+        "DeployTool",
+        "DeployTrigger",
+        "Deployment",
         "Diagnostics",
         "DiffScope",
         "EditQueuedTurnIn",
@@ -14769,6 +15831,10 @@ pub mod wire {
         "GetCiJobLogOut",
         "GetCiPipelineIn",
         "GetCiRunIn",
+        "GetDeployConfigIn",
+        "GetDeploymentIn",
+        "GetDeploymentLogIn",
+        "GetDeploymentLogOut",
         "GetDiagnosticsIn",
         "GetDotfilesOut",
         "GetFileDiffIn",
@@ -14822,6 +15888,7 @@ pub mod wire {
         "ListCheckRunsIn",
         "ListCheckpointsIn",
         "ListCiRunsIn",
+        "ListDeploymentsIn",
         "ListFilesIn",
         "ListFilesOut",
         "ListInstallationReposIn",
@@ -14895,6 +15962,7 @@ pub mod wire {
         "ReadFileAtOut",
         "ReadFileIn",
         "ReadFileOut",
+        "RedeployIn",
         "RefreshPullRequestIn",
         "RefreshPullRequestOut",
         "RenameBranchIn",
@@ -14966,6 +16034,7 @@ pub mod wire {
         "SleepWorkspaceIn",
         "StartCiRunIn",
         "StartCodexLoginOut",
+        "StartDeploymentIn",
         "StopScriptIn",
         "TerminalReady",
         "TerminalResize",
@@ -14977,6 +16046,8 @@ pub mod wire {
         "TurnUsage",
         "UnlinkProjectIn",
         "UpdateCiPipelineIn",
+        "UpdateDeployConfigIn",
+        "UpdateDeploySettingsIn",
         "UpdateDotfilesIn",
         "UpdateEnvironmentIn",
         "UpdateProjectSettingsIn",
@@ -15045,6 +16116,7 @@ pub mod wire {
             "AvailableCommand" => crate::roundtrip::<crate::AvailableCommand>(text),
             "CancelCiRunIn" => crate::roundtrip::<crate::CancelCiRunIn>(text),
             "CancelCodexLoginIn" => crate::roundtrip::<crate::CancelCodexLoginIn>(text),
+            "CancelDeploymentIn" => crate::roundtrip::<crate::CancelDeploymentIn>(text),
             "CancelRunIn" => crate::roundtrip::<crate::CancelRunIn>(text),
             "CancelTurnIn" => crate::roundtrip::<crate::CancelTurnIn>(text),
             "Capabilities" => crate::roundtrip::<crate::Capabilities>(text),
@@ -15107,6 +16179,15 @@ pub mod wire {
             "DeleteRepositoryLabelIn" => crate::roundtrip::<crate::DeleteRepositoryLabelIn>(text),
             "DeleteReviewCommentIn" => crate::roundtrip::<crate::DeleteReviewCommentIn>(text),
             "DeleteWorkspaceIn" => crate::roundtrip::<crate::DeleteWorkspaceIn>(text),
+            "DeployConclusion" => crate::roundtrip::<crate::DeployConclusion>(text),
+            "DeployConfig" => crate::roundtrip::<crate::DeployConfig>(text),
+            "DeployPermission" => crate::roundtrip::<crate::DeployPermission>(text),
+            "DeploySettings" => crate::roundtrip::<crate::DeploySettings>(text),
+            "DeployStatus" => crate::roundtrip::<crate::DeployStatus>(text),
+            "DeployTarget" => crate::roundtrip::<crate::DeployTarget>(text),
+            "DeployTool" => crate::roundtrip::<crate::DeployTool>(text),
+            "DeployTrigger" => crate::roundtrip::<crate::DeployTrigger>(text),
+            "Deployment" => crate::roundtrip::<crate::Deployment>(text),
             "Diagnostics" => crate::roundtrip::<crate::Diagnostics>(text),
             "DiffScope" => crate::roundtrip::<crate::DiffScope>(text),
             "EditQueuedTurnIn" => crate::roundtrip::<crate::EditQueuedTurnIn>(text),
@@ -15128,6 +16209,10 @@ pub mod wire {
             "GetCiJobLogOut" => crate::roundtrip::<crate::GetCiJobLogOut>(text),
             "GetCiPipelineIn" => crate::roundtrip::<crate::GetCiPipelineIn>(text),
             "GetCiRunIn" => crate::roundtrip::<crate::GetCiRunIn>(text),
+            "GetDeployConfigIn" => crate::roundtrip::<crate::GetDeployConfigIn>(text),
+            "GetDeploymentIn" => crate::roundtrip::<crate::GetDeploymentIn>(text),
+            "GetDeploymentLogIn" => crate::roundtrip::<crate::GetDeploymentLogIn>(text),
+            "GetDeploymentLogOut" => crate::roundtrip::<crate::GetDeploymentLogOut>(text),
             "GetDiagnosticsIn" => crate::roundtrip::<crate::GetDiagnosticsIn>(text),
             "GetDotfilesOut" => crate::roundtrip::<crate::GetDotfilesOut>(text),
             "GetFileDiffIn" => crate::roundtrip::<crate::GetFileDiffIn>(text),
@@ -15199,6 +16284,7 @@ pub mod wire {
             "ListCheckRunsIn" => crate::roundtrip::<crate::ListCheckRunsIn>(text),
             "ListCheckpointsIn" => crate::roundtrip::<crate::ListCheckpointsIn>(text),
             "ListCiRunsIn" => crate::roundtrip::<crate::ListCiRunsIn>(text),
+            "ListDeploymentsIn" => crate::roundtrip::<crate::ListDeploymentsIn>(text),
             "ListFilesIn" => crate::roundtrip::<crate::ListFilesIn>(text),
             "ListFilesOut" => crate::roundtrip::<crate::ListFilesOut>(text),
             "ListInstallationReposIn" => crate::roundtrip::<crate::ListInstallationReposIn>(text),
@@ -15286,6 +16372,7 @@ pub mod wire {
             "ReadFileAtOut" => crate::roundtrip::<crate::ReadFileAtOut>(text),
             "ReadFileIn" => crate::roundtrip::<crate::ReadFileIn>(text),
             "ReadFileOut" => crate::roundtrip::<crate::ReadFileOut>(text),
+            "RedeployIn" => crate::roundtrip::<crate::RedeployIn>(text),
             "RefreshPullRequestIn" => crate::roundtrip::<crate::RefreshPullRequestIn>(text),
             "RefreshPullRequestOut" => crate::roundtrip::<crate::RefreshPullRequestOut>(text),
             "RenameBranchIn" => crate::roundtrip::<crate::RenameBranchIn>(text),
@@ -15361,6 +16448,7 @@ pub mod wire {
             "SleepWorkspaceIn" => crate::roundtrip::<crate::SleepWorkspaceIn>(text),
             "StartCiRunIn" => crate::roundtrip::<crate::StartCiRunIn>(text),
             "StartCodexLoginOut" => crate::roundtrip::<crate::StartCodexLoginOut>(text),
+            "StartDeploymentIn" => crate::roundtrip::<crate::StartDeploymentIn>(text),
             "StopScriptIn" => crate::roundtrip::<crate::StopScriptIn>(text),
             "TerminalReady" => crate::roundtrip::<crate::TerminalReady>(text),
             "TerminalResize" => crate::roundtrip::<crate::TerminalResize>(text),
@@ -15372,6 +16460,8 @@ pub mod wire {
             "TurnUsage" => crate::roundtrip::<crate::TurnUsage>(text),
             "UnlinkProjectIn" => crate::roundtrip::<crate::UnlinkProjectIn>(text),
             "UpdateCiPipelineIn" => crate::roundtrip::<crate::UpdateCiPipelineIn>(text),
+            "UpdateDeployConfigIn" => crate::roundtrip::<crate::UpdateDeployConfigIn>(text),
+            "UpdateDeploySettingsIn" => crate::roundtrip::<crate::UpdateDeploySettingsIn>(text),
             "UpdateDotfilesIn" => crate::roundtrip::<crate::UpdateDotfilesIn>(text),
             "UpdateEnvironmentIn" => crate::roundtrip::<crate::UpdateEnvironmentIn>(text),
             "UpdateProjectSettingsIn" => crate::roundtrip::<crate::UpdateProjectSettingsIn>(text),

@@ -56,6 +56,7 @@ Secrets live in exactly two places: Worker secrets for the deployment, and Crede
 | `TEMPO_SETUP_TOKEN` | Worker secret | Deploy; saved privately for the setup link |
 | GitHub App id, slug, private key, client id, client secret | CredentialDO named `system`, keys `github_app.id`, `github_app.slug`, `github_app.private_key`, `github_app.client_id`, `github_app.client_secret` | The manifest flow (Deployment, below) |
 | Agent logins, API keys, project secrets, environment secrets | The owner's CredentialDO (02) | The owner, in Settings |
+| Cloudflare deploy master token; per-deployment minted tokens | The owner's CredentialDO, keys `cloudflare.deploy_token`, `cloudflare.account_id` and `deploy.<deploymentId>.token` (12) | The owner, in Settings; `AppDeployDO` mints and revokes each deployment's token |
 
 **Rules**
 
@@ -81,6 +82,7 @@ A container has no internet of its own. Every HTTP and HTTPS request goes throug
 - Every request is logged to `egress_log`: host, path without query, status, time, rule number. The WorkspaceDO keeps the newest 10,000 rows. Diagnostics searches all of them (Observability).
 - Cloud metadata addresses are not reachable from containers, so Tempo needs no rule for them.
 - CI job containers (10, Egress) use a separate, smaller rule set: read-only access to their own repository through a read token, no other credential or placeholder swap, and the built-in hosts plus the owner-approved pipeline `egress_allowlist`. Their requests are logged with `log()`, not stored in `egress_log`.
+- Deploy containers (12, Egress) use the CI rule set plus one swap: a `Bearer tempo-placeholder` Authorization header to `api.cloudflare.com` becomes the deployment's minted token. They also reach `api.cloudflare.com`, `*.workers.dev` and the configuration's `egress_allowlist`.
 
 ## Preview access
 

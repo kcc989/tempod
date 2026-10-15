@@ -22,6 +22,8 @@ export { CredentialDO } from "./do/credential.ts";
 
 export { RepositoryCiDO } from "./do/repository-ci.ts";
 
+export { AppDeployDO } from "./do/app-deploy.ts";
+
 export { InjectorSecrets, TempoOutbound } from "./egress/outbound.ts";
 
 export { BrowserOutbound } from "./egress/browser-outbound.ts";

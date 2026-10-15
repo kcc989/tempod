@@ -1,5 +1,6 @@
+import { deployTool } from "../../agents/deploys.ts";
 import { issueTool } from "../../agents/issues.ts";
-import { IssueToolName } from "@tempo/protocol";
+import { DeployToolName, IssueToolName } from "@tempo/protocol";
 import { agentTool } from "../../agents/proposals.ts";
 import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
@@ -231,6 +232,8 @@ export class TempodClient {
 
     if (Schema.is(IssueToolName)(request.op)) return issueTool(this.core, request);
 
+    if (Schema.is(DeployToolName)(request.op)) return deployTool(this.core, request);
+
     if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
 
     return agentTool(this.core, request);
@@ -415,7 +418,12 @@ export const tempodFetch = (core: WorkspaceCore, path: string, init: RequestInit
   const container = core.container;
 
   if (!container) throw new TempoError("CONTAINER_NOT_READY");
-  const token = core.wsOrNull()?.tempodToken ?? core.kv<string>("catalogToken") ?? core.kv<string>("ciToken");
+
+  const token =
+    core.wsOrNull()?.tempodToken ??
+    core.kv<string>("catalogToken") ??
+    core.kv<string>("ciToken") ??
+    core.kv<string>("deployToken");
 
   if (!token) throw new TempoError("CONTAINER_NOT_READY");
   const headers = new Headers(init.headers);

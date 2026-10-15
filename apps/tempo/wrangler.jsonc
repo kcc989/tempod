@@ -36,6 +36,7 @@
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
       { "name": "REPOSITORY_CI", "class_name": "RepositoryCiDO" },
+      { "name": "APP_DEPLOY", "class_name": "AppDeployDO" },
       { "name": "CREDENTIALS", "class_name": "CredentialDO" },
     ],
   },
@@ -44,6 +45,7 @@
     "UserHubDO": { "type": "durable-object", "storage": "sqlite" },
     "CredentialDO": { "type": "durable-object", "storage": "sqlite" },
     "RepositoryCiDO": { "type": "durable-object", "storage": "sqlite" },
+    "AppDeployDO": { "type": "durable-object", "storage": "sqlite" },
   },
   "d1_databases": [
     {

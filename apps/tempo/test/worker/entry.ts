@@ -5,6 +5,8 @@ export { UserHubDO } from "../../src/do/user-hub.ts";
 
 export { RepositoryCiDO } from "../../src/do/repository-ci.ts";
 
+export { AppDeployDO } from "../../src/do/app-deploy.ts";
+
 export { CredentialDO } from "../../src/do/credential.ts";
 
 export { InjectorSecrets, TempoOutbound } from "../../src/egress/outbound.ts";

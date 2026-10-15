@@ -698,3 +698,48 @@ export const REPOSITORY_CI_MIGRATIONS: Migrations = [
     ],
   },
 ];
+
+export const APP_DEPLOY_MIGRATIONS: Migrations = [
+  {
+    tag: "0000_init",
+    when: 1792540800000,
+    statements: [
+      `CREATE TABLE configs (
+  revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
+  source      TEXT NOT NULL,
+  spec_json   TEXT,
+  created_at  INTEGER NOT NULL
+)`,
+      `CREATE TABLE deployments (
+  id                TEXT PRIMARY KEY,
+  number            INTEGER NOT NULL UNIQUE,
+  target            TEXT NOT NULL,
+  stage             TEXT NOT NULL,
+  branch            TEXT NOT NULL,
+  sha               TEXT NOT NULL,
+  revision          INTEGER NOT NULL,
+  trigger           TEXT NOT NULL CHECK (trigger IN ('manual','agent','auto','redeploy')),
+  status            TEXT NOT NULL CHECK (status IN ('queued','running','completed')),
+  conclusion        TEXT CHECK (conclusion IN ('success','failure','cancelled','timed_out')),
+  exit_code         INTEGER,
+  summary           TEXT,
+  workspace_id      TEXT,
+  plan_json         TEXT NOT NULL,
+  token             TEXT,
+  account_id        TEXT,
+  cf_token_id       TEXT,
+  token_expires_at  INTEGER,
+  token_revoked     INTEGER NOT NULL DEFAULT 0,
+  created_at        INTEGER NOT NULL,
+  started_at        INTEGER,
+  completed_at      INTEGER
+)`,
+      `CREATE INDEX deployments_target ON deployments (target, number)`,
+      `CREATE INDEX deployments_status ON deployments (status, number)`,
+      `CREATE TABLE kv (
+  key         TEXT PRIMARY KEY,
+  value_json  TEXT NOT NULL
+)`,
+    ],
+  },
+];

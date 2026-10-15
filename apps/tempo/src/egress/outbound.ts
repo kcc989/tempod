@@ -13,6 +13,8 @@ export interface OutboundProps {
   readonly catalog?: boolean;
   /** A CI job's container (10, Egress). */
   readonly ci?: boolean;
+  /** A deployment's container (12, Egress). */
+  readonly deploy?: boolean;
   /** Set for a subrequest of this injector (01, rule 13). */
   readonly injector?: string;
 }
@@ -48,6 +50,8 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       if (this.ctx.props.ci && !config.ci) {
         decision = { rule: 10, action: "block", status: 403, body: "tempo: CI job not found" };
+      } else if (Boolean(this.ctx.props.deploy) !== Boolean(config.deploy)) {
+        decision = { rule: 10, action: "block", status: 403, body: "tempo: deployment not found" };
       } else if (injectorName) {
         const injector = config.injectors?.find((i) => i.name === injectorName);
         decision = injector
@@ -71,6 +75,8 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     } finally {
       if (this.ctx.props.ci)
         log("info", "ci egress", { runner: workspaceId, host: url.hostname, status, rule });
+      else if (this.ctx.props.deploy)
+        log("info", "deploy egress", { runner: workspaceId, host: url.hostname, status, rule });
       else if (!this.ctx.props.catalog)
         this.ctx.waitUntil(
           workspace
@@ -124,7 +130,9 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
         const headers = new Headers(request.headers);
 
         const repoBearer =
-          decision.set?.value === "artifact-bearer" || decision.set?.value === "dotfiles-bearer";
+          decision.set?.value === "artifact-bearer" ||
+          decision.set?.value === "dotfiles-bearer" ||
+          decision.set?.value === "deploy-bearer";
 
         if (repoBearer) {
           for (const name of ["authorization", "proxy-authorization", "cookie", "x-api-key"])
@@ -215,11 +223,18 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
       | "github-bearer"
       | "artifact-bearer"
       | "dotfiles-bearer"
+      | "deploy-bearer"
       | "openrouter"
       | "anthropic"
       | "openai",
     userId: string,
   ): Promise<string | null> {
+    if (kind === "deploy-bearer") {
+      const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getDeployToken();
+
+      return token === null ? null : `Bearer ${token}`;
+    }
+
     if (kind === "dotfiles-bearer") {
       const token = await this.env.WORKSPACE.getByName(this.ctx.props.workspaceId).getDotfilesToken();
 

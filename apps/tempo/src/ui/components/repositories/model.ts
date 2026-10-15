@@ -1,7 +1,7 @@
 import { Match, Schema } from "effect";
-import type { CiJob, CiRun, FnInput, RepositoryPullRequest } from "@tempo/protocol";
+import type { CiJob, CiRun, DeployTarget, Deployment, FnInput, RepositoryPullRequest } from "@tempo/protocol";
 
-export const RepositoryTab = Schema.Literals(["code", "commits", "pulls", "issues", "checks"]);
+export const RepositoryTab = Schema.Literals(["code", "commits", "pulls", "issues", "checks", "deploys"]);
 
 export type RepositoryTab = typeof RepositoryTab.Type;
 
@@ -14,6 +14,7 @@ export interface RepositorySearch {
   readonly issue?: number;
   readonly run?: string;
   readonly job?: string;
+  readonly deployment?: string;
   readonly tab?: RepositoryTab;
 }
 
@@ -22,7 +23,7 @@ export const isRepositoryTab = Schema.is(RepositoryTab);
 export function repositorySearch(search: Schema.JsonObject): RepositorySearch {
   let result: RepositorySearch = {};
 
-  for (const key of ["project", "ref", "path", "file", "run", "job"] as const) {
+  for (const key of ["project", "ref", "path", "file", "run", "job", "deployment"] as const) {
     const value = search[key];
 
     if (Schema.is(Schema.String)(value) && value) Object.assign(result, { [key]: value });
@@ -160,4 +161,49 @@ export function ciRunsInput(projectId: string, branch: string | null, offset: nu
 /** The job whose log to show: the selected one, else the first that started. */
 export function selectedJob(jobs: ReadonlyArray<CiJob>, key: string | undefined): CiJob | undefined {
   return jobs.find((job) => job.key === key) ?? jobs.find((job) => job.startedAt !== null) ?? jobs[0];
+}
+
+/** 12, Clients: never "succeeded" before the deployment completed. */
+export function deployState(item: Pick<Deployment, "status" | "conclusion">): CiStateLabel {
+  if (item.status === "queued") return { label: "Queued", tone: "muted" };
+
+  if (item.status === "running") return { label: "Running", tone: "warning" };
+
+  switch (item.conclusion) {
+    case "success":
+      return { label: "Succeeded", tone: "success" };
+    case "failure":
+      return { label: "Failed", tone: "danger" };
+    case "timed_out":
+      return { label: "Timed out", tone: "danger" };
+    case "cancelled":
+      return { label: "Cancelled", tone: "muted" };
+    default:
+      return { label: "Completed", tone: "muted" };
+  }
+}
+
+export function deploymentsInput(
+  projectId: string,
+  target: string | null,
+  offset: number,
+): FnInput<"listDeployments"> {
+  let input: FnInput<"listDeployments"> = { projectId, offset };
+
+  if (target) input = { ...input, target };
+
+  return input;
+}
+
+/** A target with its own branch deploys only that branch; any other target needs a picked branch. */
+export function deployInput(
+  projectId: string,
+  target: DeployTarget | undefined,
+  branch: string | null,
+): FnInput<"startDeployment"> | null {
+  if (!target) return null;
+
+  if (target.branch !== null) return { projectId, target: target.key };
+
+  return branch ? { projectId, target: target.key, branch } : null;
 }

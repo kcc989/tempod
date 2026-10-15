@@ -16,12 +16,54 @@ import { d1 } from "../server/handlers/common.ts";
 import * as handlers from "../server/handlers/issues.ts";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
 
-const matches = (pattern: string, name: IssueToolName): boolean => {
+const matches = (pattern: string, name: string): boolean => {
   const expression = new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*")}$`);
 
   return [name, `tempo.${name}`, `mcp__tempo__${name}`, `mcp:tempo:${name}`].some((alias) =>
     expression.test(alias),
   );
+};
+
+/**
+ * The session, run and profile rules shared by the project tools (08 issue tools, 12 deploy tools).
+ * Returns the owner's handler context and the workspace row.
+ */
+export const authorizeProjectTool = async (
+  core: WorkspaceCore,
+  request: ToolReq,
+  name: string,
+  mutates: boolean,
+  readOnlyDetail: string,
+) => {
+  const session = core.sessionRow(request.sessionId);
+
+  if (session.status === "closed") throw new TempoError("RUN_NOT_RUNNING");
+
+  if (session.runId) {
+    if (request.runId !== session.runId) throw new TempoError("RUN_NOT_RUNNING");
+    const run = core.lifecycle.runs.row(session.runId);
+
+    if (run.status !== "running" || run.sessionId !== session.id) throw new TempoError("RUN_NOT_RUNNING");
+
+    if (mutates && run.access !== "write") throw new TempoError("FORBIDDEN", undefined, readOnlyDetail);
+  } else if (request.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+  if (session.profileJson) {
+    const profile = Schema.decodeUnknownSync(Schema.fromJsonString(AgentProfile))(session.profileJson);
+
+    if (
+      profile.toolsDeny.some((pattern) => matches(pattern, name)) ||
+      (profile.toolsAllow.length > 0 && !profile.toolsAllow.some((pattern) => matches(pattern, name)))
+    )
+      throw new TempoError("FORBIDDEN", undefined, "This tool is disabled by the session profile.");
+  }
+
+  const ws = core.ws();
+  const owner = await d1(core.env).select().from(user).where(eq(user.id, ws.userId)).get();
+
+  if (!owner) throw new TempoError("NOT_FOUND");
+
+  return { ctx: { env: core.env, user: owner }, ws };
 };
 
 const json = (
@@ -55,29 +97,14 @@ export const issueTool = async (core: WorkspaceCore, request: ToolReq): Promise<
   try {
     if (!Schema.is(IssueToolName)(request.op)) throw new TempoError("UNKNOWN_OP");
     const name = request.op;
-    const session = core.sessionRow(request.sessionId);
 
-    if (session.status === "closed") throw new TempoError("RUN_NOT_RUNNING");
-
-    if (session.runId) {
-      if (request.runId !== session.runId) throw new TempoError("RUN_NOT_RUNNING");
-      const run = core.lifecycle.runs.row(session.runId);
-
-      if (run.status !== "running" || run.sessionId !== session.id) throw new TempoError("RUN_NOT_RUNNING");
-
-      if (ISSUE_TOOLS[name].mutates && run.access !== "write")
-        throw new TempoError("FORBIDDEN", undefined, "Read-only runs cannot change issue metadata.");
-    } else if (request.runId) throw new TempoError("RUN_NOT_RUNNING");
-
-    if (session.profileJson) {
-      const profile = Schema.decodeUnknownSync(Schema.fromJsonString(AgentProfile))(session.profileJson);
-
-      if (
-        profile.toolsDeny.some((pattern) => matches(pattern, name)) ||
-        (profile.toolsAllow.length > 0 && !profile.toolsAllow.some((pattern) => matches(pattern, name)))
-      )
-        throw new TempoError("FORBIDDEN", undefined, "This tool is disabled by the session profile.");
-    }
+    const { ctx, ws } = await authorizeProjectTool(
+      core,
+      request,
+      name,
+      ISSUE_TOOLS[name].mutates,
+      "Read-only runs cannot change issue metadata.",
+    );
 
     let params = request.params;
 
@@ -94,11 +121,6 @@ export const issueTool = async (core: WorkspaceCore, request: ToolReq): Promise<
       params = redacted;
     }
 
-    const ws = core.ws();
-    const owner = await d1(core.env).select().from(user).where(eq(user.id, ws.userId)).get();
-
-    if (!owner) throw new TempoError("NOT_FOUND");
-    const ctx = { env: core.env, user: owner };
     const projectId = ws.projectId;
 
     switch (name) {

@@ -1,0 +1,1 @@
+{"projectId":"01k70000000000000000000001","source":"version: 1\ntool: alchemy\ntargets:\n  production:\n    branch: main\n    auto: true\n","revision":2}

@@ -1,4 +1,4 @@
-import { ISSUE_TOOL_NAMES, ToolReq, type TempodParams } from "@tempo/protocol";
+import { DEPLOY_TOOL_NAMES, ISSUE_TOOL_NAMES, ToolReq, type TempodParams } from "@tempo/protocol";
 import { Schema } from "effect";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
@@ -56,6 +56,7 @@ describe("tempo MCP server (01, Environments)", () => {
       "propose_environment_change",
       "publish_artifact",
       ...ISSUE_TOOL_NAMES,
+      ...DEPLOY_TOOL_NAMES,
       "list_agents",
       "propose_agent_change",
     ]);
@@ -431,5 +432,83 @@ describe("run MCP reports", () => {
 
     expect(JSON.stringify(client.events)).not.toContain("private MCP issue");
     expect(daemon.log.lines.join("\n")).not.toContain("private MCP issue");
+  });
+
+  test("deploy tools forward the target with run identity and refuse extra fields and forged runs", async () => {
+    const config = testConfig();
+
+    const daemon = startTempod({
+      ...config,
+      agentCommands: { ...config.agentCommands, claude: fakeAgentCommand() },
+    });
+
+    h = daemon;
+    const client = new DoClient(daemon.base);
+    await client.hello();
+    await client.waitFor(() => existsSync(daemon.app.config.mcpSocket), 5000, "mcp socket");
+    const call = viaSocket(daemon.app.config.mcpSocket);
+    await client.ok("session.start", {
+      sessionId: "deploy-run",
+      agent: "claude",
+      env: {
+        FAKE_STATE_DIR: daemon.app.config.stateDir,
+        TEMPO_RUN_ID: "run-1",
+        TEMPO_RUN_OUTPUT_KIND: "note",
+      },
+      browser: "local",
+    });
+
+    const pending = handleMcpMessage(
+      { id: 1, method: "tools/call", params: { name: "deploy_app", arguments: { target: "preview" } } },
+      call,
+      "deploy-run",
+      "run-1",
+      "note",
+    );
+
+    await client.waitFor(() => client.raw.some((frame) => frame.type === "tool.req"), 5000, "deploy request");
+    const parsed = Schema.decodeUnknownSync(ToolReq)(client.raw.find((frame) => frame.type === "tool.req"));
+    expect(parsed).toMatchObject({
+      op: "deploy_app",
+      sessionId: "deploy-run",
+      runId: "run-1",
+      params: { target: "preview" },
+    });
+    client.send({
+      type: "tool.res",
+      id: parsed.id,
+      ok: false,
+      error: { code: "FORBIDDEN", message: "Target preview is not open to agents." },
+    });
+    expect(await pending).toMatchObject({
+      result: { isError: true, content: [{ type: "text", text: "Target preview is not open to agents." }] },
+    });
+
+    expect(
+      await handleMcpMessage(
+        {
+          id: 2,
+          method: "tools/call",
+          params: { name: "deploy_app", arguments: { target: "preview", branch: "main" } },
+        },
+        call,
+        "deploy-run",
+        "run-1",
+      ),
+    ).toMatchObject({ result: { isError: true, content: [{ text: "Invalid deploy tool arguments." }] } });
+
+    const forged = await call("/agent-tools", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        op: "deploy_app",
+        sessionId: "deploy-run",
+        runId: "other-run",
+        params: { target: "x" },
+      }),
+    });
+
+    expect(forged.status).toBe(400);
+    expect(client.raw.filter((frame) => frame.type === "tool.req")).toHaveLength(1);
   });
 });

@@ -46,4 +46,6 @@ export * from "./agent-proposals.ts";
 
 export * from "./issue-tools.ts";
 
+export * from "./deploy-tools.ts";
+
 export * from "./dotfiles.ts";

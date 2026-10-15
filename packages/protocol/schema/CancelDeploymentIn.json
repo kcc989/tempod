@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CancelDeploymentIn",
+  "type": "object",
+  "properties": {
+    "projectId": {
+      "type": "string"
+    },
+    "deploymentId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["projectId", "deploymentId"],
+  "additionalProperties": true
+}

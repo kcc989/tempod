@@ -84,6 +84,50 @@ export const getCiJobLog = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getCiJobLog">) => data)
   .handler(({ data }) => run("getCiJobLog", data));
 
+export const getDeploySettings = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getDeploySettings">) => data)
+  .handler(({ data }) => run("getDeploySettings", data));
+
+export const updateDeploySettings = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateDeploySettings">) => data)
+  .handler(({ data }) => run("updateDeploySettings", data));
+
+export const deleteDeploySettings = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteDeploySettings">) => data)
+  .handler(({ data }) => run("deleteDeploySettings", data));
+
+export const getDeployConfig = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getDeployConfig">) => data)
+  .handler(({ data }) => run("getDeployConfig", data));
+
+export const updateDeployConfig = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateDeployConfig">) => data)
+  .handler(({ data }) => run("updateDeployConfig", data));
+
+export const listDeployments = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listDeployments">) => data)
+  .handler(({ data }) => run("listDeployments", data));
+
+export const getDeployment = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getDeployment">) => data)
+  .handler(({ data }) => run("getDeployment", data));
+
+export const startDeployment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startDeployment">) => data)
+  .handler(({ data }) => run("startDeployment", data));
+
+export const redeploy = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"redeploy">) => data)
+  .handler(({ data }) => run("redeploy", data));
+
+export const cancelDeployment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"cancelDeployment">) => data)
+  .handler(({ data }) => run("cancelDeployment", data));
+
+export const getDeploymentLog = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getDeploymentLog">) => data)
+  .handler(({ data }) => run("getDeploymentLog", data));
+
 export const listRepositoryIssues = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listRepositoryIssues">) => data)
   .handler(({ data }) => run("listRepositoryIssues", data));

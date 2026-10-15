@@ -517,3 +517,21 @@ A deploy updated the Worker but new workspaces kept the previous image: tempod r
 | Mac visuals | Comparisons and flows render as text; `markdown`, `image` and `html` visuals are path links (Code tab in a PR, a native file tab in a workspace) | Native views never execute HTML (07) and the Code tab already shows repository files |
 
 Verification: web component cases for a guide with chapters, the file link target, a markdown visual read from the head ref, a missing guide, an invalid guide and a merged PR's `headSha`; a model case for the ref order. Mac: a `parse_guide` unit case, a ref-order unit case, and repository view cases for a guide, the Code-tab target at the head ref, a missing guide and an invalid guide. Not checked against a deployed Tempo or by hand in the Mac app.
+
+## App deploy (2026-10-15)
+
+The owner asked for a Cloudflare control plane that deploys apps from Tempo with Alchemy v2 and `cloudflare.config.ts`. They chose: a dedicated deploy container like CI, a master token that mints a token per project from what the project needs, all three triggers (agent tool, UI button, CI on merge), and spec plus full implementation in one change. Tab 12 App Deploy defines the contracts. Choices:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Coordinator | `AppDeployDO` (one per native project) owns configuration revisions and deployments with its own SQLite and alarm. Each deployment runs in a `WorkspaceDO` instance named `deploy:<deploymentId>`, like a CI runner. | Same model as 10; one container class. |
+| Minted tokens | One account-owned token per deployment, scoped to the project's declared permissions, with `expires_on` and revocation at completion. | "Per project" scoping without a long-lived token that can go stale or outlive an unlink. |
+| What the project needs | The owner declares `permissions` in the deploy configuration; Tempo maps them to permission groups. | Reading needs from `alchemy.run.ts` or `cloudflare.config.ts` would mean running branch code in a trusted process. |
+| Token in the container | Never. The container gets `CLOUDFLARE_API_TOKEN=tempo-placeholder`; `TempoOutbound` swaps it only for `api.cloudflare.com`. | Rule 10. |
+| Tool binaries | From the project's own dependencies through `npx --no`; nothing added to `container/versions.json`. | `cf` and `alchemy` are pinned by each project. |
+| tempod | No new request. Deploys reuse `ci.checkout` and `script.start` (`scriptId: "deploy"`). | Smallest daemon change. |
+| GitHub projects, app secrets, containers, rollback, events | Not in this stage (12, Scope). | Kept the first stage bounded. |
+| Settings placement | Web puts Cloudflare on its own Personal settings page after MCP servers (04, Settings). Mac shows the same card at the end of its Logins page, next to the other CredentialDO values. | Tab 12 names the section, not its place. |
+| Mac deep links | The Mac Deploys tab has no `tab=deploys&deployment=` link routing. | The Mac client has none for `tab=checks` either. |
+
+Live Cloudflare acceptance (a real token mint and revoke, an Alchemy v2 deploy with `Cloudflare.state()`, a `cloudflare.config.ts` deploy, and `cf`/`alchemy` accepting an account-owned token) has not been run.

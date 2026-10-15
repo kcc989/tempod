@@ -45,6 +45,8 @@ The Mac app does what the web UI does, with the same names, copy and rules as 04
 | All files and read-only file tabs | Same | Uses GPUI Kit `Editor` in read-only mode. Sleeping reads use the DO cache, show the last-synced notice, and offer an explicit wake on a cache miss. |
 | Checks | Same |  |
 | Repository Checks tab (10): runs, run detail, job logs, run/cancel/rerun, pipeline editor, PR head checks | Same | Unfinished runs refresh every 5 seconds while open |
+| Repository Deploys tab (12): deployments, detail, logs, deploy/cancel/redeploy, configuration editor | Same | Unfinished deployments refresh every 5 seconds while open |
+| Settings Cloudflare section (12): account ID, write-only token, remove | Same |  |
 | Setup, Run and Terminal tabs | Same |  |
 | Workspace startup status | Same | Compact spinner and current op step; fall back to the workspace status before a step is available. No step list, timings or queue explanation. |
 | Previews | Different | Open in the default browser; no Browser tab |

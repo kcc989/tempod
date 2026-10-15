@@ -14,6 +14,9 @@ import {
   IssueToolName,
   ISSUE_TOOL_NAMES,
   ISSUE_TOOLS,
+  DeployToolName,
+  DEPLOY_TOOL_NAMES,
+  DEPLOY_TOOLS,
   PublishArtifactRequest,
   TEMPO_SESSION_ID_ENV,
   EnvironmentSummary,
@@ -259,6 +262,13 @@ export const handleMcpMessage = async (
             description: ISSUE_TOOLS[name].description,
             inputSchema: toolInputSchema(ISSUE_TOOLS[name].input),
           })),
+          ...DEPLOY_TOOL_NAMES.map((name) => ({
+            name,
+            description: DEPLOY_TOOLS[name].description,
+            inputSchema: JsonSchema.toDocumentDraft07(
+              Schema.toJsonSchemaDocument(DEPLOY_TOOLS[name].input, { onExcessProperty: "error" }),
+            ).schema,
+          })),
           ...(!runId
             ? [
                 {
@@ -340,14 +350,19 @@ export const handleMcpMessage = async (
           return reply(text(body.text ?? ""));
         }
 
-        if (Schema.is(IssueToolName)(params["name"])) {
-          const name = Schema.decodeUnknownSync(IssueToolName)(params["name"]);
+        if (Schema.is(IssueToolName)(params["name"]) || Schema.is(DeployToolName)(params["name"])) {
+          const name = params["name"];
+          const issue = Schema.is(IssueToolName)(name);
 
-          const decoded = Schema.decodeUnknownExit(ISSUE_TOOLS[name].input, {
-            onExcessProperty: "error",
-          })(params["arguments"] ?? {});
+          const decoded = Schema.decodeUnknownExit(
+            issue ? ISSUE_TOOLS[name].input : DEPLOY_TOOLS[name].input,
+            {
+              onExcessProperty: "error",
+            },
+          )(params["arguments"] ?? {});
 
-          if (Exit.isFailure(decoded)) return reply(text("Invalid issue tool arguments.", true));
+          if (Exit.isFailure(decoded))
+            return reply(text(`Invalid ${issue ? "issue" : "deploy"} tool arguments.`, true));
 
           const res = await call("/agent-tools", {
             method: "POST",
@@ -368,7 +383,12 @@ export const handleMcpMessage = async (
           )(await res.json());
 
           return reply(
-            text(res.ok ? JSON.stringify(body.result) : (body.error ?? "Issue tool rejected."), !res.ok),
+            text(
+              res.ok
+                ? JSON.stringify(body.result)
+                : (body.error ?? `${issue ? "Issue" : "Deploy"} tool rejected.`),
+              !res.ok,
+            ),
           );
         }
 

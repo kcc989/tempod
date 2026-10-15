@@ -1,0 +1,2 @@
+{"key":"production","stage":"production","branch":"main","auto":true,"agent":false}
+{"key":"preview","stage":"preview","branch":null,"auto":false,"agent":true}

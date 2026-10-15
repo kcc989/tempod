@@ -1,3 +1,4 @@
+import type { AppDeployDO } from "./do/app-deploy.ts";
 import type { CredentialDO } from "./do/credential.ts";
 import type { RepositoryCiDO } from "./do/repository-ci.ts";
 import type { UserHubDO } from "./do/user-hub.ts";
@@ -13,6 +14,8 @@ interface TempoEnv {
   readonly CREDENTIALS: DurableObjectNamespace<CredentialDO>;
   /** Project CI coordinator, one per native project (10). */
   readonly REPOSITORY_CI: DurableObjectNamespace<RepositoryCiDO>;
+  /** App deploy coordinator, one per native project (12). */
+  readonly APP_DEPLOY: DurableObjectNamespace<AppDeployDO>;
   /** Worker Loader for injectors (01, Environments). */
   readonly LOADER: WorkerLoader;
   readonly APP_HOST: string;
@@ -35,7 +38,7 @@ declare global {
 
     interface GlobalProps {
       mainModule: typeof import("./worker.ts");
-      durableNamespaces: "WorkspaceDO" | "UserHubDO" | "CredentialDO" | "RepositoryCiDO";
+      durableNamespaces: "WorkspaceDO" | "UserHubDO" | "CredentialDO" | "RepositoryCiDO" | "AppDeployDO";
     }
   }
 }

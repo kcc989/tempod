@@ -41,7 +41,9 @@ import {
 } from "./container.ts";
 import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } from "./conversations.ts";
 import { discoverModels } from "./model-catalog.ts";
-import { ciAlarm, ciCancel, ciLog, ciStart } from "./ci-runner.ts";
+import { ciAlarm, ciCancel, ciJob, ciLog, ciStart } from "./ci-runner.ts";
+import { deployAlarm, deployCancel, deployJob, deployLog, deployStart } from "./deploy-runner.ts";
+import { deployTokenKey, type DeployJobStart } from "../../deploy/types.ts";
 import type { CiJobStart } from "../../ci/types.ts";
 import { artifactToken } from "../../artifacts/repositories.ts";
 import { WorkspaceCore, type Author } from "./core.ts";
@@ -377,7 +379,42 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   async ciLog(token: string): Promise<Result<{ text: string; truncated: boolean }>> {
     return capture(() => ciLog(this.core, token));
   }
+  // ---------- deploy runner (12, Execution) ----------
+  async deployStart(input: DeployJobStart): Promise<Result<Record<string, never>>> {
+    return capture(async () => {
+      await deployStart(this.core, input);
+
+      return {};
+    });
+  }
+  async deployCancel(token: string): Promise<void> {
+    await deployCancel(this.core, token);
+  }
+  async deployLog(token: string): Promise<Result<{ text: string; truncated: boolean }>> {
+    return capture(() => deployLog(this.core, token));
+  }
+  /** The deployment's minted token for the Cloudflare swap (12, Egress rule 3), or null. */
+  async getDeployToken(): Promise<string | null> {
+    const job = this.deployJob();
+
+    if (!job) return null;
+
+    return this.core.credentials().getSecret(deployTokenKey(job.deploymentId));
+  }
   async getEgressConfig(): Promise<EgressConfig> {
+    const deploy = this.deployJob();
+
+    if (deploy)
+      return {
+        owner: "tempo",
+        repo: deploy.repoName,
+        provider: "artifacts",
+        cloneUrl: assertArtifactRemote(deploy.cloneUrl, deploy.repoName).href,
+        policy: "allowlist",
+        allowlist: [...deploy.egressAllowlist],
+        mcp: [],
+        deploy: true,
+      };
     const ci = this.ciJob();
 
     if (ci)
@@ -442,10 +479,16 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   private ciJob(): CiJobStart | null {
     if (this.core.wsOrNull() || !this.ctx.id.name?.startsWith("ci:")) return null;
 
-    return this.core.kv<CiJobStart>("ciJob") ?? null;
+    return ciJob(this.core) ?? null;
+  }
+  /** The deployment of a deploy runner instance; never set on a workspace. */
+  private deployJob(): DeployJobStart | null {
+    if (this.core.wsOrNull() || !this.ctx.id.name?.startsWith("deploy:")) return null;
+
+    return deployJob(this.core) ?? null;
   }
   async getRepositoryToken(): Promise<string | null> {
-    const ci = this.ciJob();
+    const ci = this.ciJob() ?? this.deployJob();
 
     if (ci) {
       try {
@@ -661,6 +704,8 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       }
 
       if (this.ciJob()) await ciAlarm(core);
+
+      if (this.deployJob()) await deployAlarm(core);
 
       return;
     }

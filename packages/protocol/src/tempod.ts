@@ -1,3 +1,4 @@
+import { DEPLOY_TOOL_NAMES } from "./deploy-tools.ts";
 import { ISSUE_TOOL_NAMES } from "./issue-tools.ts";
 import { Schema } from "effect";
 import {
@@ -58,7 +59,13 @@ export type DoReq = typeof DoReq.Type;
 export const ToolReq = Schema.Struct({
   type: Schema.Literal("tool.req"),
   id: Schema.String,
-  op: Schema.Literals(["report_result", "list_agents", "propose_agent_change", ...ISSUE_TOOL_NAMES]),
+  op: Schema.Literals([
+    "report_result",
+    "list_agents",
+    "propose_agent_change",
+    ...ISSUE_TOOL_NAMES,
+    ...DEPLOY_TOOL_NAMES,
+  ]),
   sessionId: Schema.String,
   runId: Schema.optional(Schema.String),
   params: Schema.Json,

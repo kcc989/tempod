@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeploySettings",
+  "type": "object",
+  "properties": {
+    "accountId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tokenSet": {
+      "type": "boolean"
+    },
+    "updatedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["accountId", "tokenSet", "updatedAt"],
+  "additionalProperties": true
+}

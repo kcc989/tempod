@@ -15,11 +15,15 @@
       { "name": "WORKSPACE", "class_name": "WorkspaceDO" },
       { "name": "USER_HUB", "class_name": "UserHubDO" },
       { "name": "REPOSITORY_CI", "class_name": "RepositoryCiDO" },
+      { "name": "APP_DEPLOY", "class_name": "AppDeployDO" },
       { "name": "CREDENTIALS", "class_name": "CredentialDO" },
     ],
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO", "RepositoryCiDO"] },
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["WorkspaceDO", "UserHubDO", "CredentialDO", "RepositoryCiDO", "AppDeployDO"],
+    },
   ],
   "d1_databases": [
     {

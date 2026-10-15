@@ -679,6 +679,7 @@ export type SettingsTab =
   | "agents"
   | "environments"
   | "mcp"
+  | "cloudflare"
   | "project"
   | "appearance"
   | "notifications"
