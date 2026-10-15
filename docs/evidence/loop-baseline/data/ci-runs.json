@@ -1,0 +1,95 @@
+{
+  "runs": 285,
+  "rows": [
+    {
+      "workflow": "CI",
+      "day": "2026-10-11",
+      "runs": 21,
+      "success": 15,
+      "failure": 6,
+      "median_min": 3.8,
+      "p90_min": 4.3
+    },
+    {
+      "workflow": "CI",
+      "day": "2026-10-12",
+      "runs": 65,
+      "success": 45,
+      "failure": 20,
+      "median_min": 5.1,
+      "p90_min": 6.3
+    },
+    {
+      "workflow": "CI",
+      "day": "2026-10-13",
+      "runs": 97,
+      "success": 60,
+      "failure": 29,
+      "median_min": 5.1,
+      "p90_min": 6.6
+    },
+    {
+      "workflow": "CI",
+      "day": "2026-10-14",
+      "runs": 29,
+      "success": 13,
+      "failure": 15,
+      "median_min": 4.6,
+      "p90_min": 5.9
+    },
+    {
+      "workflow": "CI",
+      "day": "2026-10-15",
+      "runs": 15,
+      "success": 13,
+      "failure": 2,
+      "median_min": 3.1,
+      "p90_min": 4.5
+    },
+    {
+      "workflow": "Daemon image tests",
+      "day": "2026-10-11",
+      "runs": 4,
+      "success": 4,
+      "failure": 0,
+      "median_min": 4.1,
+      "p90_min": 4.3
+    },
+    {
+      "workflow": "Daemon image tests",
+      "day": "2026-10-12",
+      "runs": 20,
+      "success": 20,
+      "failure": 0,
+      "median_min": 3.8,
+      "p90_min": 4.3
+    },
+    {
+      "workflow": "Daemon image tests",
+      "day": "2026-10-13",
+      "runs": 22,
+      "success": 21,
+      "failure": 0,
+      "median_min": 4.2,
+      "p90_min": 4.8
+    },
+    {
+      "workflow": "Daemon image tests",
+      "day": "2026-10-14",
+      "runs": 6,
+      "success": 6,
+      "failure": 0,
+      "median_min": 3.9,
+      "p90_min": 4.3
+    },
+    {
+      "workflow": "Daemon image tests",
+      "day": "2026-10-15",
+      "runs": 6,
+      "success": 6,
+      "failure": 0,
+      "median_min": 3.9,
+      "p90_min": 4.0
+    }
+  ]
+}
