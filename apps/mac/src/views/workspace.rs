@@ -1455,6 +1455,9 @@ impl WorkspaceView {
                 ComposerEvent::SetModel { config_id, value } => {
                     this.configure(&session, Some(config_id), value, window, cx)
                 }
+                ComposerEvent::SetIntentCheck(enabled) => {
+                    this.set_intent_check(&session, *enabled, window, cx)
+                }
             },
         );
         let session = session_id.to_string();
@@ -2407,6 +2410,50 @@ impl WorkspaceView {
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Some(chat) = this.chats.get(&session_id) {
                     chat.composer.update(cx, |c, _| c.configuring = false);
+                }
+                if let Err(error) = result {
+                    this.toast_error(&error, cx);
+                }
+                this.sync(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn set_intent_check(
+        &mut self,
+        session_id: &str,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        if chat.composer.read(cx).intent_check_pending {
+            return;
+        }
+        chat.composer.update(cx, |c, cx| {
+            c.intent_check_pending = true;
+            cx.notify();
+        });
+        let client = self.client.clone();
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        let session_id = session_id.to_string();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = client
+                .call::<api::SetIntentCheck>(p::SetIntentCheckIn {
+                    workspace_id,
+                    session_id: session_id.clone(),
+                    enabled,
+                })
+                .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Some(chat) = this.chats.get(&session_id) {
+                    chat.composer.update(cx, |c, cx| {
+                        c.intent_check_pending = false;
+                        cx.notify();
+                    });
                 }
                 if let Err(error) = result {
                     this.toast_error(&error, cx);
@@ -3927,6 +3974,74 @@ mod tests {
             paths,
             ["/api/v1/rpc/cancelTurn", "/api/v1/rpc/closeSession"]
         );
+    }
+
+    #[gpui_kit::test]
+    fn intent_check_toggle_sends_the_flipped_value_once_while_in_flight(cx: &mut TestAppContext) {
+        use gpui_kit::test::TestWindowExt as _;
+        let mut state = fixture();
+        for session in state.sessions.values_mut() {
+            session.intent_check = Some(false);
+        }
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let (workspace_id, id) = view.read_with(cx, |view, cx| {
+            (
+                view.store.read(cx).workspace_id.clone(),
+                view.active.clone().unwrap(),
+            )
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let toggle = window.find("intent-check");
+            assert_eq!(toggle.label(), Some("Intent check: Off"));
+            assert_eq!(toggle.checked(), Some(false));
+            window.click("intent-check", cx);
+        })
+        .unwrap();
+        view.read_with(cx, |view, cx| {
+            assert!(view.chats[&id].composer.read(cx).intent_check_pending)
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("intent-check", cx);
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| {
+            !view.chats[&id].composer.read(cx).intent_check_pending
+        });
+        let sent: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/setIntentCheck"))
+            .map(|(path, body)| (path.clone(), body.clone()))
+            .collect();
+        assert_eq!(
+            sent,
+            [(
+                "/api/v1/rpc/setIntentCheck".to_string(),
+                serde_json::json!({"workspaceId": workspace_id, "sessionId": id, "enabled": true})
+            )]
+        );
+        view.update(cx, |view, cx| {
+            view.store.update(cx, |store, cx| {
+                store.state.sessions.get_mut(&id).unwrap().intent_check = None;
+                cx.notify();
+            })
+        });
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("intent-check").is_none());
+        })
+        .unwrap();
     }
 
     #[gpui_kit::test]
