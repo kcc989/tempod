@@ -2087,7 +2087,10 @@ describe.concurrent("step runner rules", { timeout: 60_000 }, () => {
         status: "running",
         step: "git.commitAndPush",
       });
-      expect(during.find((o) => o.kind === "sleep")).toMatchObject({ status: "pending", step: "turns.check" });
+      expect(during.find((o) => o.kind === "sleep")).toMatchObject({
+        status: "pending",
+        step: "turns.check",
+      });
       expect(during.filter((o) => o.status === "running")).toHaveLength(1);
     } finally {
       gate.resolve();
