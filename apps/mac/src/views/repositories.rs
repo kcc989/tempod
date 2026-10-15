@@ -23,6 +23,7 @@ enum RepositoryTab {
     PullRequests,
     Issues,
     Checks,
+    Deploys,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -56,6 +57,7 @@ pub struct RepositoryView {
     pull_request: Option<p::RepositoryPullRequest>,
     issues: Option<Entity<super::issues::IssuesView>>,
     checks: Option<Entity<super::repository_checks::ChecksView>>,
+    deploys: Option<Entity<super::repository_deploys::DeploysView>>,
     /// The newest check run of the open PR's head branch (10, Clients); `Some(None)` when none ran.
     pr_check: Option<Option<p::CiRun>>,
     merge_workspace: Option<p::WorkspaceDetail>,
@@ -136,6 +138,7 @@ impl RepositoryView {
             pull_request: None,
             issues: None,
             checks: None,
+            deploys: None,
             pr_check: None,
             merge_workspace: None,
             workspace_loading: false,
@@ -365,6 +368,7 @@ impl RepositoryView {
         self.pull_request = None;
         self.issues = None;
         self.checks = None;
+        self.deploys = None;
         self.merge_workspace = None;
         self.workspace_loading = false;
         self.path.clear();
@@ -397,6 +401,7 @@ impl RepositoryView {
             2 => RepositoryTab::PullRequests,
             3 => RepositoryTab::Issues,
             4 => RepositoryTab::Checks,
+            5 => RepositoryTab::Deploys,
             _ => RepositoryTab::Code,
         };
         self.file = None;
@@ -421,6 +426,18 @@ impl RepositoryView {
             let project_id = project.id.clone();
             self.checks = Some(cx.new(|cx| {
                 super::repository_checks::ChecksView::new(client, project_id, window, cx)
+            }));
+            self.loading = false;
+            self.error = None;
+            cx.notify();
+        } else if self.tab == RepositoryTab::Deploys && self.deploys.is_none() {
+            let Some(project) = &self.project else {
+                return;
+            };
+            let client = self.client.clone();
+            let project_id = project.id.clone();
+            self.deploys = Some(cx.new(|cx| {
+                super::repository_deploys::DeploysView::new(client, project_id, window, cx)
             }));
             self.loading = false;
             self.error = None;
@@ -528,6 +545,12 @@ impl RepositoryView {
                 self.loading = false;
                 if let Some(checks) = &self.checks {
                     checks.update(cx, |checks, cx| checks.refresh(cx));
+                }
+            }
+            RepositoryTab::Deploys => {
+                self.loading = false;
+                if let Some(deploys) = &self.deploys {
+                    deploys.update(cx, |deploys, cx| deploys.refresh(cx));
                 }
             }
         }
@@ -1823,6 +1846,14 @@ impl RepositoryView {
                     },
                     |checks| div().child(checks.clone()).into_any_element(),
                 ),
+                RepositoryTab::Deploys => self.deploys.as_ref().map_or_else(
+                    || {
+                        div()
+                            .child("Select Deploys to load deployments.")
+                            .into_any_element()
+                    },
+                    |deploys| div().child(deploys.clone()).into_any_element(),
+                ),
             }
         };
         let base_branch = project.default_branch.clone();
@@ -1906,13 +1937,21 @@ impl RepositoryView {
                         RepositoryTab::PullRequests => 2,
                         RepositoryTab::Issues => 3,
                         RepositoryTab::Checks => 4,
+                        RepositoryTab::Deploys => 5,
                     })
                     .on_click(cx.listener(|this, index: &usize, window, cx| {
                         this.select_tab(*index, window, cx)
                     }))
                     .children(
-                        ["Code", "Commits", "Pull requests", "Issues", "Checks"]
-                            .map(|name| Tab::new().label(name)),
+                        [
+                            "Code",
+                            "Commits",
+                            "Pull requests",
+                            "Issues",
+                            "Checks",
+                            "Deploys",
+                        ]
+                        .map(|name| Tab::new().label(name)),
                     ),
             )
             .child(body)

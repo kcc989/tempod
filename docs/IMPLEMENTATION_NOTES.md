@@ -517,6 +517,7 @@ The owner asked for a Cloudflare control plane that deploys apps from Tempo with
 | Tool binaries | From the project's own dependencies through `npx --no`; nothing added to `container/versions.json`. | `cf` and `alchemy` are pinned by each project. |
 | tempod | No new request. Deploys reuse `ci.checkout` and `script.start` (`scriptId: "deploy"`). | Smallest daemon change. |
 | GitHub projects, app secrets, containers, rollback, events | Not in this stage (12, Scope). | Kept the first stage bounded. |
-| Settings placement | Web and Mac put Cloudflare on its own Personal settings page after MCP servers (04, Settings). | Tab 12 names the section, not its place. |
+| Settings placement | Web puts Cloudflare on its own Personal settings page after MCP servers (04, Settings). Mac shows the same card at the end of its Logins page, next to the other CredentialDO values. | Tab 12 names the section, not its place. |
+| Mac deep links | The Mac Deploys tab has no `tab=deploys&deployment=` link routing. | The Mac client has none for `tab=checks` either. |
 
 Live Cloudflare acceptance (a real token mint and revoke, an Alchemy v2 deploy with `Cloudflare.state()`, a `cloudflare.config.ts` deploy, and `cf`/`alchemy` accepting an account-owned token) has not been run.

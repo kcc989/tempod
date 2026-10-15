@@ -1,11 +1,11 @@
 //! Settings pages (04, Settings): General, Logins, Environments, MCP servers, Project and
 //! Appearance. Server data changes with the same functions as the web (07, Local storage and
 //! settings).
-use super::tokens::ToggleOn as _;
 use super::environments::{self, EnvironmentSelect};
 use super::environments_model as env_model;
 use super::mcp_model::{self, McpForm};
 use super::settings_model::{self as model, EditValue, FieldState, Kind};
+use super::tokens::ToggleOn as _;
 use super::tokens::{Token, color};
 use crate::platform::Permission;
 use crate::storage::{Local, Theme as SavedTheme, TranscriptDetail};
@@ -398,6 +398,7 @@ pub struct SettingsForm {
     _environment_selected: gpui_kit::Subscription,
     mcp_servers: Option<Vec<p::McpServer>>,
     mcp_editor: Option<McpEditor>,
+    cloudflare: Entity<super::deploy_settings::CloudflareSettings>,
 }
 
 impl SettingsForm {
@@ -420,6 +421,9 @@ impl SettingsForm {
             .and_then(|w| projects.iter().find(|p| p.id == w.project_id))
             .or_else(|| projects.first())
             .cloned();
+        let cloudflare = cx.new(|cx| {
+            super::deploy_settings::CloudflareSettings::with_client(client.clone(), window, cx)
+        });
         let secret_inputs = ["Claude", "Codex", "OpenRouter", "Anthropic", "OpenAI"]
             .into_iter()
             .map(|name| {
@@ -493,6 +497,7 @@ impl SettingsForm {
             _environment_selected: environment_selected,
             mcp_servers: None,
             mcp_editor: None,
+            cloudflare,
         };
         if let Some(project) = project {
             this.load_project(project, window, cx);
@@ -2113,6 +2118,7 @@ impl SettingsForm {
                             .into_any_element()
                     }),
             )
+            .child(self.cloudflare.clone())
             .into_any_element()
     }
 
