@@ -1,4 +1,4 @@
-import { detail } from "../fixtures";
+import { detail, session } from "../fixtures";
 import { createUiEnvironment } from "../environment";
 
 const environment = createUiEnvironment();
@@ -6,7 +6,7 @@ const environment = createUiEnvironment();
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ChecklistItem, ProofContent } from "@tempo/protocol";
 import { beforeEach, expect, it } from "vitest";
-import { AddToChecklist, ProofCard } from "../../../src/ui/components/chat/ProofCard";
+import { AddToChecklist, PreviewProof, ProofCard } from "../../../src/ui/components/chat/ProofCard";
 
 const W = detail().id;
 
@@ -90,4 +90,35 @@ it("adds a message to the checklist once", async () => {
   await waitFor(() =>
     expect(environment.request).toHaveBeenCalledWith("addChecklistItem", { workspaceId: W, itemId: "m9" }),
   );
+});
+
+it("shows the newest proof above the preview and opens it on demand", async () => {
+  const proofItem = (id: string, createdAt: number, content: ProofContent) => ({
+    id,
+    sessionId: "s1",
+    turnId: null,
+    kind: "proof" as const,
+    status: "completed" as const,
+    rev: createdAt,
+    createdAt,
+    updatedAt: createdAt,
+    content,
+  });
+
+  environment.setState({
+    workspace: detail(),
+    sessions: { s1: session() },
+    itemsRev: 2,
+    backlogDone: true,
+    items: {
+      old: proofItem("old", 1, { ...proof, summary: "Old proof", status: "complete" }),
+      new: proofItem("new", 2, proof),
+    },
+  });
+  render(<PreviewProof workspaceId={W} />, { wrapper: environment.Provider });
+
+  expect((await screen.findByText("Proof incomplete")).parentElement?.textContent).toContain("3 missing");
+  expect(screen.queryByText("Old proof")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Show proof" }));
+  expect(screen.getByRole("region", { name: "Proof" }).textContent).toContain("No screen for: /settings");
 });

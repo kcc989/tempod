@@ -1,4 +1,5 @@
-import type { ChecklistItem, ProofContent } from "@tempo/protocol";
+import type { ChecklistItem, ItemOf, ProofContent } from "@tempo/protocol";
+import { useState } from "react";
 import { Button } from "~/ui/components/ui/button";
 import { artifactSrc } from "~/ui/components/artifacts/artifact-model";
 import { useCallMutation } from "~/ui/hooks/useCall";
@@ -119,5 +120,54 @@ export function AddToChecklist({ workspaceId, itemId }: { workspaceId: string; i
     >
       Add to checklist
     </Button>
+  );
+}
+
+/** The newest proof of the workspace, or null. */
+const latestProof = (items: Readonly<Record<string, { kind: string; createdAt: number }>>) => {
+  let latest: ItemOf<"proof"> | null = null;
+
+  for (const item of Object.values(items)) {
+    if (item.kind === "proof" && (!latest || item.createdAt > latest.createdAt))
+      // SAFETY: the kind check above selects proof items.
+      latest = item as ItemOf<"proof">;
+  }
+
+  return latest;
+};
+
+/** 13, L-ADR-2: the newest proof above the preview, with what is missing. */
+export function PreviewProof({ workspaceId }: { workspaceId: string }) {
+  const proof = useWorkspaceSelector(workspaceId, (s) => latestProof(s.items));
+  const [open, setOpen] = useState(false);
+
+  if (!proof) return null;
+  const p = proof.content;
+
+  const missing =
+    p.missingRoutes.length + p.missingChecklist.length + p.checks.filter((c) => c.status === "failed").length;
+
+  return (
+    <div className="shrink-0 border-b">
+      <div className="flex items-center gap-2 px-2 py-1 text-xs">
+        <span className="font-medium">{proofStatusText(p.status)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{p.summary.split("\n")[0]}</span>
+        {p.status === "incomplete" && <span className="text-destructive">{missing} missing</span>}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-5 px-1.5"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {open ? "Hide proof" : "Show proof"}
+        </Button>
+      </div>
+      {open && (
+        <div className="max-h-80 overflow-auto pb-2">
+          <ProofCard workspaceId={workspaceId} proof={p} writable />
+        </div>
+      )}
+    </div>
   );
 }

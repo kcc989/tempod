@@ -605,7 +605,8 @@ Tab 13, L-ADR-2 (Exact rules). Choices made without the owner:
 | Paths | `image` and `recording` may be absolute or relative to `/workspace` | Agents give both forms; the artifact row stores the absolute path. |
 | Checklist text | The user message text, trimmed; a repeat of Add to checklist returns the same item | The spec has the 2,000-character limit and no rule for repeats. |
 | Reopen | Shown on a proof card next to each item that this proof resolved | It is where the owner sees the result. |
-| Not built yet | The proof above the preview pane, and the "routes named by the agent" note for changed files in no `screens` entry | The transcript card shows the proof; the Exact rules table has no field for the agent's routes. |
+| Preview | The web preview Browser tab shows the newest proof in one line above the page (status, first summary line, the missing count) with Show proof. The Mac client opens previews in the default browser (07, C7), so it shows the proof in the transcript only. | 13, L-ADR-2.4. |
+| Not built yet | The "routes named by the agent" note for changed files in no `screens` entry | The Exact rules table has no field for the agent's routes. |
 
 ## Capability manifest (2026-10-15)
 
