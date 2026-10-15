@@ -1,4 +1,4 @@
-import { Files } from "@cloudflare/sandbox";
+import { Files, SandboxFileError } from "@cloudflare/sandbox";
 import { TempoError } from "@tempo/protocol";
 import { sha256Hex } from "../lib/crypto.ts";
 import type { WorkspaceCore } from "../do/workspace/core.ts";
@@ -16,9 +16,18 @@ export const protectedFileHashes = async (core: WorkspaceCore): Promise<Record<s
   const hashes: Record<string, string | null> = {};
 
   for (const path of PROTECTED_AGENT_FILES) {
-    const response = await files.readFile(path);
+    // A login the owner never set up (for example Codex) has no file; the SDK reports ENOENT.
+    const response = await files.readFile(path).catch((cause: unknown) => {
+      if (SandboxFileError.is(cause) && cause.code === "ENOENT") return null;
 
-    if (response.status === 404) {
+      throw new TempoError(
+        "RUN_ACCESS_VIOLATION",
+        undefined,
+        "Protected login or config files could not be checked.",
+      );
+    });
+
+    if (response === null || response.status === 404) {
       hashes[path] = null;
       continue;
     }

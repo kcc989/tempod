@@ -378,6 +378,8 @@ describe("repository issues", () => {
     await screen.findByText("Earlier comment 0");
     fireEvent.change(screen.getByLabelText("Add a comment"), { target: { value: "Newest comment" } });
     fireEvent.keyDown(screen.getByLabelText("Add a comment"), { code: "Enter", metaKey: true });
+    // Role queries over the 50-comment page are slow on a loaded runner; wait for page 2 first.
+    await waitFor(() => expect(screen.queryByText("Earlier comment 0")).toBeNull());
     const edit = await screen.findByRole("button", { name: "Edit comment" });
 
     expect(screen.getByText("Newest comment")).toBeDefined();
