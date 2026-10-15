@@ -1,0 +1,237 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 21,
+  "seconds": 94.1,
+  "usage": {
+    "prompt_tokens": 1048651,
+    "completion_tokens": 7729,
+    "cost": 0.6811967999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Fixes the input schema for list_issue_labels, the one tempo MCP tool with no arguments. Effect 4.0.3 renders a struct with no fields as {not:{type:\"null\"}} (see internal/schema/toJsonSchemaDocument.ts), which is not type \"object\" as MCP clients require. The new toolInputSchema helper returns {type:\"object\",properties:{},additionalProperties:false} for empty structs and leaves structs with fields unchanged. This matches decoding on tools/call (onExcessProperty: \"error\") and the docs/09 rule that issue-tool schemas are the API inputs with projectId removed. The new test fails on the old output and checks every listed tool, both outside a run and inside a run with a review report. Nothing blocks. I could not run typecheck or the tests because the worktree has no node_modules; I checked type assignability by reading Effect's Struct interface.",
+    "findings": [
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 223,
+        "text": "The new helper was inserted under the existing comment for handleMcpMessage, so that comment now sits above toolInputSchema. Not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "/** Handles one JSON-RPC message; returns the response, or null for a notification. */\n/** MCP clients require `type: \"object\"`; Effect renders a struct with no fields as any non-null value. */",
+          "why": "Two doc comments now stack above toolInputSchema, and handleMcpMessage has none. This affects only documentation, not behavior."
+        }
+      },
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 225,
+        "text": "I did not run typecheck or the tests: the worktree has no node_modules, and installing would modify it. By reading, Effect's Struct exposes fields as a readonly property and mapFields with method syntax, so Struct<F> should be assignable to Struct<Struct.Fields>. A green bun run typecheck and the tempod test suite in CI would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const toolInputSchema = (input: Schema.Struct<Schema.Struct.Fields>) =>",
+          "why": "Assignability was checked only by reading the code, not by running the compiler."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: Effect 4.0.3 JSON Schema output for an empty struct, MCP tools/list inputSchema shape, and call-time decoding",
+        "paths": [
+          "packages/tempod/src/tempo-mcp.ts",
+          "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src/internal/schema/toJsonSchemaDocument.ts",
+          "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src/Schema.ts",
+          "packages/protocol/src/issue-tools.ts",
+          "packages/protocol/src/api.ts",
+          "packages/protocol/src/runs.ts",
+          "packages/protocol/src/agent-proposals.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: the advertised schema against what tools/call accepts and rejects",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Spec: MCP tool listing (01) and issue-tool schemas (09)",
+        "paths": ["docs/01 Runtime and Agents.md", "docs/09 Git Forge.md"]
+      },
+      {
+        "risk": "Tests: the assertion runs for every listed tool, fails on the old output, and uses no sleeps or shared state",
+        "paths": ["packages/tempod/test/tempo-mcp.test.ts"]
+      },
+      {
+        "risk": "Security, idempotency, build environment: not touched by this change",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 1ec4cc3:packages/tempod/src/tempo-mcp.ts | sed -n 1,60p; echo ----; git show 1ec4cc3:packages/tempod/src/tempo-mcp.ts | sed -n 200,330p; ls docs",
+        "description": "Read changed source file"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"ISSUE_TOOLS\\b\\|ISSUE_TOOL_NAMES\\|RUN_REPORTS\\b\" packages/protocol/src | head; ",
+        "description": "Find issue tool definitions"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/protocol/src/issue-tools.ts; sed -n 1,45p packages/protocol/src/runs.ts; git log --oneline -3; git status --short | head",
+        "description": "Read issue tools and run reports"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"listRepositoryLabels\" -A4 packages/protocol/src/api.ts | head -20; git show 1ec4cc3:packages/tempod/src/tempo-mcp.ts | grep -n \"ISSUE_TOOLS\\|IssueToolName\\|onExcessProperty\" ",
+        "description": "Check labels input and call-time decode"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/tempod/package.json | head -30; cd packages/tempod && cat > /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-1ec4cc3/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.ts <<'EOF'\nimport { handleMcpMessage } from \"/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod/src/tempo-mcp.ts\";\nfor (const [r,k] of [[undefined,undefined],[\"r\",\"plan\"],[\"r\",\"review\"],[\"r\",\"note\"]] as const) {\nconst res:any = await handleMcpMessage({jsonrpc:\"2.0\",id:1,method:\"tools/list\"}, ()=>Promise.reject(1), \"s\", r, k);\nfor (const t of res.result.tools) console.log(r,k,t.name, JSON.stringify(t.inputSchema).slice(0,140));\n}\nEOF\nbun /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-1ec4cc3/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.ts 2>&1 | head -60",
+        "description": "Probe tools/list output schemas"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,30p packages/tempod/package.json; ls packages/tempod; ls node_modules | head -3",
+        "description": "Inspect tempod package scripts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "which bun node tsc; ls packages/tempod/node_modules 2>&1 | head -2; ls ~/.bun/install/cache 2>/dev/null | grep -i effect | head",
+        "description": "Check for available toolchain"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "which bun node tsc",
+        "description": "Check for bun and node"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "find / -path /proc -prune -o -type d -name \"effect\" -path \"*node_modules*\" -print 2>/dev/null | head -5",
+        "description": "Look for an installed effect package"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/effect/package.json",
+        "path": "/home/user"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "inputSchema|empty struct|type: \"object\"",
+        "path": "docs/01 Runtime and Agents.md",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "propertyNames.length === 0|anyOf.*\"object\".*\"array\"|\\{\\}\\s*:\\s*\\{ type: \"object\"|not.*type.*null",
+        "path": "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src",
+        "output_mode": "content",
+        "glob": "**/{SchemaRepresentation,JsonSchema,SchemaAST,SchemaToJsonSchema}*.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "case \"Objects\"",
+        "path": "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src",
+        "output_mode": "content",
+        "-A": 40,
+        "glob": "**/*Representation*.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "propertySignatures.length === 0|indexSignatures.length === 0",
+        "path": "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src",
+        "output_mode": "content",
+        "-C": 8
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "propertySignatures.length === 0 && .*indexSignatures.length === 0",
+        "path": "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src",
+        "output_mode": "content",
+        "-A": 6
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Schema\\.Struct<Schema\\.Struct\\.Fields>|Struct<Struct\\.Fields>",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git -C /home/user/tempod log --oneline -1; git -C /home/user/tempod status --short",
+        "description": "Check main checkout commit"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^export interface Struct<|^  mapFields|^  readonly fields",
+        "path": "/home/user/tempod/node_modules/.bun/effect@4.0.3/node_modules/effect/src/Schema.ts",
+        "output_mode": "content",
+        "-A": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export const AgentProposal =",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/protocol/src",
+        "output_mode": "content",
+        "-A": 6
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "list_issue_labels|tools/list",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 540p \"docs/01 Runtime and Agents.md\" | cut -c1-1500; echo; sed -n 107p \"docs/09 Git Forge.md\" | cut -c1-1500",
+        "description": "Read spec lines about MCP tools"
+      }
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "case": "R-2bbfc39",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2bbfc397e1a0f846508352ba6febeef79d8208dd",
+  "diffBytes": 2818562,
+  "diffCut": true,
+  "steps": 12,
+  "seconds": 87.8,
+  "usage": {
+    "prompt_tokens": 1795366,
+    "completion_tokens": 6014,
+    "cost": 1.5221249999999997
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Reviewed the branch diff (cut off at 256 KiB) against spec tabs 01, 03, 04 and 07 and the repo rules. Typecheck, lint and tests were not run because they write caches and this review is read-only. The dotfiles op steps (order and step limits), egress rule (read side only, no CI), Worker save path (token only in the Authorization header, DOTFILES_CHANGED on a stale head, Reload picks up a newer remote tip), tempod apply (path checks, no symlink following, restore or delete of dropped paths), reserved dotfiles- names, Mac header rules, initial-prompt handling (seq counts across the workspace) and outer terminal tabs all match the spec as updated in this PR. Worker test files stay at four, and new behavior has tests. Two minor, non-blocking findings.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/tools.rs",
+        "text": "open_terminal still selects ToolTab::Terminal(n) when RemoteTerminal::open fails (client.open_terminal returns Err). The user gets a blank terminal tab with no error and no retry; it should show an error or not add the tab.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/dotfiles.ts",
+        "text": "readSnapshot decodes blobs with a fatal UTF-8 TextDecoder and throws a bare ARTIFACTS_API_ERROR when there are more than filesMax entries. A stored commit with non-UTF-8 content or too many files makes getDotfiles fail with a generic or unexplained error instead of a clear message.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; git log --oneline -2; grep -rn \"ArtifactsRepoInfo\" apps/tempo/src --include=*.ts | head -5; grep -rn \"dotfiles.apply\" docs | head -20; grep -n \"seq\" packages/protocol/src/*.ts | grep -i turn | head -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -rn -i \"initial prompt\" docs/04* docs/07* | head -10; grep -n \"isInitialPrompt\" -A4 apps/tempo/src/ui/components/chat/transcript-model.ts | head -12; grep -rn \"seq\" docs/02* | grep -i \"turns\\b\\|turn\" | head -5; ls apps/tempo/test* apps/tempo/src/**/*.test.ts 2>/dev/null | head; grep -rln \"dotfiles\" apps/tempo --include=*.test.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -rn \"seq\" apps/tempo/src/do/workspace/queue.ts | head -8; grep -rn \"seq.*max\\|max(.*seq\" apps/tempo/src/do/workspace/*.ts | head; ls apps/tempo/test/worker; grep -n \"getDotfiles\\|updateDotfiles\\|DOTFILES_CHANGED\\|dotfiles-bearer\\|git-writer\" -r apps/tempo/test | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n \"fn render_native_row\" -A12 apps/mac/src/views/chat.rs; grep -n \"pill_text\" apps/mac/src/views/indicators.rs | head -3; grep -n \"dotfiles\" packages/protocol/src/fns.ts 2>/dev/null | head; grep -rn \"getDotfiles\" packages/protocol/src | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; sed -n 1079,1180p apps/mac/src/views/workspace.rs | grep -n \"pill\\|indicator\\|state\" "
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n -i \"header\" \"docs/07 Mac Client.md\" | grep -i \"state\\|running\\|pill\" | head; grep -n -i \"top bar\\|header\" \"docs/04 UI.md\" | grep -i \"state\\|running\\|pill\" | head; grep -n \"state\\|Running\" apps/tempo/src/ui/components/workspace/WorkspaceHeader.tsx 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; f=$(grep -rln \"dotfiles.apply\" apps/tempod/src container 2>/dev/null | head -5); echo \"$f\"; for x in $f; do grep -n \"isDotfilePath\\|symlink\\|lstat\\|realpath\\|ls-tree\\|git fetch\\|--depth\" $x | head -20; done"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "dotfiles\\.apply",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39/apps/tempod"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; ls apps; ls apps/tempod/src 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"dotfiles\\.apply\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39",
+        "glob": "!docs/**"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; ls packages/tempod/src; grep -rln \"dotfiles\" packages/tempod/src"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39/packages/tempod/src/dotfiles.ts"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+diff --git a/container/Dockerfile b/container/Dockerfile
+index e264260..0579e30 100644
+--- a/container/Dockerfile
++++ b/container/Dockerfile
+@@ -33,7 +33,7 @@ COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/
+ COPY dist/tempod /usr/local/bin/tempod
+ COPY container/home/ /home/tempo/
+ COPY container/home/ /etc/tempo/home-defaults/
+-COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
++COPY --chmod=0600 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
+ 
+ RUN groupmod -n tempo node \
+  && usermod -l tempo -d /home/tempo -s /bin/zsh node \

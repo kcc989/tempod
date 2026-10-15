@@ -1,0 +1,69 @@
+{
+  "case": "C-8159759",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8159759138c800f51fd0e556f1eb9c836bc46a6c",
+  "diffBytes": 4545,
+  "diffCut": false,
+  "steps": 4,
+  "seconds": 24.0,
+  "usage": {
+    "prompt_tokens": 122129,
+    "completion_tokens": 1967,
+    "cost": 0.0919778
+  },
+  "report": {
+    "status": "pass",
+    "summary": "No blocking issues. All four branch-tip lookups (PR create/reopen, merge preparation, startCiRun, push/adoption head checks) now pass the plain branch name to the binding's log(). The test fakes no longer strip refs/heads/, so the tests would catch this bug again. The forge demo patterns match both Node 24's '\u2139 fail 0' and TAP's '# fail 0'. No spec change is needed.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 68,
+        "text": "validateArtifactRef accepts refs that start with 'refs/heads/', and the repository browser passes them unchanged to repo.log (handlers/repositories.ts:252 and :338). If the binding returns no commits for full ref names, as this PR says, browsing 'refs/heads/main' shows nothing. This was there before the PR; consider a follow-up that strips the prefix or rejects these refs.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 87,
+        "text": "log() with a plain name also resolves tags, so a tag with the same name as a branch could be picked instead of the branch tip. This is a small edge case; consider adding a note to docs/IMPLEMENTATION_NOTES.md.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "log\\(\\{[^}]*ref",
+        "path": "apps",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "refs/heads",
+        "path": "apps/tempo",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/src/artifacts/repositories.ts",
+        "offset": 55,
+        "limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "resolvedRef",
+        "path": "apps/tempo/src/server/handlers/repositories.ts",
+        "output_mode": "content",
+        "-B": 3
+      }
+    }
+  ]
+}

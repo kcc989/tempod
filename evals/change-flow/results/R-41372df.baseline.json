@@ -1,0 +1,71 @@
+{
+  "case": "R-41372df",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "41372df80b5a1eb6daeaa812857da2be299a9c08",
+  "diffBytes": 1472020,
+  "diffCut": true,
+  "steps": 5,
+  "seconds": 45.8,
+  "usage": {
+    "prompt_tokens": 802546,
+    "completion_tokens": 3333,
+    "cost": 0.29643980000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Nothing blocks the merge. The diff was cut off at 256 KiB, so I reviewed the visible parts in full (Mac client repositories, issues and checks views, the agent issue tool, D1 issue storage) and spot-checked the cut-off parts in the worktree: the CI runner WorkspaceDO and tempod's ci.checkout. The CI runner starts with enableInternet false, routes all egress through TempoOutbound with ci: true, and passes only TEMPOD_TOKEN plus non-secret env vars. It sends hello before ci.checkout. The checkout pins the exact commit and fails closed if HEAD differs. The agent issue tools enforce run access (read-only runs cannot change issues), the session profile's tool allow/deny lists and a fixed project and author, and they redact title and body. The Worker test changes stay within the four-file / four-concurrent-case limits. I found three small problems: two stale docs and one stale UI state in the Mac PR view.",
+    "findings": [
+      {
+        "path": "README.md",
+        "line": 7,
+        "text": "README still says \"Artifacts repositories have no CI checks integration yet.\", but this PR adds project CI for native repositories (spec tab 10, RepositoryCiDO, native check runs, Checks tab in both clients). Update the sentence to describe project CI.",
+        "blocking": false
+      },
+      {
+        "path": "AGENTS.md",
+        "line": 3,
+        "text": "This PR adds docs/10 Project CI.md, but AGENTS.md (and the matching CLAUDE.md) still say the spec is \"tabs 00 to 09\". Agents following the rules file will not treat tab 10 as source of truth. Change it to 00 to 10.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/repositories.rs",
+        "text": "pr_check is reset only in load_pr_check, which only open_pull_request calls. select_project and create_pull_request never reset or reload it. A newly created PR, or a PR in another project, can show the previous PR's \"Checks: \u2026 Run #N\" line until it is reopened. Reset pr_check in select_project and call load_pr_check after a successful create.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && ls docs && grep -n \"00 to\" AGENTS.md CLAUDE.md; grep -n \"no CI checks\" README.md"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show --stat HEAD | grep -iE \"test\\.ts|vitest|CI.md\" | head -40; grep -rn \"four\" docs/CI.md | head; ls apps/tempo/test 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/worker | head -60; git show HEAD~1:apps/tempo/test/worker/forge.test.ts >/dev/null 2>&1 && echo existed; grep -rn \"maxWorkers\\|fileParallelism\\|maxConcurrency\" apps/tempo/vitest*.ts apps/tempo/test/*.ts 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"ci.checkout\\|ci\\.checkout\" --include=*.ts packages apps | grep -v test | head; grep -rln \"token\" packages/tempod/src | xargs grep -ln \"checkout\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 120,240p apps/tempo/src/do/workspace/ci-runner.ts; grep -n \"checkoutCommit\" -A40 packages/tempod/src/*.ts | head -60"
+      }
+    }
+  ]
+}

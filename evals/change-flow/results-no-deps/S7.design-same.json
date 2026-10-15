@@ -1,0 +1,75 @@
+{
+  "case": "S7",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "d3a1f123452c8dacf4d8d0f69d27e8eaea0942ff",
+  "diffBytes": 582,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 21.3,
+  "usage": {
+    "prompt_tokens": 119581,
+    "completion_tokens": 1670,
+    "cost": 0.19170960000000004
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change adds +1 to nextOffset in page(), which skips one issue or comment at every page boundary. Spec 09 says to follow nextOffset until it is null, and the item at offset+bounded.length is never returned. The existing worker test expects nextOffset 2 after a 2-item first page, so it now fails, and the second page gets only 1 item instead of 2.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/issues.ts",
+        "line": 50,
+        "blocking": true,
+        "text": "Off-by-one in nextOffset: each page boundary skips one entry, so agents paging through list_issues or list_issue_comments silently miss data.",
+        "evidence": {
+          "quote": "nextOffset: bounded.length < items.length || items.length === 50 ? offset + bounded.length + 1 : null,",
+          "why": "A page returns the entries at offset through offset+bounded.length-1, so the next unread entry is at offset+bounded.length. Adding 1 skips it. The handler offset is a plain skip count, as spec 09 line 99 says ('Offset must be a nonnegative safe integer'). Example: 4 comments of about 65 KB, where the byte bound fits 2 per page. The first page returns items 0-1 with nextOffset 3, and the second page returns only item 3, so item 2 is lost. With a full page of 50, the next offset is 51 and item 50 is skipped. apps/tempo/test/worker/agent-issues.cases.ts:296 `expect(first.nextOffset).toBe(2);` and the 4-unique-ids assertion both fail. Spec 09 line 107 says 'follow `nextOffset` until it is null', which only works when nothing is skipped."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: offset semantics of the repository list handlers and the MCP tool page contract",
+        "paths": [
+          "apps/tempo/src/agents/issues.ts",
+          "apps/tempo/src/server/handlers/issues.ts",
+          "packages/protocol/src/issue-tools.ts",
+          "docs/09 Git Forge.md"
+        ]
+      },
+      {
+        "risk": "Failure paths / idempotency: whether pagination loses work when an agent follows nextOffset",
+        "paths": ["apps/tempo/src/agents/issues.ts"]
+      },
+      {
+        "risk": "Tests: existing pagination test against the new behavior",
+        "paths": ["apps/tempo/test/worker/agent-issues.cases.ts"]
+      },
+      {
+        "risk": "Spec: behavior compared with spec 09 for the tempo MCP tools; no spec change in the diff",
+        "paths": ["docs/09 Git Forge.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Security, build and runtime environment: not affected by a one-line arithmetic change; no secrets, images or permissions touched",
+        "paths": ["apps/tempo/src/agents/issues.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show d3a1f123452c8dacf4d8d0f69d27e8eaea0942ff:apps/tempo/src/agents/issues.ts | head -120; grep -rn \"nextOffset\" --include=*.ts apps packages docs | grep -v node_modules | head -30; grep -rln \"nextOffset\\|offset\" docs | head",
+        "description": "Read changed file and offset usage"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 270,310p apps/tempo/test/worker/agent-issues.cases.ts; grep -n \"offset\" apps/tempo/src/server/handlers/issues.ts | head; grep -n -i \"nextOffset\\|offset\" \"docs/09 Git Forge.md\" | head",
+        "description": "Check test and handler offset semantics"
+      }
+    }
+  ]
+}

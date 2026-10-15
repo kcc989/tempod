@@ -17,7 +17,7 @@ Not in this stage (recorded in `IMPLEMENTATION_NOTES.md`):
 - Custom CI images and runtime releases (plan stages 2 and 4). Jobs use the pinned workspace image of this deployment.
 - Dependency caches. Every job starts from a clean checkout.
 - Artifacts push-event subscriptions. They need Queues, which are not in the D7 stack. Reconciliation replaces them.
-- Merge-candidate checks (plan stage 6). The gate checks the PR head commit.
+- Merge-candidate checks (plan stage 6). The gate checks the PR head commit. The change-flow study (`evals/change-flow/README.md`) measured textual conflicts in 59% of nearby PR pairs on this repository; with many agents, a merge queue that tests the merge candidate becomes the main limit on throughput. It stays out of this stage.
 - Project secrets and environment variables in jobs. Jobs get no secrets.
 - Programmable (JS/TS) pipelines.
 
@@ -61,12 +61,28 @@ egress_allowlist: ["*.example.com"]
 | `jobs.<key>.timeout_minutes` | Optional integer 1–60. Default 20. |
 | `required` | Optional list of job keys whose success a merge needs. Default: every job. An empty list means no merge gate. |
 | `egress_allowlist` | Optional list of at most 50 host patterns (`host.example` or `*.example`), added to the built-in hosts. |
+| `risk` | Proposed, not yet accepted by the parser: optional map with keys `high` and `low`, each a list of at most 100 path patterns. See Risk tiers. |
 
 Any other key, a wrong type or a broken rule fails with `CI_PIPELINE_INVALID`. Its detail names the first problem, for example `jobs.test.needs: unknown job "build"`.
 
 - Each successful save makes a new revision. Revisions start at 1 and never repeat. Saving an empty (whitespace-only) source disables CI and also makes a new revision.
 - A save sends the revision it edited. If the current revision is different, the save fails with `CI_PIPELINE_CHANGED` and changes nothing.
 - The DO keeps the newest 20 revisions. A run records the revision it used and keeps its job list after newer revisions.
+
+## Risk tiers
+
+**Status: proposed on 2026-10-15 with 08, Verification. Not implemented.**
+
+```yaml
+risk:
+  high: ["container/**", "packages/protocol/**", "**/migrations/**"]
+  low: ["docs/**", "**/*.md"]
+```
+
+- A pattern is a repository-relative path. `*` matches within one path segment and `**` matches any number of segments.
+- The tier of a head SHA comes from its changed paths against the PR base (`git diff --name-only <base>...<head>`), under the current pipeline revision: `high` if any path matches a `high` pattern; else `low` if every path matches a `low` pattern; else `medium`.
+- No `risk` key, or no pipeline, gives `medium` for every head.
+- The WorkspaceDO computes the tier at `tempo.branch.pushed`, from the same `git.changes {scope: "branch"}` call that the decision state uses, and the pipeline from `getCiPipeline`. It stores the tier on the gate runs and sends it with `reportVerification`. `RepositoryCiDO` keeps the tier for each SHA and revision.
 
 ## Runs and jobs
 
@@ -170,6 +186,13 @@ New error codes:
 - When a run changes, `RepositoryCiDO` notifies each non-archived workspace of the project on that branch. A workspace with a PR refreshes its checks.
 - Native `tempo.check.passed` and `tempo.check.failed` keep payload `{prNumber}` and add optional `commitSha`. The dedupe key stays `checks:<prNumber>:<sha>:<type>`. Workspaces without a PR get no check events in this stage.
 - Merge gate: a native merge needs the newest run for the exact head SHA and the current revision, with every `required` job `success`. Otherwise it fails with `PR_NOT_MERGEABLE`, detail `Required checks have not passed for <sha7>.` No pipeline, a disabled pipeline or an empty `required` list means no gate. A merge already pushed (lost acknowledgement) is still recovered without the gate.
+- Proposed merge gate inputs (08, Verification; not implemented). After the CI check, for the head's tier, in this order:
+  1. Each enabled attachment with a required `pre_merge` gate for the tier has a reported run for the exact SHA with status `pass`. Otherwise detail `Required verifier <handle> has not passed for <sha7>.` An attachment whose agent is deleted still counts and keeps the gate closed until the owner removes or disables the attachment.
+  2. No gate run reported for the SHA has a confirmed blocking finding. Otherwise detail `<handle> reported a blocking finding for <sha7>.`
+  3. For `high`, a Guide acknowledgement for the SHA. Otherwise detail `Read the guide for <sha7> first.`
+  A merge already pushed is still recovered without these inputs.
+- Proposed storage. `RepositoryCiDO` migration `0001_verification` adds `verifications(sha, attachment_id, run_id, workspace_id, handle, tier, status, blocking, model_family, reported_at, PRIMARY KEY (sha, attachment_id, run_id))`, `guide_acks(sha PRIMARY KEY, acknowledged_at)` and `gates(pr_number, sha, tier, state, reasons_json, updated_at, PRIMARY KEY (pr_number, sha))`. For each attachment the newest reported run counts. It keeps rows for the newest 200 SHAs. It reads attachments and their gates from D1 and never writes D1.
+- `RepositoryCiDO` recomputes the gate state after each run change, report, acknowledgement, push and merge. It notifies each non-archived workspace of the PR's head branch; the WorkspaceDO emits `tempo.gate.changed`. Both clients show the state and reasons beside the PR's checks.
 
 ## Clients
 

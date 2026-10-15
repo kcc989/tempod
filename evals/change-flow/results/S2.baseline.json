@@ -1,0 +1,87 @@
+{
+  "case": "S2",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5770819eb7eea0219eecaa4e0176daaa1e2837e1",
+  "diffBytes": 718,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 34.2,
+  "usage": {
+    "prompt_tokens": 202801,
+    "completion_tokens": 2836,
+    "cost": 0.1520976
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change lets a `skipped` required job satisfy the merge gate. This contradicts docs/10 Project CI.md, which requires every required job to be `success`. In this codebase a job is skipped only when one of its needs did not succeed, so the change opens a gate bypass: with required: [deploy] and deploy needing test, a failing test skips deploy and the merge goes through. The spec isn't updated, nothing is recorded in IMPLEMENTATION_NOTES, and no test covers a skipped required job. The long changed line will probably also fail the formatter check in lint (lint was not run).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "Counting conclusion `skipped` as passing lets a merge through when an upstream job failed. Per docs/10 Project CI.md line 84, a job completes as `skipped` only when one of its `needs` ended without success (failure, cancelled, timed_out, or skipped). Example: jobs test and deploy, deploy needs test, required: [deploy]. test fails, deploy is skipped, mergeBlock returns null, and the native merge goes ahead with no passing checks. This weakens the gate rather than relaxing it for jobs that were skipped on purpose.",
+        "blocking": true
+      },
+      {
+        "path": "docs/10 Project CI.md",
+        "line": 172,
+        "text": "The spec says the merge gate needs \"every `required` job `success`\", and line 62 says `required` lists the jobs \"whose success a merge needs\". The diff changes this behavior without updating the spec or docs/IMPLEMENTATION_NOTES.md. CLAUDE.md rules 1 and 16 require asking first or changing the spec in the same PR. If skipped jobs should pass, the spec has to say which skips count (for example, only when every job in the needs chain succeeded), and the spec owner has to agree first.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/test/worker/project-ci.cases.ts",
+        "text": "No test covers the new behavior. The existing mergeBlock cases (around lines 256-291) don't cover a required job with conclusion `skipped`, and they don't cover a skip caused by a failed upstream job. docs/10 Project CI.md line 187 lists the merge gate and needs skips as required verification, and CLAUDE.md rule 14 requires tests for every server function.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "The changed line is about 150 characters inside a call the formatter had split across lines, so it probably fails the formatting check in `bun run lint`. Reformat it, or pull the success check into a small helper.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "skipped",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2",
+        "output_mode": "content",
+        "glob": "!node_modules"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2/apps/tempo/src/do/repository-ci.ts",
+        "offset": 240,
+        "limit": 80
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(?i)merge gate|skipped",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2/docs",
+        "output_mode": "content",
+        "-C": 3
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2; ls docs; grep -n -i -B3 -A15 \"merge gate\" docs/10*.md | head -80; grep -n -i \"skipped\" docs/10*.md",
+        "description": "Find merge gate spec in tab 10"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2; git status --short; git log --oneline -3; grep -rn \"mergeBlock\" apps/tempo --include=*.ts | grep -v node_modules | head",
+        "description": "Check branch state and mergeBlock tests"
+      }
+    }
+  ]
+}

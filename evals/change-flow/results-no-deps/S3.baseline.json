@@ -1,0 +1,78 @@
+{
+  "case": "S3",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "80ffc66f1ee60d11004a4f3b0094c0f664e2a791",
+  "diffBytes": 748,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 32.5,
+  "usage": {
+    "prompt_tokens": 193946,
+    "completion_tokens": 2441,
+    "cost": 0.2189758
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff adds a log line to artifactToken that passes the plaintext Artifacts token (issued.plaintext) as a log field. The log helper currently masks it only because the key is named 'token'. Handing a secret to a logger goes against CLAUDE.md rule 9, and any rename of the field would leak a live credential. The field always prints '[redacted]', so it does nothing for debugging expired clones. Remove the token from the log call and keep only non-secret fields (repo, scope, expiresAt).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "The log call passes `token: issued.plaintext`, the live Artifacts git token, to the logger. CLAUDE.md rule 9 says never put a secret in logs. Today redactFields masks it only because the key matches SECRET_FIELD (/token|key|.../i). Renaming or nesting it under a key such as 'credential', 'value' or 'plaintext' would write the plaintext token to Workers logs. The field also always prints '[redacted]', so it gives no debugging value. Remove the token field entirely and log only repo, scope and expiresAt (and, if useful, whether the cache was hit or missed).",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "No test covers the new log line (rule 14). Add a test that captures log output when a token is issued and asserts the plaintext token never appears in it, so a later field rename can't leak the secret without a failing test.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 1,
+        "text": "The relative `../log.ts` import is placed above the package imports (@tempo/protocol, effect), against the file's existing order. Move it next to the other relative import (`../env.ts`) so `bun run lint` stays clean.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/log.ts 2>/dev/null | head -60; grep -rn \"redact\" apps/tempo/src --include=*.ts | head -20; sed -n 1,10p apps/tempo/src/artifacts/repositories.ts",
+        "description": "Inspect log helper and redaction usage"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"redactFields\\|RedactableFields\" packages/protocol/src | head; f=$(grep -rln \"export const redactFields\" packages/protocol/src); sed -n 1,80p \"$f\"",
+        "description": "Inspect redactFields implementation"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "redactFields|RedactableFields|SECRET_KEYS|token",
+        "path": "packages/protocol/src",
+        "output_mode": "content",
+        "glob": "*redact*"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S3/packages/protocol/src/redact.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3; ls apps/tempo/src/artifacts/; ls apps/tempo/test 2>/dev/null | head",
+        "description": "Show recent commits and test files"
+      }
+    }
+  ]
+}

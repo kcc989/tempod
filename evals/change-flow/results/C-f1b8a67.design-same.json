@@ -1,0 +1,237 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 19,
+  "seconds": 99.0,
+  "usage": {
+    "prompt_tokens": 741103,
+    "completion_tokens": 8018,
+    "cost": 0.5352614
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "The change treats a Sandbox SDK ENOENT error from Files.readFile as a missing protected file (hash null) and keeps other errors fail-closed as RUN_ACCESS_VIOLATION. It also adds a UI wait on visible state and a worker test. Its correctness depends on the real @cloudflare/sandbox 1.0.0 contract: that SandboxFileError is exported with a static .is, that a missing file throws with code ENOENT instead of returning a 404, and whether .is matches by name or by instanceof. The SDK is not installed in the worktree (bun.lock only pins 1.0.0 and its integrity hash) and downloading the tarball needed approval, so I could not check that contract or run typecheck or tests. The rest of the logic is sound: failures stay closed, missing-before and missing-after compare equal, and a created or deleted protected file still fails the run.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 21,
+        "text": "Not verified against the real SDK: that @cloudflare/sandbox 1.0.0 exports SandboxFileError with a static .is, and that readFile throws with code ENOENT for a missing file (the old code assumed a 404 response). If the export or .is does not exist, typecheck fails. If readFile never throws for a missing file, this branch does nothing (the 404 path still covers it). Reading the package's dist/index.d.ts and its readFile code would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "if (SandboxFileError.is(cause) && cause.code === \"ENOENT\") return null;",
+          "why": "This depends on an SDK API that has no generated types or vendored source in the repository, so I could not check its signature or its behavior for a missing file."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 290,
+        "text": "The test fakes the SDK error as a plain Error with name and code added. It counts as a SandboxFileError only if SandboxFileError.is matches by name or shape. If .is uses instanceof, the guard rethrows RUN_ACCESS_VIOLATION and this test fails. If the real SDK returns a 404 response instead of throwing, the test exercises behavior that never happens in production. Confirm against the SDK source or by running the test.",
+        "blocking": false,
+        "evidence": {
+          "quote": "throw Object.assign(new Error(`readFile '${path}': No such file or directory (os error 2)`), {",
+          "why": "The fake is not an instance of the SDK class, so whether it matches the real SDK error depends on how .is is implemented, which I could not see."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 285,
+        "text": "This file now has 15 cases (14 at the base). CLAUDE.md asks for at most four cases per Worker file. The file is imported into workspace-rpc.test.ts and was already over the limit, so this is not blocking.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Sandbox SDK Files.readFile and SandboxFileError). Could not finish: the SDK is not installed and the download needed approval.",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/package.json",
+          "bun.lock",
+          "apps/tempo/src/do/workspace/scripts.ts",
+          "apps/tempo/src/do/workspace/durability.ts",
+          "apps/tempo/src/do/workspace/artifacts.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths and fail-closed guard",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Idempotency and state (hash comparison of missing files before and after a run)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Security (no secrets in errors or logs; protected-file guard still detects create and delete)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "docs/05 Security and Ops.md"]
+      },
+      {
+        "risk": "Tests (waits on observable state, shared spies under concurrency, assertions that check something, case budget)",
+        "paths": [
+          "apps/tempo/test/worker/runs.cases.ts",
+          "apps/tempo/test/ui/components/issues.test.tsx",
+          "apps/tempo/test/worker/workspace-rpc.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec (protected login/config files fail the run with RUN_ACCESS_VIOLATION)",
+        "paths": [
+          "docs/08 Events and Agents.md",
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "CLAUDE.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat apps/tempo/src/agents/protected-files.ts && grep -rn \"SandboxFileError\" --include=*.ts --include=*.d.ts -l . node_modules/@cloudflare/sandbox 2>/dev/null | grep -v \"^./node_modules/.*node_modules\" | head -20",
+        "description": "Show head file and find SDK error type"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67",
+        "glob": "!**/.git/**"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls -d node_modules/@cloudflare/sandbox apps/tempo/node_modules/@cloudflare/sandbox 2>&1; grep -rn \"@cloudflare/sandbox\" apps/tempo/package.json",
+        "description": "Locate Sandbox SDK package"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/@cloudflare/sandbox/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "cloudflare/sandbox",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67",
+        "output_mode": "content",
+        "glob": "!**/*.lock"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.mock|readFile|SandboxFileError|ENOENT",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "readFile|SandboxFileError|ENOENT|FileError",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "RUN_ACCESS_VIOLATION|protected (login|file)|\\.codex/auth\\.json",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\.readFile\\(|status === 404|\\.catch\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/do/workspace",
+        "output_mode": "content",
+        "-A": 4,
+        "glob": "{scripts,durability,artifacts}.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n '360,368p' \"docs/01 Runtime and Agents.md\" | cut -c1-2500; sed -n '169p' docs/IMPLEMENTATION_NOTES.md | cut -c1-2000",
+        "description": "Read spec guard text and implementation notes"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/*/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"@cloudflare/sandbox@",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/bun.lock",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "D=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/sdk; mkdir -p $D && curl -sSfL https://registry.npmjs.org/@cloudflare/sandbox/-/sandbox-1.0.0.tgz -o $D/s.tgz && tar -xzf $D/s.tgz -C $D && ls $D/package $D/package/dist | head -50",
+        "description": "Download pinned Sandbox SDK tarball to scratchpad"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "curl -sSfL https://registry.npmjs.org/@cloudflare/sandbox/-/sandbox-1.0.0.tgz -o /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/sandbox.tgz",
+        "description": "Download pinned Sandbox SDK tarball"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/ui/components/issues.test.tsx",
+        "offset": 340,
+        "limit": 60
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/worker/runs.cases.ts",
+        "offset": 40,
+        "limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "concurrent|sequential|restoreAllMocks|runs\\.cases",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/worker",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff --stat 1ec4cc30b7bbf14339434b45e04f6a052c592c80 f1b8a672ada10526e1035fd4f3b4a9d7500fe921; grep -c '^  it(' apps/tempo/test/worker/runs.cases.ts; git show 1ec4cc30b7bbf14339434b45e04f6a052c592c80:apps/tempo/test/worker/runs.cases.ts | grep -c '^  it('",
+        "description": "Confirm diff scope and count test cases"
+      }
+    }
+  ]
+}

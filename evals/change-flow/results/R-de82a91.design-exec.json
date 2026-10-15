@@ -1,0 +1,241 @@
+{
+  "case": "R-de82a91",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "de82a91d26288b4a13ed049ad627394d87d92717",
+  "diffBytes": 42558,
+  "diffCut": false,
+  "steps": 23,
+  "seconds": 290.0,
+  "usage": {
+    "prompt_tokens": 1471426,
+    "completion_tokens": 8614,
+    "cost": 0.8961928
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Test-infrastructure-only change: merges the worker, UI and component vitest configs into one projects config, runs UI and component tests in vmThreads with 2 workers each, and makes workspace-events cases concurrent (maxConcurrency 4) using test-context expect. All 67 cases use context expect. Fixtures are isolated per case (distinct user, project, DO and FakeTempod; all queries scoped by id; no global mocks or timers). The two changed test files pass under the new config (78/78). No source or spec behavior changes. The full suite has 4 failures in untouched areas (custom agents, OP_STEPS) caused by @tempo/protocol resolving to the main checkout at /home/user/tempod, not this worktree; they match the stale-protocol typecheck errors.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/fakes.ts",
+        "line": 438,
+        "text": "seedWorkspace reads the shared seedCounter after seedProject's await, so concurrent cases can get the same slug and branch. This is harmless now because the unique indexes workspaces_active_slug and workspaces_active_branch are per project_id and each case seeds its own project. It would break if concurrent cases ever shared a project.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const slug = opts.slug ?? `city${seedCounter}`;",
+          "why": "The counter is read after an await while other concurrent cases increment it. Uniqueness is scoped per project, so there is no collision today."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/workspace-events.test.ts",
+        "line": 115,
+        "text": "With 4 concurrent workspace setups per file, the existing 5000 ms waitFor deadlines (first prompt, turn running, event applied) run under more contention. They passed locally well within budget. A CI timing report from a loaded runner would confirm the margin.",
+        "blocking": false,
+        "evidence": {
+          "quote": "await waitFor(() => ctx.tempod.requestsOf(\"session.prompt\").length === 1, 5000, \"first prompt\");",
+          "why": "This fixed per-wait budget is shared by four concurrent DO setups. It is not a failure, but it is a potential flake source on a slow runner."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: concurrent cases sharing globals, spies, DOM or expect; assertions that can run zero checks",
+        "paths": [
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/test/worker/setup.ts",
+          "apps/tempo/test/ui/components/artifacts.test.tsx"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment: vitest projects config, vmThreads pool, worker pool settings preserved, tsconfig includes, ran changed tests and full suite",
+        "paths": [
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/tsconfig.json",
+          "apps/tempo/package.json"
+        ]
+      },
+      {
+        "risk": "Cache correctness and CI budget: turbo task inputs cover the new config; no scripts reference the removed -c invocations; docs/CI.md updated",
+        "paths": ["turbo.json", "scripts/ci.ts", "docs/CI.md"]
+      },
+      {
+        "risk": "Idempotency/state: D1 unique constraints vs concurrent seeding",
+        "paths": ["apps/tempo/src/db/migrations/0000_init.sql", "apps/tempo/test/worker/fakes.ts"]
+      },
+      {
+        "risk": "Real contracts, failure paths, security, spec: no production source, protocol or spec changes in this diff; only test and config files changed",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts", "docs/CI.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log -1 --format=%H && sed -n 1,160p apps/tempo/test/worker/workspace-events.test.ts && node -p \"require('./apps/tempo/node_modules/vitest/package.json').version\" 2>/dev/null || ls node_modules/vitest/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/worker/ && cat apps/tempo/test/worker/setup.ts; grep -rn \"^let \\|^const .*= new \\|^const .*\\[\\]\\|vi\\.\\(spyOn\\|mock\\|stubGlobal\\|useFakeTimers\\)\" apps/tempo/test/worker/workspace-events.test.ts apps/tempo/test/worker/helpers* 2>/dev/null | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,150p apps/tempo/test/worker/workspace-events.test.ts; sed -n 225,335p apps/tempo/test/worker/workspace-events.test.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"^let \\|^const \\|^export const \\|^export let \\|globalThis\\|static \\|vi\\.\\|Date.now = \\|fetchMock\\|setTimeout\" apps/tempo/test/worker/fakes.ts | head -60; wc -l apps/tempo/test/worker/fakes.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 295,476p apps/tempo/test/worker/fakes.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn -i \"unique\\|slug\" apps/tempo/src/db/migrations/*.sql | grep -i \"workspaces\\|slug\\|unique\" | head -20; grep -rn \"PREVIEW_DOMAIN\\|slug\" apps/tempo/src/do/workspace/*.ts | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo && grep -n \"async () => {$\\|async (.*) => {$\" test/worker/workspace-events.test.ts | grep -v \"expect\" | head -30; grep -n \"^describe\\|^  it\\|^    async\" test/worker/workspace-events.test.ts | grep -c \"async ({ expect })\"; grep -n \"globals\" vitest*.ts tsconfig.json; git diff b9c98977 de82a91 --stat -- ../../.github ../../package.json ../../turbo.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "F=apps/tempo/test/worker/workspace-events.test.ts; grep -n \"^    async\" $F | grep -v \"expect\" ; grep -n \"it(\\|it.for\\|it.each\\|it.skip\\|it.only\" $F | wc -l; grep -c \"async ({ expect })\\|{ expect })\" $F; grep -n \"globals\" apps/tempo/vitest*.ts apps/tempo/tsconfig.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^\\s+async \\((?!\\{ expect \\}|stopReason, \\{ expect \\}).*\\) =>|globals",
+        "path": "apps/tempo",
+        "glob": "{test/worker/workspace-events.test.ts,vitest*.ts,tsconfig.json}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^    async \\(",
+        "path": "apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "count"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^    async \\(\\{ expect \\}\\)|stopReason, \\{ expect \\}",
+        "path": "apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "count"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "globals|\"types\"",
+        "path": "apps/tempo",
+        "glob": "{vitest*.ts,tsconfig.json}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo && ls node_modules/.bin 2>&1 | grep -E \"^(vitest|tsc)$\"; timeout 300 bun run typecheck 2>&1 | tail -15",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun run --cwd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo typecheck",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun run --cwd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo typecheck 2>&1 | grep -E \"^(test/worker/workspace-events|test/ui/components/artifacts|vitest)\" ; echo done",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo && timeout 400 bun x vitest run test/worker/workspace-events.test.ts test/ui/components/artifacts.test.tsx 2>&1 | tail -40",
+        "timeout": 420000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 500 bun x vitest run 2>&1 | grep -vE \"^\\s*$\" | grep -E \"Test Files|Tests |Duration|FAIL|\u2717|\u00d7|Error\" | head -40",
+        "timeout": 520000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 500 bun x vitest run 2>&1 | grep -E \"Test Files|Tests |Duration|FAIL|\u00d7\" | head -40",
+        "timeout": 520000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "readlink -f node_modules/@tempo/protocol; readlink -f ../../node_modules/@tempo/protocol; ls ../../packages/protocol/src | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vitest\\.(ui|components|worker)?\\.?config|vitest\\.config|\"inputs\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91",
+        "glob": "!**/node_modules/**",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat ../../turbo.json; grep -rn \"vitest\\|apps/tempo\" ../../scripts/*.ts ../../package.json 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "FROM (workspaces|projects|user|events)\\b(?! WHERE id)|env\\.[A-Z_]+ =|globalThis|Date\\.now =|Math\\.random =",
+        "path": "test/worker/workspace-events.test.ts",
+        "output_mode": "content",
+        "-n": true
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "env\\.DB|env\\.[A-Z_]+ =|globalThis|Date\\.now =|getByName\\(",
+        "path": "test/worker/workspace-events.test.ts",
+        "output_mode": "content",
+        "-n": true
+      }
+    }
+  ]
+}

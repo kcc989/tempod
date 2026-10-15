@@ -1,0 +1,137 @@
+{
+  "case": "R-2ff48c5",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2ff48c57add387786ffe3361209f790f9efeecd4",
+  "diffBytes": 991538,
+  "diffCut": true,
+  "steps": 12,
+  "seconds": 94.7,
+  "usage": {
+    "prompt_tokens": 1961314,
+    "completion_tokens": 7688,
+    "cost": 0.7655360000000001
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Nothing blocks this merge. It removes the legacy custom-agent/Artifacts and roles paths across Worker, DO, web UI, Mac client, protocol and tempod while keeping frozen session profiles. Migration 0012_session_agents renames the session columns to agent_id/agent_name/agent_sha and adds a nullable agent_version; old chats get no version and keep their project-model fallback. Spec tabs 01/02/08 and IMPLEMENTATION_NOTES record the owner's waiver and the new flat Session fields (rule 16), and web and Mac change together (rule 17). isomorphic-git and the AGENTS binding are removed, with no leftover references found. Tests cover the new model rules, wrong-agent and deleted-agent rejection, the migration, ignored roles keys in settings files, and the retired /home/tempo/roles ACP folder. typecheck, lint and test were not run because they needed approval, so this review is static only.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/workspace/runs.ts",
+        "line": 223,
+        "text": "The run pre-check calls sessionModel with frozen=true, but the run session it creates takes agentVersion from row.agentVersion. Runs migrated by 0010_agents have a NULL agent_version, so for them ensureSessionLive does not treat the session as frozen and falls back to the project model. The check and the started session then use different rules: with an empty model on Claude or Codex the check passes but the session silently gets the project model instead of the adapter default. Edge case for legacy queued runs only.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/agents/decisions.ts",
+        "line": 10,
+        "text": "This file is inside agents/ but imports \"../agents/secrets.ts\"; \"./secrets.ts\" is clearer (proposals.ts has the same pattern).",
+        "blocking": false
+      },
+      {
+        "path": "packages/tempod/src/acp/profile.ts",
+        "line": 15,
+        "text": "Comment grammar after the rename: \"a agent profile\" and \"A agent server\" should be \"an agent\".",
+        "blocking": false
+      },
+      {
+        "path": "CORE-RESULTS.md",
+        "line": 26,
+        "text": "Still lists the custom-agent Artifacts (AGENTS) binding as present in the deployment; it is now removed from wrangler.jsonc and env.ts.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && git diff --stat HEAD~1 | tail -80",
+        "description": "Show recent commits and changed files"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff --stat HEAD~1 | head -110; ls docs; grep -rn \"plan\\|PLAN\" docs/*.md 2>/dev/null | grep -i \"M6\" | head",
+        "description": "Show first part of changed files and docs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff HEAD~1 -- docs/ packages/tempod/src packages/protocol/src/agents.ts packages/protocol/src/types.ts packages/settings/package.json | head -600",
+        "description": "Show doc and protocol diffs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff HEAD~1 -- docs/IMPLEMENTATION_NOTES.md \"docs/02 Data and API.md\" \"docs/08 Events and Agents.md\" packages/tempod/src packages/protocol/src/types.ts packages/protocol/src/agents.ts packages/settings/package.json turbo.json",
+        "description": "Show key spec and tempod diffs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "rg -n \"custom_agent|customAgent|CustomAgent|menu_entries|roles-builtin|rolesChanged|listRoles|ARTIFACTS_ERROR|ROLE_ACCESS\" --glob '!docs/**' --glob '!**/generated.rs' --glob '!bun.lock' . | grep -v \"^./spikes\" | head -40; rg -n \"agent_name|agent_version|agent_sha\" crates/tempo-protocol/src/generated.rs | head; sed -n 1,40p apps/tempo/src/agents/library.ts",
+        "description": "Grep for leftover legacy references"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "rg -n \"agentVersion|agent_version\" apps/tempo/src/db/workspace-do.ts; rg -n \"readonly model\" apps/tempo/src/do/workspace/index.ts; rg -n \"model\" packages/protocol/src/api.ts | grep -i \"createSession\\|createWorkspace\" ; rg -n \"createSession|CreateSessionIn|CreateWorkspaceIn\" packages/protocol/src/*.ts | head",
+        "description": "Check run schema and model input types"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules >/dev/null 2>&1 && (cd apps/tempo && timeout 300 bun run typecheck 2>&1 | tail -20)",
+        "description": "Typecheck the tempo app",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "agentVersion|agent_version|readonly model",
+        "path": "apps/tempo/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo && timeout 300 bun run typecheck",
+        "description": "Typecheck the tempo app",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun run --cwd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo typecheck",
+        "description": "Typecheck the tempo app",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff HEAD~1 -- packages/settings/test/migrations/settings.test.ts packages/protocol/src/settings.ts packages/tempod/test/acp.test.ts",
+        "description": "Show settings migration and acp test diffs"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "decodeUnknown\\w*\\((SettingsLayer|Settings)\\b",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    }
+  ]
+}

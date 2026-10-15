@@ -1,0 +1,178 @@
+{
+  "case": "S3",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "966d17080c28dc79040e4e31ee3b39a08a56d9dc",
+  "diffBytes": 747,
+  "diffCut": false,
+  "steps": 20,
+  "seconds": 76.1,
+  "usage": {
+    "prompt_tokens": 87684,
+    "completion_tokens": 1253,
+    "cost": 0.0,
+    "neurons": 6246.352806091309
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change adds a log line that emits an issued artifact access token as part of the log message. The repository's `log` helper only redacts structured fields, not the free-form `msg` string, and the spec (05, Secrets) requires tokens/keys/secrets to be redacted. This leaks a credential into the log stream.",
+    "checked": [
+      {
+        "risk": "Security",
+        "paths": [
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/log.ts",
+          "packages/protocol/src/redact.ts",
+          "docs/05 Security and Ops.md"
+        ]
+      },
+      {
+        "risk": "Real contracts",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      }
+    ],
+    "findings": [
+      {
+        "blocking": true,
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "Log message includes the plaintext issued artifact token, which the log function does not redact.",
+        "evidence": {
+          "quote": "log(\"info\", `artifacts ${scope} access issued for ${name}: ${issued.plaintext}`, { expiresAt });",
+          "why": "The `log` helper redacts values whose field names match SECRET_FIELD (packages/protocol/src/redact.ts), but the free-form `msg` parameter is interpolated directly into the JSON output without redaction (apps/tempo/src/log.ts line 18). This emits the bearer token in the log stream, violating the Secrets requirement in docs/05 Security and Ops.md and creating an exposure in logs/R2 retention. The token should be omitted from the message or moved into a field name that matches the redaction rule."
+        }
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la docs/"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs -maxdepth 3 -type f | head -100"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "CLAUDE.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "AGENTS.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/log.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 Security and Ops.md",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "start": 190,
+        "end": 230
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git grep -n \"redact\" apps/tempo/src/log.ts packages/protocol/src/ 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git grep -n \"redact\" apps/tempo/src/log.ts packages/protocol/src/ 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "start": 1,
+        "end": 50
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git grep -n \"redactFields\" packages/protocol/src/ 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find packages/protocol/src -type f | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find packages/protocol/src -type f"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "packages/protocol/src/redact.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/log.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 Security and Ops.md",
+        "start": 200,
+        "end": 350
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 Security and Ops.md",
+        "start": 350,
+        "end": 500
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"artifact\" apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

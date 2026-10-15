@@ -1,0 +1,17 @@
+diff --git a/apps/tempo/src/artifacts/repositories.ts b/apps/tempo/src/artifacts/repositories.ts
+index a0312cd..33ffbb5 100644
+--- a/apps/tempo/src/artifacts/repositories.ts
++++ b/apps/tempo/src/artifacts/repositories.ts
+@@ -1,3 +1,4 @@
++import { log } from "../log.ts";
+ import { TempoError } from "@tempo/protocol";
+ import { Option, Schema } from "effect";
+ import type { Env } from "../env.ts";
+@@ -221,6 +222,7 @@ export const artifactToken = async (
+ 
+     while (cache.size >= MAX_CACHED_TOKENS) cache.delete(cache.keys().next().value!);
+     cache.set(key, { token: issued.plaintext, expiresAt });
++    log("info", `artifacts ${scope} access issued for ${name}: ${issued.plaintext}`, { expiresAt });
+ 
+     return issued.plaintext;
+   });

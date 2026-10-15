@@ -1,0 +1,332 @@
+{
+  "case": "R-eaf0b28",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "eaf0b2894068c621e49284ddf30b43dfe91b6645",
+  "diffBytes": 161562,
+  "diffCut": false,
+  "steps": 33,
+  "seconds": 214.5,
+  "usage": {
+    "prompt_tokens": 4102554,
+    "completion_tokens": 16488,
+    "cost": 1.4232487999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "CI/test-infrastructure change: split Vitest into cached Worker/UI/component Turbo tasks with transit hashing, docs-only CI fast path that fails closed, concurrent Worker RPC/op groups using test-context expect and per-test cleanup, cached browser fixture builds and narrower phone Playwright coverage, with spec/CI docs updated. No blocking defects found. One non-blocking risk: a concurrent ops group mutates the module-global STEP_LIMITS table. Tests could not be executed in this sandbox (bun test needed approval); verification is by code reading.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 1938,
+        "text": "The \"step runner rules\" group is now describe.concurrent, but one case temporarily mutates the module-global STEP_LIMITS table that the DO runner in the same isolate reads. Sibling cases running at the same time (maxConcurrency 4) all run create ops through settings.read, so they get a 300 ms timeout. That breaks the AGENTS.md/CI.md rule to keep cases with global mocks sequential. The likely effect is extra retries on a loaded runner, not wrong assertions, since siblings do not assert on settings.read. Making this group sequential (or moving this case to a sequential group) fixes it. A CI run under load showing settings.read retries or TEMPOD_TIMEOUT in sibling create ops would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "STEP_LIMITS[\"settings.read\"] = { ...original, timeoutMs: 300 };",
+          "why": "Runs inside describe.concurrent(\"step runner rules\"), so concurrent siblings that call seedWs/readyWs run settings.read with the shortened 300 ms timeout until the finally block restores it."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: concurrency safety (test-context expect, shared spies/globals, cleanup) in the newly concurrent Worker groups",
+        "paths": [
+          "apps/tempo/test/worker/ops.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/worker/setup.ts",
+          "apps/tempo/vitest.worker.config.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths / fail-closed: docs-only change classification (missing, invalid or unreachable base, fetch timeout, empty diff, renames)",
+        "paths": [
+          "scripts/ci-changes.ts",
+          "scripts/ci-changes.test.ts",
+          ".github/workflows/ci.yml",
+          "scripts/ci.ts"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment: docs-only lint/format via bunx without node_modules, pinned tool versions, configs",
+        "paths": ["package.json", ".oxlintrc.json", ".oxfmtrc.json", "scripts/ci.ts"]
+      },
+      {
+        "risk": "Cache correctness: Turbo task inputs, transit hashing, Worker exclusion of UI/routes, fixture build outputs",
+        "paths": [
+          "turbo.json",
+          "apps/tempo/package.json",
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/test/browser/vite.config.ts",
+          "apps/tempo/vite.web-test.config.ts",
+          "packages/protocol/package.json",
+          "packages/tempod/package.json",
+          "node_modules/turbo/docs/crafting-your-repository/configuring-tasks.mdx"
+        ]
+      },
+      {
+        "risk": "Tests: Playwright project grep/tags, phone device taps, UI controls used by new steps",
+        "paths": [
+          "tests/e2e/playwright.browser.config.ts",
+          "tests/e2e/playwright.web.config.ts",
+          "tests/e2e/web/client.spec.ts",
+          "tests/e2e/browser-tests/workspace.spec.ts",
+          "tests/e2e/package.json",
+          "apps/tempo/src/ui/components/settings/SettingsPage.tsx",
+          "apps/tempo/src/ui/components/sidebar/Sidebar.tsx"
+        ]
+      },
+      {
+        "risk": "Spec/docs consistency and repository rules (CI budget, required check job, docs updated in same change)",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "AGENTS.md"]
+      },
+      {
+        "risk": "Security: workflow input handling (base SHA via env, no secrets) \u2014 no platform/SDK contracts touched",
+        "paths": [".github/workflows/ci.yml", "scripts/ci-changes.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; git rev-parse HEAD; ls apps/tempo; cat apps/tempo/vitest*.ts | head -150; grep -n '\"name\"\\|\"main\"\\|\"exports\"' -A3 packages/*/package.json | head -60; cat apps/tempo/test/browser/vite.config.ts apps/tempo/vite.web-test.config.ts | grep -n -i 'outDir\\|root\\|build' ; grep -n '\"@playwright/test\"\\|oxlint\\|oxfmt' tests/e2e/package.json package.json; ls -a | grep -i oxlint; cat .oxlintrc.json 2>/dev/null | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; f=apps/tempo/test/worker/ops.test.ts; grep -n 'describe\\|vi\\.\\|Date.now = \\|STEP_LIMITS\\[\\|globalThis\\|spyOn\\|useFakeTimers\\|counter' $f | grep -v '^\\s*$' | head -80"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "describe|vi\\.|Date\\.now = |STEP_LIMITS\\[|globalThis|spyOn|useFakeTimers|Date\\.now\\.bind",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/ops.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/ops.test.ts",
+        "offset": 1900,
+        "limit": 185
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; cat apps/tempo/test/worker/setup.ts; sed -n 1,330p apps/tempo/test/worker/ops.test.ts | grep -n 'let \\|const .*= \\[\\]\\|new Map\\|afterEach\\|beforeEach\\|vi\\.' "
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "spyOn|describe|Date\\.now = |mockImplementation|globalThis\\.|fetchMock",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/workspace-rpc.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; sed -n 1,314p apps/tempo/test/worker/workspace-rpc.test.ts | grep -n 'expect'; grep -n 'expect' apps/tempo/test/worker/helpers*.ts apps/tempo/test/worker/*fake*.ts 2>/dev/null | head; ls apps/tempo/test/worker | head -50; sed -n 1,326p apps/tempo/test/worker/ops.test.ts | grep -n 'expect'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n 'types\\|globals' apps/tempo/tsconfig.json; awk 'NR>=1065 && NR<=1080' apps/tempo/test/worker/workspace-rpc.test.ts; awk 'NR>=2515 && NR<=2560' apps/tempo/test/worker/workspace-rpc.test.ts | grep -n expect; awk 'NR>=2625 && NR<=2652' apps/tempo/test/worker/workspace-rpc.test.ts | grep -n expect; awk 'NR>=2138 && NR<=2145' apps/tempo/test/worker/workspace-rpc.test.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^\\s+(?:const|let) \\w+ = [^;]*$|expect\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/workspace-rpc.test.ts",
+        "output_mode": "content",
+        "offset": 0,
+        "head_limit": 0,
+        "-n": true,
+        "multiline": false
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "it\\([^\\n]*async \\(\\) =>|it\\([^\\n]*, \\(\\) =>",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker",
+        "glob": "{ops,workspace-rpc}.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/workspace-rpc.test.ts",
+        "offset": 1065,
+        "limit": 15
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "docs/|\\.md[\"'`]|README",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28",
+        "glob": "**/*.{ts,tsx,json,jsonc}",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "[\"'`/]docs/|\\.\\./docs|readFile[^\\n]*\\.md|spikes/",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28",
+        "glob": "**/*.{ts,tsx,json,jsonc}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"build\"\\|\"test\"' /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/packages/*/package.json /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/tests/*/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from [\"'][^\"']*(/ui/|/routes|routeTree|~/ui|~/routes)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo",
+        "glob": "{test/worker/**,src/**}",
+        "output_mode": "content",
+        "head_limit": 40
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo && grep -rlE \"from ['\\\"][^'\\\"]*(/ui/|~/ui|routeTree|/router)\" src test/worker --include=*.ts --include=*.tsx | grep -v '^src/ui/\\|^src/routes/'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rlE \"router|routeTree\" src test/worker --include=*.ts --include=*.tsx | grep -v '^src/ui/\\|^src/routes/'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rnE \"[\\\"'/]router(\\.tsx)?[\\\"']|routeTree\" src test/worker --include=*.ts --include=*.tsx | grep -v '^src/routes/'; grep -n 'routeTree\\|ui' ../../.gitignore .gitignore 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from ['\\\"]\\.\\./[^'\\\"]*['\\\"]\" test/worker | sort -u | grep -v '\\.\\./\\.\\./src' ; ls test"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from ['\\\"](\\.\\./)+[^'\\\"]*['\\\"]\" test/ui test/web test/browser | grep -vE \"\\.\\./src|/src/\" | sort -u | head; grep -rn \"import\" test/browser/vite.config.ts vite.web-test.config.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rln \"\\.\\./fixtures\\\"\\|\\.\\./storage-stub\\\"\" test/ui test/web test/browser; ls test/ui | head -30; grep -rn \"fixtures\\|\\.\\./\\.\\.\" test/web/*.ts* 2>/dev/null | grep import | head; grep -rn \"css\\|tailwind\\|components.json\" vite.web-test.config.ts test/browser/vite.config.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from ['\\\"][^'\\\"]+['\\\"]\" test/web test/browser | sort -u | grep -vE '\"(\\.\\./\\.\\./src|~|react|@)' | head -20; grep -rn \"@source\\|@import\" src/*.css src/**/*.css 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"name\"' package.json; grep -rn '\"Back\"\\|aria-label=\"Back\"\\|>Back<\\|\"Appearance\"\\|\"Settings\"' src/ui | head -20; ls ~/.cache/ms-playwright 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"Back\"|>Back<|\"Appearance\"|label=\"Settings\"|\"Settings\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/src/ui",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"name\"' package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Back\\b",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/src/ui/components/settings",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28 && timeout 120 bun test scripts/ci-changes.test.ts 2>&1 | tail -15"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun test ../../scripts/ci-changes.test.ts",
+        "timeout": 120000
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/.oxfmtrc.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "github\\.\\w+ =|STEP_LIMITS\\[[^\\]]+\\] =|\\w+\\.prototype\\.\\w+ =",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker",
+        "glob": "{ops,workspace-rpc}.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls ../../node_modules/turbo/docs 2>/dev/null | head; grep -n '\"version\"' ../../node_modules/turbo/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "package-name#task|Package Configurations|transit",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/node_modules/turbo/docs",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "transit|package-name#|\"\\w+#\\w+\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/node_modules/turbo/docs/crafting-your-repository/configuring-tasks.mdx",
+        "output_mode": "content",
+        "-C": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 10,
+  "seconds": 41.2,
+  "usage": {
+    "prompt_tokens": 390510,
+    "completion_tokens": 3215,
+    "cost": 0.31928080000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change does what the request describes. protectedFileHashes now treats a SandboxFileError ENOENT from Files.readFile as an absent file (null), like the existing 404 branch. Any other readFile failure still fails with RUN_ACCESS_VIOLATION and the same message, with no path or secret in it. The guard is no weaker: an agent that creates a missing login file changes its hash from null to a value, and one that deletes a protected file changes it from a value to null, so both runs still fail. The new Worker case checks the observable result (the run completes with no error code), and the existing changed-file case still covers the failure path. The issues.test.tsx fix waits for page 2 to replace page 1 instead of sleeping or retrying, and its assertions are unchanged. node_modules is not installed in this worktree, so I could not read SandboxFileError.is in @cloudflare/sandbox 1.0.0 and did not run the tests. There are no blocking findings.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 290,
+        "text": "The test throws a plain Error with name 'SandboxFileError' and code 'ENOENT' added, not a real SandboxFileError. That proves the fix only if SandboxFileError.is in @cloudflare/sandbox 1.0.0 checks the name or a brand rather than instanceof. If it uses instanceof, this case fails, while production, which gets real instances, would still work. node_modules is missing here, so I could not confirm which. Consider building the error with the SDK's own constructor so the test does not depend on how .is works inside the SDK.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 21,
+        "text": "Treating ENOENT as absent extends the existing 404 path, so I see no spec conflict. Docs 01 and 08 describe the guard only as comparing hashes, so this is not new behavior. The PR could still add a short line to docs/IMPLEMENTATION_NOTES.md noting that a missing protected file hashes as null, so the choice is recorded.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67; cat apps/tempo/src/agents/protected-files.ts; grep -rn \"SandboxFileError\" --include=*.ts --include=*.d.ts . 2>/dev/null | grep -v node_modules/.cache | head -20; grep -n \"vi.mock\\|SandboxFileError\\|@cloudflare/sandbox\" apps/tempo/test/worker/runs.cases.ts apps/tempo/test/worker/*.ts | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67; d=$(find . -path \"*node_modules/@cloudflare/sandbox/package.json\" -not -path \"*/.cache/*\" | head -1); echo $d; grep '\"version\"' $d; dd=$(dirname $d); grep -rn \"SandboxFileError\" $dd --include=*.d.ts | head; grep -rn -A12 \"class SandboxFileError\" $dd --include=*.js | head -40; grep -rn \"Files\\|sandbox\" apps/tempo/test/worker/setup*.ts apps/tempo/vitest*.ts 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/sandbox/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "@cloudflare/sandbox|readFile",
+        "path": "apps/tempo/test/worker",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls ~/.bun/install/cache 2>/dev/null | grep -i sandbox | head; grep -rn \"sandbox\" /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "sandbox",
+        "path": "apps/tempo/package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "ENOENT|SandboxFileError|readFile",
+        "path": "docs",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protected login|RUN_ACCESS_VIOLATION",
+        "path": "docs",
+        "output_mode": "content",
+        "-o": false,
+        "head_limit": 10
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 364p \"docs/01 Runtime and Agents.md\" | grep -o \".\\{0,400\\}protected.\\{0,600\\}\""
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": ".{0,300}hash.{0,500}",
+        "path": "docs/01 Runtime and Agents.md",
+        "output_mode": "content",
+        "-o": true
+      }
+    }
+  ]
+}

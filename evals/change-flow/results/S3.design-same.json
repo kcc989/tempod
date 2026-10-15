@@ -1,0 +1,78 @@
+{
+  "case": "S3",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "966d17080c28dc79040e4e31ee3b39a08a56d9dc",
+  "diffBytes": 747,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 27.4,
+  "usage": {
+    "prompt_tokens": 117734,
+    "completion_tokens": 2318,
+    "cost": 0.194012
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The single added line logs the plaintext Artifacts repository access token (issued.plaintext) at info level inside the message string. The log helper only redacts structured fields, not msg, so a live read/write Git credential is written to Workers Logs every time a new token is issued. This violates CLAUDE.md rule 9, spec 05 (all logs pass through the redact helper) and spec 09 (minted tokens MUST NOT appear in outputs). No spec change or test is included.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "Plaintext Artifacts access token written to logs. The token is interpolated into the log message, and redaction does not apply to the message.",
+        "blocking": true,
+        "evidence": {
+          "quote": "log(\"info\", `artifacts ${scope} access issued for ${name}: ${issued.plaintext}`, { expiresAt });",
+          "why": "log() in apps/tempo/src/log.ts builds `JSON.stringify({ ts: Date.now(), level, msg, ...redactFields(fields) })`: only `fields` is redacted, `msg` is emitted verbatim. MIN level is \"info\", so every newly minted repository-scoped read/write Git token (valid for TOKEN_TTL) lands in Workers Logs. This violates CLAUDE.md rule 9, spec 05 line 171 ('All logs pass through the redact helper') and spec 09 line 17 ('Initial and minted tokens MUST NOT appear in outputs')."
+        }
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 1,
+        "text": "The relative import is placed above the package imports, which may break the lint import-order rule. Not verified; running bun run lint would confirm.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Security: secrets in logs and redaction",
+        "paths": [
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/log.ts",
+          "docs/05 Security and Ops.md",
+          "docs/09 Git Forge.md",
+          "CLAUDE.md"
+        ]
+      },
+      {
+        "risk": "Spec conformance (no spec change accompanies the behavior change)",
+        "paths": ["docs/05 Security and Ops.md", "docs/09 Git Forge.md"]
+      },
+      {
+        "risk": "Failure paths, idempotency, real contracts: the added line does not change token issuance, caching or error handling",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Tests: no test added or changed for the new log line",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 966d17080c28dc79040e4e31ee3b39a08a56d9dc:apps/tempo/src/log.ts; git show 966d17080c28dc79040e4e31ee3b39a08a56d9dc:apps/tempo/src/artifacts/repositories.ts | sed -n 180,235p; ls docs",
+        "description": "Read log helper and changed function at head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n -i \"redact\\|never.*log\" \"docs/05 Security and Ops.md\" | head -20; grep -rn -i \"artifact.*token\" \"docs/09 Git Forge.md\" | head -8",
+        "description": "Find spec rules on logging secrets and artifact tokens"
+      }
+    }
+  ]
+}

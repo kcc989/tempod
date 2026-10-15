@@ -1,0 +1,22 @@
+{
+  "baseline": {
+    "recall": 0.42105263157894735,
+    "fix_recall": 0.0,
+    "seed_recall": 1.0,
+    "fpr": 0.16666666666666666,
+    "score": 0.2543859649122807,
+    "tokens_per_run": 468240.95454545453,
+    "minutes_per_run": 0.764090909090909,
+    "runs": 22
+  },
+  "design-same": {
+    "recall": 0.3684210526315789,
+    "fix_recall": 0.0,
+    "seed_recall": 0.875,
+    "fpr": 0.3333333333333333,
+    "score": 0.03508771929824561,
+    "tokens_per_run": 1526519.6363636365,
+    "minutes_per_run": 1.6167424242424242,
+    "runs": 22
+  }
+}

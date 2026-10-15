@@ -1,0 +1,150 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 10,
+  "seconds": 54.2,
+  "usage": {
+    "prompt_tokens": 469563,
+    "completion_tokens": 4703,
+    "cost": 0.3936956
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Changes Claude's default mode from bypassPermissions to auto everywhere it is used (server default in queue.ts, the web and Mac plan toggles, the conformance harness, spec 01) and rewords the turn-summary rule in spec 01 and in TURN_SUMMARY_RULE so the two match exactly. The recorded run of the pinned claude-agent-acp 0.89.1 lists 'auto' among its modes. If setting the mode fails, tempod logs a warning and the session keeps the agent's current mode; the error is not hidden or reported as success. The spec and IMPLEMENTATION_NOTES change in the same commit, and the web and Mac clients change together. The tests could not be run here because the sandbox blocks access to node_modules, which links outside the worktree.",
+    "findings": [
+      {
+        "path": "docs/01 Runtime and Agents.md",
+        "line": 104,
+        "text": "Spec 01 still explains IS_SANDBOX=1 by saying it shows bypassPermissions, and spike S3 in docs/06 still requires that mode. Now that the default is auto, both may be out of date. Confirm with the owner whether they still apply.",
+        "blocking": false,
+        "evidence": {
+          "quote": "`IS_SANDBOX=1` is set even though agents run as uid 1000. Claude Code hides `bypassPermissions` for root unless `IS_SANDBOX` is `1`.",
+          "why": "The text still explains the flag by a mode that is no longer the default. Behavior is unchanged, so this does not block."
+        }
+      },
+      {
+        "path": "docs/evidence/core/claude.json",
+        "line": 71,
+        "text": "The recorded run lists 'auto' among the modes but shows setMode as bypassPermissions, so nothing on record proves that setting 'auto' succeeds on the real adapter, or under the subscription-token sign-in. Running the live conformance suite (test:conformance) with the updated harness would confirm it. If it fails, tempod falls back to the agent's current mode and logs a warning.",
+        "blocking": false,
+        "evidence": {
+          "quote": "\"setMode\": \"bypassPermissions\",",
+          "why": "The recorded run predates the change, so it shows the mode is offered but not that switching to it works."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: does claude-agent-acp offer the 'auto' mode, and how tempod sets the mode",
+        "paths": [
+          "docs/evidence/core/claude.json",
+          "container/versions.json",
+          "packages/tempod/src/acp/session.ts",
+          "packages/tempod/src/acp/manager.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: what happens when the mode change is rejected",
+        "paths": ["packages/tempod/src/acp/session.ts"]
+      },
+      {
+        "risk": "Spec matches the code: Agents table, turn-summary text, implementation note",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "packages/protocol/src/tempod.ts",
+          "apps/tempo/src/do/workspace/queue.ts"
+        ]
+      },
+      {
+        "risk": "Web and Mac clients change together (CLAUDE.md rule 17), and plan-mode toggle logic",
+        "paths": ["apps/tempo/src/ui/lib/agents.ts", "apps/mac/src/views/chat_model.rs"]
+      },
+      {
+        "risk": "Tests: updated assertions; tests that use TURN_SUMMARY_RULE refer to the constant, not the text",
+        "paths": [
+          "apps/tempo/test/ui/logic.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "tests/conformance/test/harness.ts",
+          "tests/conformance/README.md"
+        ]
+      },
+      {
+        "risk": "Security / secrets: no secrets, credentials or env changes in the diff",
+        "paths": ["apps/tempo/src/do/workspace/queue.ts", "packages/protocol/src/tempod.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && git grep -n \"bypassPermissions\" | head -40; echo ---; git grep -n '\"auto\"' docs/evidence | head; echo ---; git grep -n \"what you changed, which checks\\|I changed no files\\|TURN_SUMMARY_RULE\" | head -30; cat container/versions.json | grep -i claude"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 30,80p docs/evidence/core/claude.json; git grep -n \"plan_target\\|bypass\" apps/mac | head; git grep -n \"modeId\" container/tempod/src 2>/dev/null | head -20; ls container"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git grep -ln \"set_config_option\\|setSessionConfigOption\\|setSessionMode\" -- ':!docs' | head; "
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git grep -ln \"modeId\" -- '*.rs' '*.ts' | grep -v test | head -30; ls crates apps"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"modeId\\|setMode\\|set_mode\\|ConfigOption\" packages/tempod/src/acp/session.ts packages/tempod/src/acp/manager.ts | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 465,500p packages/tempod/src/acp/session.ts; grep -n \"auto\\|bypass\\|IS_SANDBOX\" packages/tempod/src/acp/*.ts | head; sed -n 95,110p \"docs/01 Runtime and Agents.md\""
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1530,1550p apps/mac/src/views/chat_model.rs; cat apps/tempo/package.json | grep -n '\"test' ; ls node_modules >/dev/null 2>&1 && echo has_nm"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1530,1550p apps/mac/src/views/chat_model.rs; ls -d node_modules apps/tempo/node_modules"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-ee1e5f7/apps/mac/src/views/chat_model.rs",
+        "offset": 120,
+        "limit": 25
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-ee1e5f7/apps/tempo/src/ui/lib/agents.ts",
+        "offset": 40,
+        "limit": 40
+      }
+    }
+  ]
+}

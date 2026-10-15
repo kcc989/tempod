@@ -1,0 +1,54 @@
+{
+  "case": "S4",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "b0fb1293df8bf25e2e3fa593fbb51836e2ac760c",
+  "diffBytes": 615,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 24.7,
+  "usage": {
+    "prompt_tokens": 118116,
+    "completion_tokens": 1923,
+    "cost": 0.1036176
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff removes the early return in prepareArtifactMerge for PRs that are already merged. A merge op retried on an already-merged PR now throws PR_NOT_MERGEABLE instead of finishing. That breaks the idempotency rule (CLAUDE.md rule 5) and the spec's retry recovery for a lost metadata acknowledgement (docs/09 Git Forge.md). The existing worker test that expects the merged result now fails, and the spec isn't updated.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 320,
+        "text": "Removing the `state === \"merged\" && mergeSha` early return means a merged PR now hits `state !== \"open\"` and throws PR_NOT_MERGEABLE. The merge op step (do/workspace/steps.ts around line 746) depends on prepareArtifactMerge returning `{ mergeSha }` for an already-merged PR so a re-run finishes and sets prState to merged. Now that retry fails. This breaks CLAUDE.md rule 5 (every op step is idempotent and checks state before it acts) and docs/09 Git Forge.md line 70 (a lost metadata acknowledgement must be recoverable on retry). Changing this behavior would also need a spec change (rule 16), and there isn't one.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "line": 364,
+        "text": "This test still expects `prepareArtifactMerge` on a merged PR to return `{ pullRequest: merged, mergeSha: MERGED }`. With the change it rejects with PR_NOT_MERGEABLE, so `bun run test` fails (rule 15). The diff doesn't update the test.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 343,
+        "text": "The already-merged return is still there, but only on the path where the update loses a race. Whether a merged PR returns its merge SHA or throws now depends on timing. If the aim is simplification, keep the early return and remove this duplicate check instead.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 290,400p apps/tempo/src/artifacts/pull-requests.ts; grep -rn \"prepareArtifactMerge\" --include=*.ts . | grep -v node_modules; grep -rn -i \"already merged\\|mergeSha\\|merge_sha\" docs | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 330,390p apps/tempo/test/worker/native-pull-requests.cases.ts; sed -n 730,790p apps/tempo/src/do/workspace/steps.ts"
+      }
+    }
+  ]
+}

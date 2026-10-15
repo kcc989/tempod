@@ -1,0 +1,63 @@
+{
+  "case": "S5",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 24.7,
+  "usage": {
+    "prompt_tokens": 117859,
+    "completion_tokens": 2133,
+    "cost": 0.1904072
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The only change swaps an observable-state wait (waitFor on session.prompt requests, 5 s bounded poll) for a fixed 200 ms sleep in the `active` helper. That breaks the repo's test rules (CLAUDE.md, docs/CI.md item 4) and makes every run test that uses `active` flaky on busy runners: if the prompt hasn't arrived within 200 ms, requestsOf(...)[index] is undefined and decodeUnknownSync throws. It also adds at least 200 ms to every call. Restore the waitFor line.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 66,
+        "text": "A fixed sleep replaces waiting for the observable session.prompt request. The test becomes timing-dependent and slower, against CLAUDE.md ('Wait for observable state instead of sleeping') and docs/CI.md item 4 ('Avoid fixed sleeps except when elapsed time is the behavior under test').",
+        "blocking": true,
+        "evidence": {
+          "quote": "await new Promise((resolve) => setTimeout(resolve, 200));",
+          "why": "Nothing guarantees the Durable Object sends session.prompt within 200 ms. On a busy CI runner, `w.tempod.requestsOf(\"session.prompt\")[index]` is still undefined after the sleep, so `Schema.decodeUnknownSync(...)` throws a parse error and the test fails for reasons unrelated to the behaviour it checks. The previous `waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index)` checked every 5 ms for up to 5 s. The sleep also adds at least 200 ms to every call even when the prompt arrives in milliseconds, which eats into the 300 s CI check budget. Elapsed time is not the behaviour under test, so the exception in docs/CI.md does not apply."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: sleeps or timing assertions instead of waiting for observable state; budgets too small for loaded runners",
+        "paths": [
+          "apps/tempo/test/worker/runs.cases.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "docs/CI.md",
+          "CLAUDE.md"
+        ]
+      },
+      {
+        "risk": "Real contracts, failure paths, idempotency, security, build environment, spec: the change is test-only and touches none of these; no spec tab is affected",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 7f3fb8742743e049f75f8ad8fd898005dba9fa21:apps/tempo/test/worker/runs.cases.ts | sed -n 1,120p; grep -n \"sleep\\|setTimeout\\|waitFor\" docs/CI.md | head",
+        "description": "Show test file at head and CI doc guidance"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"export const waitFor\" -A15 apps/tempo/test/worker/fakes.ts; sed -n 175,190p docs/CI.md",
+        "description": "Inspect waitFor helper and CI guidance"
+      }
+    }
+  ]
+}

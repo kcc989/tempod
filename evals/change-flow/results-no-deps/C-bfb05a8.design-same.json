@@ -1,0 +1,262 @@
+{
+  "case": "C-bfb05a8",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "bfb05a8457a01e04a5a4671db947f7ca4c4f4085",
+  "diffBytes": 16681,
+  "diffCut": false,
+  "steps": 24,
+  "seconds": 132.5,
+  "usage": {
+    "prompt_tokens": 1420312,
+    "completion_tokens": 11505,
+    "cost": 0.9012017999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "No blocking issues; the change can merge. The deferred-turn reconnect test now holds the real /v1/connect response in the fake instead of sleeping 100 ms. While it is held, the queue runner cannot start the turn: kickQueue runs only after openAndHello sets core.tempod, and sendPrompt does not wait for the socket, so the hold cannot deadlock. The release in onTestFinished runs even when the test fails, and the same hold/release pattern is already used by holdHealth in workspace-rpc.test.ts. The docs-only CI path now installs only the root package (--filter tempo); it runs only bunx oxlint/oxfmt, the anti-slop plugin needs only @oxlint/plugins (a root devDependency), Chromium and the Playwright version are skipped, and an unknown base still installs everything. The image workflow and Dockerfile.test filter to tempo plus @tempo/tempod; check:versions (effect), build:tempod (turbo), the daemon's imports (effect, ACP SDK, @tempo/protocol, @tempo/settings, ulid, yaml) and container/pi/tempo-profile.ts (Node built-ins only) all stay inside that set. The production Dockerfile has no bun install. The spec (06) and CI.md were updated in the same change. Nothing was run during this review: Bun execution needed approval, so the Bun --filter behaviour is confirmed by reading only.",
+    "findings": [
+      {
+        "path": "container/Dockerfile.test",
+        "line": 11,
+        "text": "Not confirmed by running: Bun 1.4.2 must accept the root package name 'tempo' as a --filter together with --frozen-lockfile and install the root devDependencies (turbo, effect, oxlint). The author reports a local run (251 and 215 packages installed). The image workflow runs only on pushes to main, so a regression would not show in PR CI. The first image-workflow run on main after merging, or a manual run of that workflow, would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "bun install --frozen-lockfile --filter tempo --filter @tempo/tempod",
+          "why": "Correctness depends on how Bun's workspace filter matches the root package. I could not run bun to confirm it."
+        }
+      },
+      {
+        "path": ".github/workflows/ci.yml",
+        "line": 49,
+        "text": "Docs-only lint now runs without workspace node_modules. The oxlint 'import' plugin rules in the correctness category normally skip imports they cannot resolve, and the source is identical to the base on this path, so results should not change. A passing docs-only CI run would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "bun install --frozen-lockfile --filter tempo",
+          "why": "Lint module resolution differs from the previous full install; the risk is low but was not observed in a run."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: DO reconnect path versus the fake /v1/connect gate (connectTempod, openTempodSocket, scheduleReconnect, kickQueue gating)",
+        "paths": [
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/src/do/workspace/container.ts",
+          "apps/tempo/src/do/workspace/tempod-client.ts",
+          "apps/tempo/src/do/workspace/index.ts",
+          "apps/tempo/src/do/workspace/rpc.ts"
+        ]
+      },
+      {
+        "risk": "Tests: sleep replaced by observable state, cleanup on failure, no deadlock because sendPrompt does not wait for the socket, a real assertion that no session.prompt was sent while held, same pattern as the existing holdHealth test",
+        "paths": [
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/worker/fakes.ts"
+        ]
+      },
+      {
+        "risk": "Build environment: the filtered install covers root tooling and the daemon dependency set used by check:versions, build:tempod, daemon tests and container scripts",
+        "paths": [
+          "container/Dockerfile.test",
+          ".github/workflows/container-test.yml",
+          "scripts/test-tempod-container.ts",
+          "packages/tempod/package.json",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "container/versions.ts",
+          "container/check-versions.ts",
+          "container/pi/tempo-profile.ts",
+          "turbo.json",
+          "package.json"
+        ]
+      },
+      {
+        "risk": "Failure paths: docs-only classification fails closed (unknown base still does the full install); Chromium and Playwright steps are gated on docs_only",
+        "paths": [".github/workflows/ci.yml", "scripts/ci.ts", ".oxlintrc.json", "tools/oxlint/anti-slop"]
+      },
+      {
+        "risk": "Spec and repository rules: 06 Build Plan and CI.md updated in the same change; no added dependencies, jobs or deadline changes",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "docs/CI_PLAYBOOK.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Security and idempotency: not affected (test-only fake and CI install scope; no secrets or production code paths changed)",
+        "paths": ["apps/tempo/test/worker/fakes.ts", ".github/workflows/ci.yml"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 HEAD; git rev-parse HEAD; cat .github/workflows/ci.yml; cat .github/workflows/container-test.yml; cat container/Dockerfile.test; cat package.json",
+        "description": "Show head, workflows, Dockerfile and root package"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat scripts/test-tempod-container.ts; echo ----; cat packages/tempod/package.json; echo ----; grep -n \"docs-only\\|docsOnly\\|import\" scripts/ci.ts | head -40; echo ----; grep -rn \"bun install\" container/ scripts/ .github | grep -v node_modules",
+        "description": "Read container test script, tempod manifest, ci.ts docs path"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"holdHealth\\|holdConnect\\|runInDurableObject(ctx.stub, () =>\\|tempod = \\|tempod:\" apps/tempo/test/worker/*.ts | head -40; echo ----; sed -n 1,80p apps/tempo/test/worker/fakes.ts",
+        "description": "Find holdHealth usage patterns and fake setup"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,110p apps/tempo/test/worker/fakes.ts; sed -n 150,215p apps/tempo/test/worker/fakes.ts; echo ----; sed -n 2615,2660p apps/tempo/test/worker/workspace-rpc.test.ts; echo -----; sed -n 2755,2805p apps/tempo/test/worker/workspace-events.test.ts",
+        "description": "Read holdHealth, fetch handler, existing usage, and changed test"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"v1/connect\\|reconnect\" apps/tempo/src/do/workspace/*.ts | head -30",
+        "description": "Find DO reconnect and connect code"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 165,275p apps/tempo/src/do/workspace/container.ts; sed -n 340,400p apps/tempo/src/do/workspace/tempod-client.ts",
+        "description": "Read reconnect logic and connect implementation"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"kickQueue\\b\\|tempod?.open\" apps/tempo/src/do/workspace/*.ts | head -20",
+        "description": "Locate queue runner gating on tempod socket"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 670,715p apps/tempo/src/do/workspace/index.ts; sed -n 815,850p apps/tempo/src/do/workspace/index.ts",
+        "description": "Read kickQueue and heartbeat"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"^const prompt\\b\\|^const prompt =\" -A12 apps/tempo/test/worker/workspace-events.test.ts; grep -n \"async sendPrompt\" -A30 apps/tempo/src/do/workspace/index.ts | grep -n \"requireReady\\|waitReady\\|ensureAwake\" ",
+        "description": "Check test prompt helper and sendPrompt readiness"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"sendPrompt\" apps/tempo/src/do/workspace/index.ts | head; grep -rn \"export const sendPrompt\\|sendPrompt = \" -A40 apps/tempo/src/do/workspace/*.ts | grep -n \"requireReady\\|waitReady\\|tempodFor\\|connectTempod\\|ensureAwake\" | head",
+        "description": "Trace sendPrompt readiness requirements"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rln \"sendPrompt\" apps/tempo/src | head; grep -rn \"sendPrompt\" apps/tempo/src/do | head",
+        "description": "Find sendPrompt implementation"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 654,800p apps/tempo/src/do/workspace/rpc.ts | grep -n \"await\\|Ready\\|tempod\\|kick\" ",
+        "description": "Check awaits in sendPrompt"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat bunfig.toml 2>/dev/null; ls packages/tempod; cat packages/tempod/bunfig.toml 2>/dev/null; grep -rhoE \"from \\\"[^\\\".][^\\\"]*\\\"\" packages/tempod packages/protocol/src packages/settings/src --include=*.ts | sort | uniq -c | sort -rn | head -40; cat packages/protocol/package.json packages/settings/package.json | grep -A8 '\"dependencies\"\\|\"devDependencies\"'",
+        "description": "List external imports used by tempod closure"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from \\\"\\.\\./\\.\\./[^\\\"]*\\\"|import\\(\\\"\\.\\./\\.\\./[^\\\"]*\\\"\\)\" packages/tempod | sort -u | head; cat turbo.json | head -40; grep -n '\"build\"\\|\"scripts\"' -A4 packages/protocol/package.json packages/settings/package.json; command -v bun && bun --version",
+        "description": "Check cross-package imports, turbo build graph, bun version"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"(\\.\\./){2,}",
+        "path": "packages/tempod",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/turbo.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"(build|test|typecheck)\":",
+        "path": "packages",
+        "glob": "*/package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"^import\\|from \\\"\" container/pi/tempo-profile.ts container/check-versions.ts container/versions.ts; ls container/pi; cat container/pi/package.json 2>/dev/null | head -30",
+        "description": "Check imports of container scripts used by tempod tests"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "which bun; bun --version",
+        "description": "Check bun availability"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version",
+        "description": "Check bun version"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,40p scripts/ci.ts; ls -a | grep -i oxlint; grep -rn \"jsPlugins\\|plugins\" .oxlintrc.json 2>/dev/null | head",
+        "description": "Read ci.ts docs-only checks and oxlint plugins"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 55,75p .oxlintrc.json; grep -n '\"import/' .oxlintrc.json",
+        "description": "Check oxlint jsPlugins and import rules"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from \\\"[^\\\".][^\\\"]*\\\"\" tools/oxlint/anti-slop | sort -u; grep -n \"import\" .oxlintrc.json | head",
+        "description": "Check anti-slop plugin dependencies"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/.oxlintrc.json",
+        "limit": 45
+      }
+    }
+  ]
+}

@@ -1,0 +1,284 @@
+{
+  "case": "S8",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "5cfee5c1382d36bcd4953cb4cd89eb17981829c8",
+  "diffBytes": 1018,
+  "diffCut": false,
+  "steps": 39,
+  "seconds": 88.3,
+  "usage": {
+    "prompt_tokens": 318125,
+    "completion_tokens": 1912,
+    "cost": 0.0,
+    "neurons": 22951.959602355957
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "The diff is tiny: issues.ts now imports and calls requireReadableProject(ctx.env, ctx.user, projectId) instead of requireProject(ctx.env, ctx.user.id, projectId). This looks like a partial fix from tab 11 Public Profile: it allows the *owner* (still authenticated, since issues functions are not in VISITOR_FNS) to read their own project, but since requireReadableProject also accepts a public project owned by someone else, it would allow an authenticated owner to read issues of another owner's public project. The spec says \"Issues, pull requests, checks, conversations and workspaces stay owner-only for every project.\" So issues handlers must keep ownership checks, not merely readability checks. However, I cannot confirm whether there is a requireWritableProject helper or whether other mutation handlers use it, because the environment is discarding command outputs. Without seeing the complete common.ts and without a successful grep, I'm blocked on verifying the intended ownership/writability contract and whether this is the right replacement.",
+    "checked": [
+      {
+        "risk": "spec",
+        "paths": [
+          "apps/tempo/src/server/handlers/issues.ts",
+          "docs/11 Public Profile.md",
+          "apps/tempo/src/server/handlers/common.ts"
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "text": "issues handlers now use requireReadableProject, which permits any authenticated viewer to read a public project owned by another user, but issues are specified as owner-only even for public projects",
+        "evidence": {
+          "quote": "    const project = await requireReadableProject(ctx.env, ctx.user, projectId);",
+          "why": "docs/11 Public Profile.md says: 'Issues, pull requests, checks, conversations and workspaces stay owner-only for every project.' The issues functions are not in VISITOR_FNS so the caller is authenticated, but requireReadableProject allows the caller to proceed if the project is public and owned by a different user, violating the owner-only requirement for issues."
+        },
+        "blocking": true
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/issues.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/common.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls docs/"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"listRepositoryIssues\\|createRepositoryIssue\\|updateRepositoryIssue\\|deleteRepositoryIssue\\|createRepositoryIssueComment\\|updateRepositoryIssueComment\\|deleteRepositoryIssueComment\\|listRepositoryIssueComments\\|listRepositoryLabels\\|createRepositoryLabel\\|updateRepositoryLabel\\|deleteRepositoryLabel\\|requireReadableProject\\|requireProject\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"requireReadableProject\\|requireProject\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"Issues\" docs --include='*.md'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"requireReadableProject\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/09 Git Forge.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/11 Public Profile.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/repositories.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/projects.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/common.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/auth/auth.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/issues.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/run.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/policy.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/issues.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/registry.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 GitHub App.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs -type f | sort"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "cat CLAUDE.md 2>/dev/null || cat AGENTS.md 2>/dev/null || true"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls docs/"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 Security and Ops.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/AGENTS-RESULTS.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "start": 1,
+        "end": 120
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"withOwnedRepository\\|withReadableRepository\\|requireWritableProject\\|requireReadableProject\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"requireWritableProject\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"withOwned\\|withReadable\" apps/tempo/src --include='*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git grep -n \"withOwned\\|withReadable\" apps/tempo/src -- '*.ts'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"withOwned\" apps/tempo/src/server/handlers/issues.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"requireProject\\|requireReadableProject\" apps/tempo/src/server/handlers/*.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"requireProject\" apps/tempo/src/server/handlers/common.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"requireReadableProject\" apps/tempo/src/server/handlers/common.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/common.ts",
+        "start": 46,
+        "end": 120
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/handlers/common.ts",
+        "start": 1,
+        "end": 45
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/11 Public Profile.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/run.ts",
+        "start": 1,
+        "end": 120
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/server/policy.ts"
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

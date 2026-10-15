@@ -1,0 +1,119 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 4,
+  "seconds": 42.5,
+  "usage": {
+    "prompt_tokens": 227849,
+    "completion_tokens": 3847,
+    "cost": 0.31788320000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change switches the Claude default mode from bypassPermissions to auto in the server queue, the web and Mac plan toggles, their tests and the conformance harness, and rewrites the turn-summary rule. The spec (01) and IMPLEMENTATION_NOTES change in the same commit, and web and Mac change together. The pinned claude-agent-acp 0.89.1 advertises 'auto' in docs/evidence/core/claude.json and exposes a mode config option. When setting the mode fails, tempod logs a warning and the session keeps the agent's current mode, as the note says. Sessions with a saved modeId keep it. No code still uses bypassPermissions as a default. The tests were not run; the paths were checked by reading. Nothing blocking.",
+    "findings": [
+      {
+        "path": "docs/evidence/core/claude.json",
+        "line": 71,
+        "text": "The evidence shows 'auto' advertised but records a set-mode only for bypassPermissions. Nothing in the repo shows a successful switch to 'auto'. If Claude Code refuses auto for some accounts or models, tempod logs a warning and the session stays in 'default', which asks for permissions. Confirm with a live test:conformance run for claude, which now requires and sets 'auto'.",
+        "blocking": false,
+        "evidence": {
+          "quote": "\"setMode\": \"bypassPermissions\",",
+          "why": "The recorded mode change used the old default, so the new default's set_config_option call has no recorded evidence."
+        }
+      },
+      {
+        "path": "apps/mac/src/views/chat_model.rs",
+        "line": 126,
+        "text": "The Mac plan-toggle test covers only Codex and Pi, so nothing tests that leaving plan mode returns Claude to 'auto'. The change is a one-line constant, so the risk is low.",
+        "blocking": false,
+        "evidence": {
+          "quote": "AgentId::Claude => (\"plan\", \"auto\"),",
+          "why": "The test plan_toggle_uses_reported_modes_and_returns_to_previous_mode never sets agent to Claude."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: does the ACP adapter advertise the 'auto' mode and how is the mode set",
+        "paths": [
+          "docs/evidence/core/claude.json",
+          "container/versions.json",
+          "packages/tempod/src/acp/session.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: a failed mode change is logged and the session start goes on",
+        "paths": ["packages/tempod/src/acp/session.ts", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "State: the default applies only when no mode is saved; saved modes are kept",
+        "paths": [
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/ui/lib/agents.ts",
+          "apps/mac/src/views/chat_model.rs"
+        ]
+      },
+      {
+        "risk": "Security: no secrets, logging or credential changes",
+        "paths": ["apps/tempo/src/do/workspace/queue.ts", "packages/protocol/src/tempod.ts"]
+      },
+      {
+        "risk": "Build and runtime environment: no image or tool version changes; the adapter version is pinned",
+        "paths": ["container/versions.json"]
+      },
+      {
+        "risk": "Tests: the assertions check the new values; the turn-summary tests use the shared constant",
+        "paths": [
+          "apps/tempo/test/ui/logic.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "tests/conformance/test/harness.ts",
+          "tests/conformance/README.md"
+        ]
+      },
+      {
+        "risk": "Spec: the 01 Agents table and turn-summary text match the code; web and Mac change together; no code still uses bypassPermissions as a default",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/04 UI.md",
+          "docs/07 Mac Client.md",
+          "docs/06 Build Plan.md",
+          "packages/protocol/src/tempod.ts",
+          "docs/IMPLEMENTATION_NOTES.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && grep -rn \"bypassPermissions\" --exclude-dir=node_modules --exclude-dir=.git . | head -40; echo ---; grep -n '\"auto\"\\|bypass' docs/evidence/core/claude.json | head; echo ---; grep -rn \"TURN_SUMMARY_RULE\\|what you changed, which checks\" --exclude-dir=node_modules --exclude-dir=.git . | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 30,80p docs/evidence/core/claude.json; grep -n \"claude-agent-acp\\|claude\" container/versions.json; grep -rn \"plan_target\\|\\\"auto\\\"\" apps/mac/src --include=*.rs | head; grep -rln \"set_config_option\\|setSessionMode\\|setSessionConfigOption\\|set_mode\" --include=*.ts --exclude-dir=node_modules apps packages container | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"modeId\\|setMode\\|set_config\\|setSessionConfigOption\\|log\\.\" packages/tempod/src/acp/session.ts | head -50; grep -rn \"DEFAULT_MODE\" --include=*.ts --exclude-dir=node_modules apps packages | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,100p apps/tempo/src/ui/lib/agents.ts; sed -n 470,495p packages/tempod/src/acp/session.ts; sed -n 1530,1550p apps/mac/src/views/chat_model.rs; grep -n \"Claude default\\|auto\" docs/04*.md docs/07*.md | head"
+      }
+    }
+  ]
+}

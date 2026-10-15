@@ -1,0 +1,93 @@
+{
+  "case": "S2",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5770819eb7eea0219eecaa4e0176daaa1e2837e1",
+  "diffBytes": 718,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 31.2,
+  "usage": {
+    "prompt_tokens": 171857,
+    "completion_tokens": 2625,
+    "cost": 0.24976579999999998
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The one-line change lets the native merge gate accept required jobs whose conclusion is `skipped`. In RepositoryCiDO, `skipped` is assigned exactly when a job's need ended without success, so a required job whose dependency failed now passes the gate and the merge proceeds. This contradicts docs/10 Project CI.md ('every `required` job `success`'). The spec is not updated and no test was added.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "The merge gate now treats `skipped` required jobs as passing. `skipped` is assigned only when a needed job ended without success, so a failed upstream job (e.g. build fails, so required `test` is skipped) no longer blocks the merge. The guard opens instead of staying shut.",
+        "blocking": true,
+        "evidence": {
+          "quote": "jobs.some((job) => job.key === key && job.status === \"completed\" && (job.conclusion === \"success\" || job.conclusion === \"skipped\")),",
+          "why": "pump() runs `if (needs.some((need) => need?.status === \"completed\" && need.conclusion !== \"success\")) { this.completeJob(job, \"skipped\", ...)`, so a required job whose need failed completes as skipped and mergeBlock returns null. The merge then goes ahead although required work never ran. Spec 10 says: 'Merge gate: a native merge needs ... every `required` job `success`.'"
+        }
+      },
+      {
+        "path": "docs/10 Project CI.md",
+        "text": "This changes behavior but the spec is not updated in the same change (CLAUDE.md rule 16). No test covers the new acceptance of skipped jobs (rule 14).",
+        "blocking": true,
+        "evidence": {
+          "quote": "Merge gate: a native merge needs the newest run for the exact head SHA and the current revision, with every `required` job `success`.",
+          "why": "The spec still requires `success`. The code now differs from the spec's source of truth and from docs/CLOUDFLARE-CODE-HOSTING-PLAN.md ('Empty, unknown, incomplete, cancelled, or stale required results cannot grant merge permission')."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Spec conformance of the merge gate and job conclusion semantics",
+        "paths": ["docs/10 Project CI.md", "docs/CLOUDFLARE-CODE-HOSTING-PLAN.md", "docs/02 Data and API.md"]
+      },
+      {
+        "risk": "Failure paths / guard fails closed: where `skipped` is produced and how the gate consumes it",
+        "paths": ["apps/tempo/src/do/repository-ci.ts"]
+      },
+      {
+        "risk": "Security: merge permission granted without required checks running",
+        "paths": ["apps/tempo/src/do/repository-ci.ts", "docs/CLOUDFLARE-CODE-HOSTING-PLAN.md"]
+      },
+      {
+        "risk": "Tests covering mergeBlock (none changed)",
+        "paths": [
+          "apps/tempo/test/worker/project-ci.cases.ts",
+          "apps/tempo/test/worker/native-workspace-pull-requests.cases.ts"
+        ]
+      },
+      {
+        "risk": "Repository rules (spec change in same PR, tests for behavior)",
+        "paths": ["CLAUDE.md"]
+      },
+      {
+        "risk": "Real contracts / idempotency / build environment: not applicable; the change is a pure in-DO predicate over SQLite rows",
+        "paths": ["apps/tempo/src/do/repository-ci.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 5770819eb7eea0219eecaa4e0176daaa1e2837e1:apps/tempo/src/do/repository-ci.ts | sed -n 240,320p; grep -rn -i \"skipped\\|required check\\|conclusion\" docs/ | head -50",
+        "description": "Read changed function and spec mentions"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,90p \"docs/10 Project CI.md\"; sed -n 170,174p \"docs/10 Project CI.md\"; grep -rn \"skipped\" apps/tempo/src/do/repository-ci.ts | head; grep -rln \"mergeBlock\" apps/tempo --include=*.test.ts",
+        "description": "Confirm spec lines and skip semantics"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 515,540p apps/tempo/src/do/repository-ci.ts; grep -rln \"Required checks have not passed\\|mergeBlock\" apps/tempo | head",
+        "description": "Read skip path and find tests"
+      }
+    }
+  ]
+}

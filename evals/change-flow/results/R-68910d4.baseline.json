@@ -1,0 +1,68 @@
+{
+  "case": "R-68910d4",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "68910d4cd3723950b6a488f00223bcb5b5ceab28",
+  "diffBytes": 1254090,
+  "diffCut": true,
+  "steps": 3,
+  "seconds": 45.4,
+  "usage": {
+    "prompt_tokens": 624431,
+    "completion_tokens": 3302,
+    "cost": 0.2320002
+  },
+  "report": {
+    "status": "fail",
+    "summary": "Large Worker change (DOs, egress, GitHub App, auth, server functions). The code mostly follows the spec and the secret rules (no secrets in start env, credential.changed payload redacted, the Claude OAuth token in the adapter env as 01 specifies). But the branch adds no tests at all, which breaks CLAUDE.md rule 14 and the 06 checklist. A few smaller spec deviations are noted. Review was partial: the diff was cut at 256 KiB, so most of src/http/* and src/server/* was not checked.",
+    "findings": [
+      {
+        "path": "apps/tempo",
+        "text": "No test files in the change (no *.test.ts anywhere under apps/tempo). Rule 14 requires a test for every server function, op step and tempod request, with DO tests on @cloudflare/vitest-pool-workers, and the 06 checklist requires one failure case each. Without tests, rule 15 (bun run test passes) shows nothing either.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "line": 440,
+        "text": "restore onFailed only broadcasts an error. Spec 03 (Ops, permanent error) says a failed restore moves the workspace to `error`, but transitions.ts forbids archived -> error. The two tabs disagree; per rule 1, resolve it and update the spec instead of picking a behaviour.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "text": "r2.retention deletes extra home backups at a hand-built key `homes/<id>/<backupId>.tar.zst`. DirectoryBackup owns that layout, so this guess may delete nothing. Use homeBackup(core).delete(record), as backupHome already does.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/core.ts",
+        "text": "settings() falls back to project overrides from projectCache, which may still be empty, when the stored settings fail to decode. It gives no warning and never fetches the project, so the effective settings can quietly be plain defaults.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/index.ts",
+        "text": "listOps() is labelled a test helper but is a public RPC method on the production WorkspaceDO class.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-68910d4; git log --oneline -3; ls docs; git diff --stat HEAD~1 2>/dev/null | tail -5; find apps/tempo -name '*.test.ts' | head -50; grep -n \"CLAUDE_CODE_OAUTH_TOKEN\" -r docs | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-68910d4; git diff --stat HEAD~1 | head -70; grep -n -i \"test\" \"docs/06 Build Plan.md\" | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-68910d4; grep -n -i \"restore\" \"docs/03 Lifecycles.md\" | head -20; grep -n \"archiving\" \"docs/03 Lifecycles.md\" | head"
+      }
+    }
+  ]
+}

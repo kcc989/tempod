@@ -1,0 +1,97 @@
+{
+  "case": "S7",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "d3a1f123452c8dacf4d8d0f69d27e8eaea0942ff",
+  "diffBytes": 582,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 30.4,
+  "usage": {
+    "prompt_tokens": 248389,
+    "completion_tokens": 2279,
+    "cost": 0.1490922
+  },
+  "report": {
+    "status": "fail",
+    "summary": "I can't approve this change. It adds one to nextOffset, so every time an agent follows nextOffset to the next page, one issue or comment is skipped and never returned. nextOffset is passed straight back as a SQL row offset, so it must be the number of items already returned. The existing test agent-issues.cases.ts expects 2 at line 296 and will fail. The spec (docs/09 Git Forge.md) tells clients to follow nextOffset until it is null, which only works if no rows are skipped.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/issues.ts",
+        "line": 50,
+        "text": "nextOffset is now one more than the number of rows already returned. The next call passes it to `.offset(start)` in the list handlers, so the first unread row is skipped on every page.",
+        "blocking": true,
+        "evidence": {
+          "quote": "nextOffset: bounded.length < items.length || items.length === 50 ? offset + bounded.length + 1 : null,",
+          "why": "listArtifactIssues and listArtifactIssueComments use the offset input directly as a row offset (`const start = validateOffset(offset);` then `.offset(start)` in apps/tempo/src/artifacts/issues.ts). Example: 4 comments where only 2 fit in the 1 MiB budget. The first page returns rows 0\u20131 with nextOffset 3, so the second page starts at row 3 and row 2 is never returned. With 50-item pages the same thing drops row 50, row 101, and so on. docs/09 Git Forge.md says to \"follow `nextOffset` until it is null\", which only gives every item if no rows are skipped."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/agent-issues.cases.ts",
+        "line": 296,
+        "text": "The existing worker test checks nextOffset and is not updated, so `bun run test` will fail at this head.",
+        "blocking": true,
+        "evidence": {
+          "quote": "expect(first.nextOffset).toBe(2);",
+          "why": "With the change, first.nextOffset is 0 + 2 + 1 = 3. The following checks would also fail: `expect(second.items).toHaveLength(2);` would get 1 item, and the check that 4 distinct ids came back would see only 3."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: how the offset is used by the list handlers and the protocol page schema",
+        "paths": [
+          "apps/tempo/src/agents/issues.ts",
+          "apps/tempo/src/artifacts/issues.ts",
+          "packages/protocol/src/issue-tools.ts",
+          "packages/protocol/src/api.ts"
+        ]
+      },
+      {
+        "risk": "Spec: the pagination contract in docs/09",
+        "paths": ["docs/09 Git Forge.md"]
+      },
+      {
+        "risk": "Tests: existing coverage of nextOffset",
+        "paths": ["apps/tempo/test/worker/agent-issues.cases.ts"]
+      },
+      {
+        "risk": "Failure paths, idempotency, security, build environment: not affected, because the change is a single arithmetic edit in a read-only pagination helper",
+        "paths": ["apps/tempo/src/agents/issues.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat -n apps/tempo/src/agents/issues.ts | head -120 && grep -rn \"nextOffset\\|offset\" apps/tempo/src/agents/issues.ts | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"offset\" apps/tempo/src/server/handlers/issues.ts | head -20; grep -rn \"nextOffset\" docs/ packages/protocol/src | head -20; grep -rln \"nextOffset\" apps/tempo --include=*.test.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 60,115p packages/protocol/src/issue-tools.ts; grep -rn \"offset\" apps/tempo/src/server/handlers/issues.ts apps/tempo/src/server/*issue* 2>/dev/null | head; grep -rln \"offset\" apps/tempo/src --include=*.ts | grep -i issue"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"offset\" apps/tempo/src/artifacts/issues.ts; grep -rn \"offset\" packages/protocol/src/api*.ts packages/protocol/src/*.ts 2>/dev/null | grep -i \"issue\\|offset:\" | head; grep -rn \"nextOffset\" apps/tempo/test apps/tempo/src 2>/dev/null | grep -v \"src/agents/issues.ts\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 270,306p apps/tempo/test/worker/agent-issues.cases.ts; sed -n 155,190p apps/tempo/src/artifacts/issues.ts"
+      }
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "case": "R-8f23c85",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8f23c85befce80c0a1c94a727017b59ee1d24f03",
+  "diffBytes": 35884,
+  "diffCut": false,
+  "steps": 10,
+  "seconds": 73.1,
+  "usage": {
+    "prompt_tokens": 456769,
+    "completion_tokens": 6010,
+    "cost": 0.2908236
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The diff matches the plan. The forge demo e2e test only calls functions that exist in the protocol and checks the CI gate described in specs 09 and 10. The deploy always builds, checks and pins the workspace image digest, and the CA secret is optional. tempod now reads process.env.TEMPO_BUILD_ID, which bun build --env inlines. scripts/ci-cache.ts prunes only after a passing run and only when every run summary decodes and names at least one task. The cache save now runs only when new entries were written. Each check runs in its own process group, killed when it ends or the deadline passes. The docs (CI.md, IMPLEMENTATION_NOTES, deployment doc, e2e README, PROGRESS) are updated, and the unit tests for the cache logic run under scripts/test.ts. The findings below are minor and none blocks the merge.",
+    "findings": [
+      {
+        "path": "scripts/deploy-worker.ts",
+        "line": 100,
+        "text": "The image check greps for buildId. When git cannot supply a sha, buildId falls back to the bare package.json version (e.g. 0.1.0), which every old image also contains. In that case the check passes and does not catch the stale-image failure it was added for. Consider skipping the check or failing when no sha is available.",
+        "blocking": false
+      },
+      {
+        "path": "scripts/ci-cache.ts",
+        "line": 44,
+        "text": "Stale entries are deleted only when the run also wrote new entries (changed=true), because the save step runs only then. A passing run where every task was a cache hit removes nothing and saves nothing, so a cache that has grown large stays that size until a run writes something new. This is acceptable, but CI.md could say it.",
+        "blocking": false
+      },
+      {
+        "path": "tests/e2e/tests/forge-demo.spec.ts",
+        "line": 188,
+        "text": "watch.close() runs only when the test succeeds. If an assertion fails first, the WebSocket stays open until the worker exits. Closing it in a try/finally or an afterEach would keep failed runs tidy.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; git log --oneline -3; cat turbo.json | head -30; grep -n \"buildId\\|TEMPO_BUILD_ID\" scripts/deploy-worker.ts | head; grep -rn \"TEMPO_BUILD_ID\\|tempod\" container/Dockerfile | head; grep -n \"build\" packages/tempod/package.json; grep -n \"spawn\\|turbo\" scripts/ci.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; sed -n 1,60p scripts/ci.ts; grep -rn \"detached\" node_modules/bun-types/*.d.ts 2>/dev/null | head -5; grep -n \"^FROM\\|grep\" container/Dockerfile | head; ls node_modules/turbo* -d; grep -n \"cacheDir\\|cache\" turbo.json"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/ci.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "detached",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/node_modules/bun-types",
+        "output_mode": "content",
+        "head_limit": 10
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^FROM|cacheDir",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85",
+        "glob": "{container/Dockerfile,turbo.json}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "for n in createRepository getRepository updateCiPipeline listCiRuns getCiRun getCiJobLog getRepositoryPullRequest listCheckRuns updateRepositoryPullRequest listRepositoryCommits mergePullRequest createPullRequest commitAndPush PR_NOT_MERGEABLE; do printf \"%s %s\\n\" $n $(grep -rl \"\\b$n\\b\" packages/protocol/src | wc -l); done"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\b(createRepository|getRepository|updateCiPipeline|listCiRuns|getCiRun|getCiJobLog|getRepositoryPullRequest|listCheckRuns|updateRepositoryPullRequest|listRepositoryCommits|PR_NOT_MERGEABLE)\\b",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/packages/protocol/src",
+        "output_mode": "content",
+        "-o": true,
+        "head_limit": 60
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "PR_NOT_MERGEABLE",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85",
+        "glob": "{docs/10*,docs/09*,apps/**/*.ts,packages/worker/**/*.ts}",
+        "output_mode": "content",
+        "head_limit": 15
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "key:|path: .turbo|tasks",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/.github/workflows/ci.yml",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "scripts",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/test.ts",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

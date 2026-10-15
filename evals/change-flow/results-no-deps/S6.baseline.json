@@ -1,0 +1,37 @@
+{
+  "case": "S6",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "da9729f15a8dc00e65021597253cd5c3cb1c0d72",
+  "diffBytes": 611,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 17.7,
+  "usage": {
+    "prompt_tokens": 77173,
+    "completion_tokens": 1274,
+    "cost": 0.16956739999999998
+  },
+  "report": {
+    "status": "fail",
+    "summary": "Changing the Pi extension's mode to 0600 leaves it owned by root and readable only by root (COPY has no --chown). Pi runs as the tempo user and loads it via `-e /opt/tempo/pi/tempo-profile.ts` (spec 01), so the extension fails to load and the profile's MCP and tool limits go unenforced. The image test's R_OK check would also fail.",
+    "findings": [
+      {
+        "path": "container/Dockerfile",
+        "line": 36,
+        "text": "COPY --chmod=0600 without --chown leaves /opt/tempo/pi/tempo-profile.ts as root:root 0600. The image runs as USER tempo, and Pi (started by tempod as tempo with `-e /opt/tempo/pi/tempo-profile.ts`, spec 01 line 353) cannot read it. The Tempo pi extension then fails to load, so per-session MCP servers and the tools.allow/deny tool_call guard are not applied. This also breaks packages/tempod/test/image.test.ts:30 (accessSync R_OK), against rules 14 and 15. The file is code, not a secret (secrets come from $TEMPO_PROFILE_DIR/mcp.json), so 0644 exposes nothing. To stop edits, keep it root-owned and world-readable (0644 or 0444), not 0600.",
+        "blocking": true
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S6; cat container/Dockerfile; grep -rn \"tempo-profile\" --include=* -I . 2>/dev/null | grep -v node_modules | head -30",
+        "description": "Read Dockerfile and find profile references"
+      }
+    }
+  ]
+}

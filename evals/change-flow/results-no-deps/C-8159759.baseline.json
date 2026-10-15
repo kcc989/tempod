@@ -1,0 +1,99 @@
+{
+  "case": "C-8159759",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8159759138c800f51fd0e556f1eb9c836bc46a6c",
+  "diffBytes": 4545,
+  "diffCut": false,
+  "steps": 7,
+  "seconds": 30.6,
+  "usage": {
+    "prompt_tokens": 208303,
+    "completion_tokens": 2396,
+    "cost": 0.2524826
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change matches its plan, and nothing blocks the merge. branchTips (pull-requests.ts) and artifactHeadSha (repositories.ts) now pass the plain branch name to the Artifacts binding's log() instead of refs/heads/<branch>. That fixes native PR create/reopen, merge preparation, startCiRun and the push/adoption head checks, which all depend on these two functions. Both native PR test fakes no longer strip refs/heads/, and the call-order assertion in native-pull-requests.cases.ts now expects log:feature:1 / log:main:1. That assertion fails if refs/heads/ comes back, so it covers branchTips. The forge demo test patterns now match both Node 24's spec reporter output (\u2139 fail 0) and TAP output (# fail 0). No spec or architecture rule is affected. The three notes below are non-blocking. Review was by reading only; typecheck, lint and tests were not run.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/repositories.cases.ts",
+        "line": 173,
+        "text": "The populated fixture puts the commit under both \"main\" and \"refs/heads/main\". Because of that, the artifactHeadSha test (around line 607) passes with the old code and the new code alike, so it would not catch this bug coming back. The plan says the fakes now match the binding; this fake still answers for the full ref. Remove the \"refs/heads/main\" entry, or have the fake return nothing for refs/heads/* the way the binding does. Then the test covers artifactHeadSha (used by startCiRun and the push head checks).",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 68,
+        "text": "validateArtifactRef still accepts refs/heads/<x> from users, and the repository handlers (server/handlers/repositories.ts:252, 338) pass that ref straight to repo.log(). If the binding really returns no commits for a full ref name, a user ref like refs/heads/main will show as empty or missing in the browse/commits views. This is outside this PR's scope. Consider stripping refs/heads/ before calling log(), or rejecting it, in a follow-up.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 87,
+        "text": "The binding resolves a short name as a branch, a tag or a commit ID. So if a tag shares a branch's name, log() may return the tag's commit as the branch tip. Whether that can happen depends on the binding's resolution order. It is minor, but consider noting it in docs/IMPLEMENTATION_NOTES.md.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "log\\(\\{\\s*ref:|refs/heads/",
+        "path": "apps/tempo/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "refs/heads|log\\(",
+        "path": "docs",
+        "output_mode": "content",
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/src/artifacts/repositories.ts",
+        "offset": 55,
+        "limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "resolvedRef",
+        "path": "apps/tempo/src/server/handlers/repositories.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "refs/heads",
+        "path": "apps/tempo/test",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/test/worker/repositories.cases.ts",
+        "offset": 150,
+        "limit": 40
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "artifactHeadSha|commits\\.get",
+        "path": "apps/tempo",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

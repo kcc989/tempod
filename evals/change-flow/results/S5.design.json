@@ -1,0 +1,79 @@
+{
+  "case": "S5",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 6,
+  "seconds": 22.1,
+  "usage": {
+    "prompt_tokens": 34628,
+    "completion_tokens": 687,
+    "cost": 0.0,
+    "neurons": 1630.8763580322266
+  },
+  "report": {
+    "status": "fail",
+    "summary": "A test helper was changed from polling for an observable condition to a fixed 200 ms sleep. This violates the repository's explicit rule to wait for observable state instead of sleeping. It removes the guarantee that the prompt has actually been sent when active() returns, which can mask real failures or create flakes on slow runners, contradicting the change's stated goal of speeding up the fixture safely.",
+    "checked": [
+      {
+        "risk": "Tests",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "docs/CI.md"]
+      },
+      {
+        "risk": "Failure paths",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      }
+    ],
+    "findings": [
+      {
+        "blocking": true,
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 65,
+        "text": "active() now sleeps 200 ms instead of waiting for the prompt request to exist",
+        "evidence": {
+          "quote": "const active = async (w: Fixture, index = 0) => {\n  // The prompt is sent within one alarm tick.\n  await new Promise((resolve) => setTimeout(resolve, 200));\n\n  return Schema.decodeUnknownSync(\n    Schema.Struct({\n      turnId: Schema.String,\n      sessionId: Schema.String,\n      content: Schema.Array(Schema.Struct({ text: Schema.String })),\n    }),\n  )(w.tempod.requestsOf(\"session.prompt\")[index]);\n};",
+          "why": "This replaces a bounded poll (waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index)) with an unconditional 200 ms sleep. The helper then blindly indexes into requestsOf(\"session.prompt\")[index], so if the prompt has not been sent within 200 ms the call site throws a decoding/undefined error instead of waiting. docs/CI.md rule 4 says: \"Poll for a bounded condition or use a controlled promise. Avoid fixed sleeps except when elapsed time is the behavior under test.\" The commit message claims to speed up the fixture, but this change makes timing-dependent failures likely on loaded CI runners (docs/CI.md notes Worker tests are CPU-bound and five runs recently failed on the 300-second deadline or six-minute limit), and removes the regression coverage that waited for the prompt to actually exist."
+        }
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/runs.cases.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "CLAUDE.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "AGENTS.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/CI.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git show --stat HEAD"
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

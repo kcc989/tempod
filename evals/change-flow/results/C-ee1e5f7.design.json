@@ -1,0 +1,339 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 37,
+  "seconds": 171.4,
+  "usage": {
+    "prompt_tokens": 315512,
+    "completion_tokens": 2463,
+    "cost": 0.0,
+    "neurons": 17417.06886291504
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change at head ee1e5f7b updates the Claude default mode from `bypassPermissions` to `auto` across code, tests, docs and conformance expectations, and tightens the turn-summary rule to ask agents to report changes/checks only when applicable. All edited locations are consistent with the spec tab `docs/01 Runtime and Agents.md` and the vendored adapter evidence `docs/evidence/core/claude.json`, which lists `auto` as an available mode. No `bypassPermissions` references remain in the repository. The logic changes are simple string substitutions; there are no new failure paths, retries, secrets, idempotency concerns, build/runtime changes or new tests introduced to evaluate beyond the updated existing assertions. The conformance harness and README correctly track the documented default.",
+    "checked": [
+      {
+        "risk": "Real contracts",
+        "paths": [
+          "docs/evidence/core/claude.json",
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/ui/lib/agents.ts",
+          "apps/mac/src/views/chat_model.rs"
+        ]
+      },
+      {
+        "risk": "The spec",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "packages/protocol/src/tempod.ts",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "tests/conformance/README.md",
+          "tests/conformance/test/harness.ts"
+        ]
+      },
+      {
+        "risk": "Tests",
+        "paths": [
+          "apps/tempo/test/ui/logic.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "tests/conformance/test/harness.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths and idempotency",
+        "paths": [
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/ui/lib/agents.ts",
+          "apps/mac/src/views/chat_model.rs"
+        ]
+      },
+      {
+        "risk": "Security and build/runtime environment",
+        "paths": [
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/ui/lib/agents.ts",
+          "apps/mac/src/views/chat_model.rs",
+          "packages/protocol/src/tempod.ts",
+          "tests/conformance/test/harness.ts"
+        ]
+      }
+    ],
+    "findings": []
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la docs/"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs/evidence -name \"claude.json\" -o -name \"*claude*\" | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs/evidence -name \"claude.json\""
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/evidence/core/claude.json"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 250,
+        "end": 280
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 440,
+        "end": 470
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/queue.ts",
+        "start": 30,
+        "end": 60
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/ui/lib/agents.ts",
+        "start": 45,
+        "end": 70
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/mac/src/views/chat_model.rs",
+        "start": 115,
+        "end": 145
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/ui/logic.test.ts",
+        "start": 110,
+        "end": 150
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/workspace-rpc.test.ts",
+        "start": 1235,
+        "end": 1255
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "tests/conformance/test/harness.ts",
+        "start": 75,
+        "end": 100
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/IMPLEMENTATION_NOTES.md",
+        "start": 470,
+        "end": 490
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"bypassPermissions\" --include=\"*\" . 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"bypassPermissions\" --include=\"*\" . 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"bypassPermissions\""
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/evidence/core/claude.json"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"DEFAULT_MODE\" apps/tempo/src packages/protocol/src apps/tempo/src"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/queue.ts",
+        "start": 180,
+        "end": 240
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 70485b983c876e05f14cc9593ebb5878b65e13cb ee1e5f7b4023bb0c97d762b4420afa136ebf5353 -- apps/tempo/src/do/workspace/queue.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 70485b983c876e05f14cc9593ebb5878b65e13cb ee1e5f7b4023bb0c97d762b4420afa136ebf5353"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/ui/lib/agents.ts",
+        "start": 1,
+        "end": 130
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/queue.ts",
+        "start": 1,
+        "end": 60
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/mac/src/views/chat_model.rs",
+        "start": 100,
+        "end": 160
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "tests/conformance/test/harness.ts",
+        "start": 1,
+        "end": 130
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "packages/protocol/src/tempod.ts",
+        "start": 485,
+        "end": 520
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 260,
+        "end": 275
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 445,
+        "end": 465
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 70485b983c876e05f14cc9593ebb5878b65e13cb ee1e5f7b4023bb0c97d762b4420afa136ebf5353 -- docs/01\\ Runtime\\ and\\ Agents.md docs/IMPLEMENTATION_NOTES.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/IMPLEMENTATION_NOTES.md",
+        "start": 1,
+        "end": 50
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/evidence/core/claude.json",
+        "start": 1,
+        "end": 80
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "tests/conformance/README.md",
+        "start": 1,
+        "end": 60
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "AGENTS.md",
+        "start": 1,
+        "end": 60
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 235,
+        "end": 280
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "tests/conformance/test/harness.ts",
+        "start": 60,
+        "end": 150
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "tests/conformance/test/harness.ts",
+        "start": 200,
+        "end": 280
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

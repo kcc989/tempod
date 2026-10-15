@@ -1,0 +1,160 @@
+{
+  "case": "R-eaf0b28",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "eaf0b2894068c621e49284ddf30b43dfe91b6645",
+  "diffBytes": 161562,
+  "diffCut": false,
+  "steps": 15,
+  "seconds": 114.7,
+  "usage": {
+    "prompt_tokens": 1630464,
+    "completion_tokens": 8822,
+    "cost": 0.6490218000000001
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The new cache tasks, change classifier, fixture outputs and per-test cleanup in workspace-rpc look right. One blocking problem: ops.test.ts makes 'step runner rules' a parallel group, but one of its tests changes the shared STEP_LIMITS['settings.read'] to 300 ms while other tests in the group run settings.read. That can make them fail at random, and it breaks the rule this branch adds: groups that change global state run one test at a time.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 1902,
+        "text": "'step runner rules' is now describe.concurrent, but the test 'aborts a step at its timeout\u2026' (lines 1937-1950) changes the shared STEP_LIMITS['settings.read'] to timeoutMs: 300 and only restores it in finally. The other tests in the group ('recovery after a DO restart\u2026' x2, 'a step's timing includes\u2026') run create ops that call settings.read at the same time, so they can pick up the 300 ms timeout under load: settings.read is aborted, retried and skipped, and those tests fail at random. This breaks the new AGENTS.md/CLAUDE.md rule that groups changing global state run one test at a time. Move this test into a group that runs in order (e.g. 'create op'), or keep 'step runner rules' in order.",
+        "blocking": true
+      },
+      {
+        "path": "tests/e2e/web/client.spec.ts",
+        "line": 222,
+        "text": "The phone-chromium project now only runs tests tagged @mobile, so the phone-only branches in the git primary action test (and the phone test.skip lines around 291/311) never run on a phone. Remove the dead branches or tag the test so the code doesn't look like phone coverage it no longer has.",
+        "blocking": false
+      },
+      {
+        "path": "docs/CI.md",
+        "line": 83,
+        "text": "The documentation-only path runs only oxlint and oxfmt, and both are set to ignore docs/**, so a docs/-only change gets almost no real checking. Allowed, since the required check still passes, but CI.md should say so plainly.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; git status --short | head; ls apps/tempo/ apps/tempo/test; cat apps/tempo/vitest*.ts 2>/dev/null | head -150; cat packages/protocol/package.json | head -30",
+        "description": "Inspect app test configs and protocol package"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo; grep -rhoE \"from \\\"\\.\\./\\.\\./?[^\\\"]*\\\"|from \\\"\\.\\./[^\\\"]*\\\"\" test/worker | sort -u | grep -v \"src/\" | head; grep -nE \"^describe|STEP_LIMITS\\[|Date\\.now = |vi\\.spyOn|vi\\.useFakeTimers|globalThis\\.\" test/worker/ops.test.ts | head -80",
+        "description": "Check imports and global mutations in ops tests"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo; sed -n 1930,1960p test/worker/ops.test.ts; sed -n 2050,2085p test/worker/ops.test.ts; grep -n \"settings.read\" test/worker/helpers*.ts test/worker/*fake* 2>/dev/null | head; ls test/worker",
+        "description": "View step runner tests"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo; awk '/^describe/{d=$0} /expect\\(/{print NR\": \"substr(d,1,50)\" | \"$0}' test/worker/workspace-rpc.test.ts | awk -F: '$1<320' | head -20; grep -nE \"vi\\.spyOn|Date, \\\"now\\\"|useFakeTimers|^describe|^  (const|let) [a-z]+ = (\\[|new Map)\" test/worker/workspace-rpc.test.ts | head -60",
+        "description": "Find global expect in helpers and spies"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.spyOn|Date, \"now\"|useFakeTimers|^describe|^\\s*expect\\(|^const .*expect",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/workspace-rpc.test.ts",
+        "output_mode": "content",
+        "head_limit": 60
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.spyOn|mockImplementation|healthy = |^describe\\(|onTestFinished\\)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/workspace-rpc.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Chose: |\"Back\"|aria-label=\"Back\"|name: \"Appearance\"|Appearance",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/src/ui",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n \"Back\\|<button\\|role=\\\"radio\\|aria-label\" apps/tempo/src/ui/components/settings/SettingsPage.tsx | head -20; grep -n \"General\" apps/tempo/src/ui/components/settings/SettingsPage.tsx | head -3; grep -rn \"\\\"test\\\"\\|docs/\\|\\.md\" .github/workflows/*.yml | head; grep -n \"\\\"transit\\\"\\|scripts\" packages/*/package.json | head",
+        "description": "Check settings UI and workflows"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e; grep -n \"\\\"build\" packages/*/package.json; grep -rn \"dist/\\|tempod/dist\\|tempod.*build\" apps/tempo/test/worker/*.ts apps/tempo/vitest.worker.config.ts apps/tempo/test/wrangler.test.jsonc | head; grep -n \"\\\"@tempo\" apps/tempo/package.json",
+        "description": "Check removed ^build dependency impact"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"build[:\"]",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/packages",
+        "glob": "*/package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "dist/|tempod.*(bin|build)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test",
+        "output_mode": "content",
+        "head_limit": 10
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls -a; cat .oxlintrc.json 2>/dev/null | head -30; cat .oxfmtrc.json 2>/dev/null | head; grep -n \"oxlint\\|oxfmt\" package.json",
+        "description": "Inspect lint/format configs"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "phone|@mobile|setViewportSize",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/tests/e2e",
+        "glob": "*.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "outDir|root:",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo",
+        "glob": "{vite.web-test.config.ts,test/browser/vite.config.ts}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "head -20 apps/tempo/vite.web-test.config.ts apps/tempo/test/browser/vite.config.ts; grep -rhoE \"from \\\"[./][^\\\"]*\\\"\" apps/tempo/test/browser apps/tempo/test/web --include=*.ts --include=*.tsx | sort -u | grep -v \"^from \\\"\\./\" | head",
+        "description": "Check fixture config imports"
+      }
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "case": "C-f29c2bc",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f29c2bc59fe3700079a53fead37c86759de11175",
+  "diffBytes": 4035,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 23.4,
+  "usage": {
+    "prompt_tokens": 163805,
+    "completion_tokens": 1833,
+    "cost": 0.10666519999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change can merge. The Dockerfile now lets everyone read and enter /opt/tempo and /opt/tempo/pi, so the tempo user can load the pi extension at /opt/tempo/pi/tempo-profile.ts, where spec 01 puts it; the existing check in packages/tempod/test/image.test.ts already tests that the file is readable. In the ops test, a gate that the test releases in a finally block replaces the 300 ms sleep, which follows the CI rule to wait for state instead of sleeping. The step-duration check it removed is still covered by other timing checks in ops.test.ts (settings.read, setup.run). The conversations test now fails only the upload of its own transcript and passes every other upload to the real store, which removes the race with concurrent cases. Typecheck, lint and tests were not run because this review only reads.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/conversations.cases.ts",
+        "line": 182,
+        "text": "The spy on env.DATA.put is named `get`, and the bound original `put` reuses the name a nearby test gives its spy. Renaming the spy (for example to `putSpy`) would make the test clearer.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 2082,
+        "text": "The diff deletes the comment that quoted the spec rule this test checks (03 Step runner: at most one op runs at a time). Keeping that one-line reference would make it easy to trace the test back to the spec.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f29c2bc; sed -n 150,210p apps/tempo/test/worker/conversations.cases.ts; sed -n 20,60p container/Dockerfile; grep -n \"timings\\[\" apps/tempo/test/worker/*.ts | head; grep -rn \"sleep(\" apps/tempo/test/worker/ops.test.ts | head -5; git log --oneline -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f29c2bc; grep -n \"key\" apps/tempo/test/worker/conversations.cases.ts | head -20; grep -rn \"tempo-profile\\|/opt/tempo\" container apps/tempod 2>/dev/null | grep -v Dockerfile | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "tempo-profile|opt/tempo",
+        "glob": "!**/node_modules/**",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "baseline": {
+    "recall": 0.42105263157894735,
+    "fix_recall": 0.0,
+    "seed_recall": 1.0,
+    "fpr": 0.0,
+    "score": 0.42105263157894735,
+    "tokens_per_run": 450903.54545454547,
+    "minutes_per_run": 0.7018939393939394,
+    "runs": 22
+  },
+  "design": {
+    "recall": 0.2631578947368421,
+    "fix_recall": 0.0,
+    "seed_recall": 0.625,
+    "fpr": 0.16666666666666666,
+    "score": 0.09649122807017543,
+    "tokens_per_run": 1181344.0909090908,
+    "minutes_per_run": 2.7266666666666666,
+    "runs": 22
+  },
+  "design-same": {
+    "recall": 0.42105263157894735,
+    "fix_recall": 0.0,
+    "seed_recall": 1.0,
+    "fpr": 0.16666666666666666,
+    "score": 0.2543859649122807,
+    "tokens_per_run": 1626438.6818181819,
+    "minutes_per_run": 1.8196969696969698,
+    "runs": 22
+  },
+  "design-exec": {
+    "recall": 0.42105263157894735,
+    "fix_recall": 0.0,
+    "seed_recall": 1.0,
+    "fpr": 0.16666666666666666,
+    "score": 0.2543859649122807,
+    "tokens_per_run": 2059514.6363636365,
+    "minutes_per_run": 2.183636363636364,
+    "runs": 22
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "case": "R-2ff48c5",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2ff48c57add387786ffe3361209f790f9efeecd4",
+  "diffBytes": 991538,
+  "diffCut": true,
+  "steps": 3,
+  "seconds": 42.6,
+  "usage": {
+    "prompt_tokens": 656374,
+    "completion_tokens": 3242,
+    "cost": 1.3055002
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Removes legacy roles, custom agents, the Artifacts store and isomorphic-git. Existing sessions keep their data through DO migration 0012_session_agents, and the session wire fields are flat (agentId/agentName/agentVersion/agentSha). IMPLEMENTATION_NOTES records the owner waiving the legacy imports and approving the new behavior; the 02 spec lists the removed functions. The web and Mac clients change together. Tests cover the frozen-session migration, library sessions keeping their profile after edit and delete, and the empty-model adapter default. Not verified: typecheck, lint and tests were not run, and the diff was cut at 256 KiB, so protocol, tempod and spec hunks were seen only as file stats. Only minor issues remain.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/agents_model.rs",
+        "line": 128,
+        "text": "Deleting validate() left its doc comment ('Field errors keyed like the web\u2026, or the definition.') attached to vars_text, which it does not describe. Remove or move the comment.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/runs.ts",
+        "line": 223,
+        "text": "The run pre-check calls sessionModel(..., true) to keep the saved model, but the session it creates stores row.agentVersion, which is null for legacy runs. ensureSessionLive then treats that session as an older chat and falls back to settings.agent.models. A legacy run with an empty model can pass the pre-check under one rule and start under another. Consider passing row.agentVersion !== null so both checks use the same rule.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/ui/components/chat/chat-tabs-model.ts",
+        "line": 34,
+        "text": "libraryAgentMenu (renamed from customAgentMenu) appears to be used only in tests. If no component calls it, delete it as dead code.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && git diff --stat HEAD~1 -- docs packages | tail -30 && grep -rn \"custom_agent\\|customAgent\\|CustomAgent\\|roles\\.\\|listRoles\\|ARTIFACTS_ERROR\\|isomorphic\" --include=*.ts --include=*.tsx --include=*.rs --include=*.json apps packages crates -l 2>/dev/null | grep -v node_modules | grep -v generated | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff --stat HEAD~1 -- docs; grep -n \"custom_agents\\|M6\\|frozen\\|waiv\" docs/IMPLEMENTATION_NOTES.md | head -20; grep -rn \"custom_agent\\|Custom agents\\|customAgentId\\|listRoles\\|putUserRole\\|ARTIFACTS_ERROR\\|AGENTS binding\\|isomorphic\" docs/0*.md | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 120,135p apps/mac/src/views/agents_model.rs; grep -n \"agentVersion\\|agent_version\" apps/tempo/src/do/workspace/queue.ts apps/tempo/src/do/workspace/runs.ts | head; grep -rn \"has_login\" apps/mac/src | head -3"
+      }
+    }
+  ]
+}

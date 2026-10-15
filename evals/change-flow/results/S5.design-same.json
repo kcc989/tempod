@@ -1,0 +1,55 @@
+{
+  "case": "S5",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 23.1,
+  "usage": {
+    "prompt_tokens": 78262,
+    "completion_tokens": 1785,
+    "cost": 0.0747676
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The only change replaces a deterministic wait for the session.prompt request with a fixed 200 ms sleep in the active() test helper. CLAUDE.md and docs/CI.md forbid fixed sleeps. On a loaded runner, or when the alarm-driven prompt arrives after 200 ms, requestsOf(\"session.prompt\")[index] is undefined and Schema.decodeUnknownSync throws, so every run test that uses active() becomes flaky. The test suite was not run; the verdict is from reading the code.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "A fixed 200 ms sleep replaces waitFor on the observable session.prompt request. This breaks the repository's test rules and makes run tests flaky when the prompt is dispatched later than 200 ms. Restore `await waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index);`.",
+        "blocking": true,
+        "evidence": {
+          "quote": "  await new Promise((resolve) => setTimeout(resolve, 200));",
+          "why": "The prompt is sent by an alarm-driven DO step, and nothing guarantees how long that takes in wall-clock time. If the step has not finished after 200 ms (a loaded runner, or concurrent Worker cases), `w.tempod.requestsOf(\"session.prompt\")[index]` is undefined and `Schema.decodeUnknownSync(Schema.Struct({turnId: Schema.String, ...}))` throws. If it was sent sooner, the sleep only adds latency. CLAUDE.md says \"Wait for observable state instead of sleeping.\" and docs/CI.md line 183 says \"Avoid fixed sleeps\". The previous waitFor polled for exactly that observable state."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: sleeps or timing assertions instead of waiting for observable state; budgets too small for loaded runners",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "docs/CI.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Real contracts, failure paths, idempotency, security, build environment: the change touches only a test helper and no production code, bindings or images",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Spec: test-only change with no behavior change, so no spec tab update is needed",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 7f3fb8742743e049f75f8ad8fd898005dba9fa21:apps/tempo/test/worker/runs.cases.ts | sed -n 1,120p; grep -n \"waitFor\" apps/tempo/test/worker/runs.cases.ts; ls docs; grep -n -i \"sleep\\|observable\" docs/CI.md | head",
+        "description": "Read changed test file and CI doc rules"
+      }
+    }
+  ]
+}

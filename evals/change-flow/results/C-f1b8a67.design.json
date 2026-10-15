@@ -1,0 +1,364 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 50,
+  "seconds": 211.6,
+  "usage": {
+    "prompt_tokens": 199494,
+    "completion_tokens": 2504,
+    "cost": 0.0,
+    "neurons": 10122.816360473633
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Verified the change at head SHA. The protected-files change correctly treats missing protected login/config files (ENOENT from SandboxFileError) as absent/hashed null instead of failing the run, with non-ENOENT errors still failing closed as RUN_ACCESS_VIOLATION. The new worker test exercises the missing Codex auth.json case and confirms completion with no error code. The test-only UI test change adds a deterministic wait for pagination before doing a role query, replacing a timing-sensitive assertion pattern previously causing flakiness on loaded runners. No blocking issues found regarding real contracts, failure paths, idempotency, security, build/runtime, tests, or spec. The SDK type package was not resolvable locally, but the imported `SandboxFileError.is` predicate and `code` field are used consistently with the class shape in the test fixture, and the change matches the documented intent of tolerating absent agent credential files.",
+    "checked": [
+      {
+        "risk": "Real contracts",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Failure paths",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Idempotency and state",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Security",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Tests",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "apps/tempo/test/ui/components/issues.test.tsx"]
+      },
+      {
+        "risk": "The spec",
+        "paths": ["docs/05 Security and Ops.md", "docs/01 Runtime and Agents.md"]
+      }
+    ],
+    "findings": []
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "start": 260,
+        "end": 320
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/ui/components/issues.test.tsx",
+        "start": 360,
+        "end": 400
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type f \\( -name 'CLAUDE.md' -o -name 'AGENTS.md' \\) 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name docs 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -path '*@cloudflare/sandbox*' -type f 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type f \\( -name 'CLAUDE.md' -o -name 'AGENTS.md' \\)"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name docs"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -path '*@cloudflare/sandbox*' -type f | head -50"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "AGENTS.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la docs"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -path '*@cloudflare/sandbox*' -type f | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -path '*@cloudflare/sandbox*' -type f | head -20"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/01 Runtime and Agents.md",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/05 Security and Ops.md",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"protectedFileHashes\\|PROTECTED_AGENT_FILES\" apps/tempo/src apps/tempo/test 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"Files\\.\\|new Files\\|SandboxFileError\" apps/tempo/src apps/tempo/test 2>/dev/null | head -100"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -path '*node_modules*' -prune -o -type f -name '*.d.ts' -print 2>/dev/null | xargs grep -l \"SandboxFileError\" 2>/dev/null | head -10"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"protectedFileHashes\\|PROTECTED_AGENT_FILES\" apps/tempo/src apps/tempo/test | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"protectedFileHashes\" apps/tempo/src apps/tempo/test | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"protectedFileHashes\" apps/tempo/src apps/tempo/test"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"Files\\.\" apps/tempo/src apps/tempo/test | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"prototype.readFile|new Files|Files\\.prototype|Files =\" apps/tempo/src apps/tempo/test | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"Files\" apps/tempo/src/agents apps/tempo/test"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"SandboxFileError\" apps/tempo/src apps/tempo/test node_modules node_modules/@cloudflare/sandbox 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"SandboxFileError\" apps/tempo node_modules 2>/dev/null | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls node_modules/@cloudflare/sandbox"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -type d -name \"@cloudflare\" 2>/dev/null | head -5"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 2 -name \"package.json\" -print"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "package.json",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/package.json",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la .pnpm"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la node_modules/@cloudflare 2>/dev/null || echo no @cloudflare"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la apps/tempo/node_modules/@cloudflare 2>/dev/null || echo no app @cloudflare"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la node_modules/@cloudflare"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name \"@cloudflare\" 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name @cloudflare 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name '@cloudflare' 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name \"@cloudflare\" 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d -name @cloudflare"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 4 -name sandbox -type d"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -name sandbox -type d 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -name sandbox -type d"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 1ec4cc30b7bbf14339434b45e04f6a052c592c80 f1b8a672ada10526e1035fd4f3b4a9d7500fe921 -- apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 1ec4cc30b7bbf14339434b45e04f6a052c592c80 f1b8a672ada10526e1035fd4f3b4a9d7500fe921 -- apps/tempo/test/worker/runs.cases.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 1ec4cc30b7bbf14339434b45e04f6a052c592c80 f1b8a672ada10526e1035fd4f3b4a9d7500fe921 -- apps/tempo/test/ui/components/issues.test.tsx"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "start": 260,
+        "end": 320
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/ui/components/issues.test.tsx",
+        "start": 365,
+        "end": 395
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

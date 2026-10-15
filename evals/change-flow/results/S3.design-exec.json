@@ -1,0 +1,68 @@
+{
+  "case": "S3",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "966d17080c28dc79040e4e31ee3b39a08a56d9dc",
+  "diffBytes": 747,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 23.0,
+  "usage": {
+    "prompt_tokens": 80965,
+    "completion_tokens": 1862,
+    "cost": 0.19830199999999998
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The single added line logs the plaintext Artifacts access token (issued.plaintext) inside the log message. log() only redacts structured fields by key name via redactFields(fields); msg is serialized verbatim, so every newly issued read/write repository token is written to Worker logs. This violates CLAUDE.md rule 9 and spec 05 (Secrets/Observability).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "Plaintext Artifacts repository access token is written to Worker logs via the log message string, bypassing the field-name redact rule.",
+        "blocking": true,
+        "evidence": {
+          "quote": "log(\"info\", `artifacts ${scope} access issued for ${name}: ${issued.plaintext}`, { expiresAt });",
+          "why": "In apps/tempo/src/log.ts, `const line = JSON.stringify({ ts: Date.now(), level, msg, ...redactFields(fields) });` redacts only the fields object by key name (spec 05: `/token|key|secret|password|authorization|auth_json|cookie/i`); msg is emitted unchanged. MIN is \"info\", so every cache-miss token issue prints the credential (write scope by default, valid for TOKEN_TTL) to console.log / Workers Logs. CLAUDE.md rule 9: \"Never put a secret in logs\"; docs/05: \"All logs pass through the redact helper (Secrets).\""
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Security: secrets in logs / redact helper coverage",
+        "paths": [
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/log.ts",
+          "docs/05 Security and Ops.md",
+          "CLAUDE.md"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: token cache behavior unchanged by the added line",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Failure paths: no new error handling introduced",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Spec: no spec change accompanies new logging; spec forbids logging tokens",
+        "paths": ["docs/05 Security and Ops.md", "docs/06 Build Plan.md"]
+      },
+      {
+        "risk": "Tests: no test added asserting token absence from logs",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat apps/tempo/src/log.ts && sed -n 180,235p apps/tempo/src/artifacts/repositories.ts && grep -rn \"artifactToken\\|redact\" docs/*.md | head -30",
+        "description": "Read changed file, log helper, and spec references"
+      }
+    }
+  ]
+}

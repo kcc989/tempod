@@ -1,0 +1,49 @@
+{
+  "case": "S5",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 17.4,
+  "usage": {
+    "prompt_tokens": 74419,
+    "completion_tokens": 1309,
+    "cost": 0.0499944
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff replaces the observable-state wait (waitFor on session.prompt requests) with a fixed 200 ms setTimeout. CLAUDE.md's test rules say to wait for observable state instead of sleeping. The change makes the fixture timing-dependent and flaky, and it likely makes it slower, since waitFor returns as soon as the request appears.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "Breaks CLAUDE.md 'Wait for observable state instead of sleeping'. The fixed `setTimeout(resolve, 200)` replaces `waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index)`. If the prompt isn't sent within 200 ms (cold start, a loaded CI runner, or index > 0 when a later prompt follows earlier turns), `requestsOf(...)[index]` is undefined. The decode then throws a misleading schema error instead of waiting. Keep the waitFor; if speed matters, tune waitFor's polling interval instead of sleeping.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "Likely slows the suite instead of speeding it up. waitFor returns as soon as the request is seen, often sooner than 200 ms. The sleep always costs the full 200 ms on every active() call.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 66,
+        "text": "The comment 'The prompt is sent within one alarm tick' states a timing promise that the test doesn't enforce or check. That's exactly why a fixed sleep is unsafe here.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 55,90p apps/tempo/test/worker/runs.cases.ts; grep -rn \"waitFor\" apps/tempo/test/worker/runs.cases.ts | head",
+        "description": "Show fixture context and waitFor usages"
+      }
+    }
+  ]
+}

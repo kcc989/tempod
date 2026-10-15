@@ -1,0 +1,69 @@
+{
+  "case": "S1",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "0b524cf545d50518420d361fd5cc80b095bd542c",
+  "diffBytes": 1374,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 31.4,
+  "usage": {
+    "prompt_tokens": 162848,
+    "completion_tokens": 2350,
+    "cost": 0.2383924
+  },
+  "report": {
+    "status": "fail",
+    "summary": "Main already lets a run start when a login file is missing: commit f1b8a67 (#63) treats the SDK's ENOENT (file not found) as absent, and a test in runs.cases.ts covers it. This diff goes further and treats every readFile error as an absent file. Errors like permission denied, an I/O error, the container not being reachable or a timeout now hash as null. The guard on protected login and config files used to fail with RUN_ACCESS_VIOLATION when it couldn't check a file. Now it lets the run through, which weakens a security control the spec keeps 'as today' (08 \u00a7244). The change also has no test for the new behavior and no spec or implementation-notes update.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "`.catch(() => null)` treats every read error as 'file absent', so the guard no longer fails when it can't check a file. Ways to slip past it: (1) the agent writes a protected file that didn't exist before, such as ~/.gitconfig or ~/.codex/config.toml, and makes it unreadable to the reader. The before hash is null and the after read throws EACCES, which also becomes null, so nothing is flagged. (2) A container or SDK error during the before snapshot and again after the turn records null both times, which hides any change in between. (3) A one-off read failure on a file that exists records null at start, then a good read after the turn shows a change that didn't happen. Before this diff, every non-ENOENT error raised RUN_ACCESS_VIOLATION ('could not be checked'), and runs.ts:450 still expects that path. Keep the `SandboxFileError.is(cause) && cause.code === \"ENOENT\"` narrowing, and add any other codes that really mean 'not there' (e.g. ENOTDIR) one by one instead of catching everything.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 19,
+        "text": "The request ('a login the owner never set up must not block a run') is already met on main: #63 handles ENOENT, and runs.cases.ts has 'runs when a login file is missing, as for an owner without a Codex login'. Nothing in the diff shows a login that was never set up producing a different error. If one does (e.g. a different SDK code for a missing parent directory), name that code and add a test that reproduces it rather than catching every error.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 285,
+        "text": "The change in behavior comes with no test (CLAUDE.md rule 14). There should be a test asserting that a read error other than ENOENT (e.g. EACCES, or the container being unreachable) still fails the run with RUN_ACCESS_VIOLATION. A test showing the new behavior would have made the security regression obvious.",
+        "blocking": false
+      },
+      {
+        "path": "docs/08 Events and Agents.md",
+        "line": 244,
+        "text": "The spec says protected-file checks continue 'as today', and errors.ts describes RUN_ACCESS_VIOLATION as a security failure. Changing whether the check fails when it can't read a file needs a spec or IMPLEMENTATION_NOTES change in the same PR (CLAUDE.md rules 1 and 16). Silently letting unreadable files pass is new behavior the spec doesn't describe.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/agents/protected-files.ts; grep -rn \"protectedFileHashes\\|RUN_ACCESS_VIOLATION\" --include=*.ts --include=*.md . | grep -v node_modules | head -40",
+        "description": "Read changed file and find usages"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3; git diff --stat HEAD~1 2>/dev/null | tail -3; grep -rn -i \"protected\\|ENOENT\" docs/*.md docs/IMPLEMENTATION_NOTES.md | head -20; grep -rn -i \"protected\\|ENOENT\\|readFile\" apps/tempo/test | head -20",
+        "description": "Check spec and tests for protected files"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 270,320p apps/tempo/test/worker/runs.cases.ts; sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 440,460p apps/tempo/src/do/workspace/runs.ts",
+        "description": "Read related test and callers"
+      }
+    }
+  ]
+}

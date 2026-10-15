@@ -1,0 +1,14 @@
+diff --git a/apps/tempo/src/artifacts/pull-requests.ts b/apps/tempo/src/artifacts/pull-requests.ts
+index 854a904..6d2bbed 100644
+--- a/apps/tempo/src/artifacts/pull-requests.ts
++++ b/apps/tempo/src/artifacts/pull-requests.ts
+@@ -317,9 +317,6 @@ export const prepareArtifactMerge = async (
+ > => {
+   const pullRequest = await getArtifactPullRequest(env, project, number);
+ 
+-  if (pullRequest.state === "merged" && pullRequest.mergeSha)
+-    return { pullRequest, mergeSha: pullRequest.mergeSha };
+-
+   if (pullRequest.state !== "open") throw new TempoError("PR_NOT_MERGEABLE");
+ 
+   const tips = await branchTips(

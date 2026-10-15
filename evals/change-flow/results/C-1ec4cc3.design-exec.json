@@ -1,0 +1,145 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 11,
+  "seconds": 74.9,
+  "usage": {
+    "prompt_tokens": 469729,
+    "completion_tokens": 6027,
+    "cost": 0.41996700000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change fixes the MCP tools/list input schema for issue tools whose input struct has no fields (list_issue_labels). Effect rendered these as {\"not\":{\"type\":\"null\"}}, which MCP clients reject because it is not type \"object\". At head, tools/list returns type \"object\" for every tool, both outside runs and in runs of kind plan, review and note. Checked by running handleMcpMessage directly. The tempo-mcp tests pass (6/6), tsc --noEmit for packages/tempod passes and oxlint on the two changed files passes. The repo-wide bun run typecheck, lint and test were not run. This matches the spec: 09 says the issue tool schemas are the repository API inputs with projectId removed, and the empty object is exactly that input. There is one non-blocking note: tools/call still accepts extra arguments for empty-input tools, which predates this change.",
+    "findings": [
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 227,
+        "text": "The schema advertised for empty-input tools is now {type:'object', properties:{}, additionalProperties:false}, but the runtime check in tools/call still accepts extra keys. A probe showed that decodeUnknownExit(list_issue_labels.input, {onExcessProperty:'error'})({x:1}) succeeds and returns {x:1}, which is then forwarded as params to /agent-tools. This predates the change, and the advertised schema being stricter is harmless to clients. A follow-up could reject extra keys for empty structs in tools/call so the check matches the schema.",
+        "blocking": false,
+        "evidence": {
+          "quote": "? { type: \"object\", properties: {}, additionalProperties: false }",
+          "why": "The advertised schema forbids extra properties, but the decode path at the tools/call branch, which this change did not touch, lets them through for a struct with no fields."
+        }
+      },
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 223,
+        "text": "The new helper was inserted below the existing doc comment for handleMcpMessage, so that comment now sits above toolInputSchema instead. This is cosmetic only.",
+        "blocking": false,
+        "evidence": {
+          "quote": "/** Handles one JSON-RPC message; returns the response, or null for a notification. */",
+          "why": "The comment is now attached to the wrong declaration. Behavior is not affected."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: shape of the MCP tools/list inputSchema, and Effect's JsonSchema output for an empty Struct. Checked with probes that load the real effect and @tempo/protocol packages.",
+        "paths": [
+          "packages/tempod/src/tempo-mcp.ts",
+          "packages/protocol/src/issue-tools.ts",
+          "packages/protocol/src/runs.ts",
+          "packages/protocol/src/agent-library.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths and guards: issue tool decode in tools/call is unchanged; extra-key acceptance predates the change and is reported as not blocking",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Idempotency and state: the change is a pure schema rendering function with no state",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Security: no secrets, ownership or credential handling is touched",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Tests: the new test decodes real tools/list output both outside runs and in a run, with no sleeps or shared globals. Its assertion compares against an empty list, and the Schema decode fails if tools or inputSchema.type is missing, so it cannot pass vacuously. Ran bun test test/tempo-mcp.test.ts (6 pass), tsc --noEmit and oxlint.",
+        "paths": ["packages/tempod/test/tempo-mcp.test.ts"]
+      },
+      {
+        "risk": "Spec: the MCP server section in 01 and the issue tools section in 09 (schemas are the API inputs without projectId). The change matches both, and no spec change is needed.",
+        "paths": ["docs/01 Runtime and Agents.md", "docs/09 Git Forge.md"]
+      },
+      {
+        "risk": "Build/runtime environment: no image, file mode or tool version changes",
+        "paths": ["packages/tempod/package.json"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,60p packages/tempod/src/tempo-mcp.ts && sed -n 200,330p packages/tempod/src/tempo-mcp.ts && grep -rn \"ISSUE_TOOLS\\b\" packages --include=*.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/protocol/src/issue-tools.ts && sed -n 335,370p packages/tempod/src/tempo-mcp.ts && ls docs && grep -rln \"inputSchema\\|tools/list\" docs | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"inputSchema\\|tools/list\\|list_issue_labels\" \"docs/01 Runtime and Agents.md\" docs/IMPLEMENTATION_NOTES.md \"docs/09 Git Forge.md\" | head; cat packages/tempod/package.json | grep -n '\"test' ; grep -n \"OutputKind = \\|RUN_REPORTS = \" -A6 packages/protocol/src/*.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && timeout 300 bun test test/tempo-mcp.test.ts 2>&1 | tail -20; cat > /tmp/probe-mcp.ts <<'EOF'\nimport { handleMcpMessage } from \"/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod/src/tempo-mcp.ts\";\nconst call = () => Promise.reject(new Error(\"x\"));\nfor (const [r,k] of [[undefined,undefined],[\"r\",\"plan\"],[\"r\",\"review\"],[\"r\",\"note\"]] as const) {\n  const res: any = await handleMcpMessage({jsonrpc:\"2.0\",id:1,method:\"tools/list\"}, call, \"s\", r, k);\n  console.log(k, res.result.tools.map((t:any)=>`${t.name}:${t.inputSchema.type}`).join(\" \"));\n}\nconst res: any = await handleMcpMessage({jsonrpc:\"2.0\",id:1,method:\"tools/list\"}, call, \"s\", undefined, undefined);\nconsole.log(JSON.stringify(res.result.tools.find((t:any)=>t.name===\"list_issue_labels\")));\nfor (const a of [{}, {x:1}]) { const r:any = await handleMcpMessage({jsonrpc:\"2.0\",id:2,method:\"tools/call\",params:{name:\"list_issue_labels\",arguments:a}}, async()=>new Response(JSON.stringify({result:[]})), \"s\"); console.log(JSON.stringify(a), JSON.stringify(r.result)); }\nEOF\nbun /tmp/probe-mcp.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && timeout 300 bun test test/tempo-mcp.test.ts 2>&1 | tail -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e '\nimport { handleMcpMessage } from \"./src/tempo-mcp.ts\";\nconst call = () => Promise.reject(new Error(\"x\"));\nfor (const [r,k] of [[undefined,undefined],[\"r\",\"plan\"],[\"r\",\"review\"],[\"r\",\"note\"]]) {\n  const res = await handleMcpMessage({jsonrpc:\"2.0\",id:1,method:\"tools/list\"}, call, \"s\", r, k);\n  console.log(k, res.result.tools.map((t)=>t.name+\":\"+t.inputSchema.type).join(\" \"));\n}\nconst res = await handleMcpMessage({jsonrpc:\"2.0\",id:1,method:\"tools/list\"}, call, \"s\", undefined, undefined);\nconsole.log(JSON.stringify(res.result.tools.filter((t)=>t.name===\"list_issue_labels\")));\nfor (const a of [{}, {x:1}]) { const r = await handleMcpMessage({jsonrpc:\"2.0\",id:2,method:\"tools/call\",params:{name:\"list_issue_labels\",arguments:a}}, async()=>new Response(JSON.stringify({result:[]})), \"s\"); console.log(JSON.stringify(a), JSON.stringify(r.result)); }\n'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e '\nimport { Schema, JsonSchema, Exit } from \"effect\";\nimport { ISSUE_TOOLS } from \"@tempo/protocol\";\nconsole.log(JSON.stringify(JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(ISSUE_TOOLS.list_issue_labels.input, { onExcessProperty: \"error\" })).schema));\nconst d = Schema.decodeUnknownExit(ISSUE_TOOLS.list_issue_labels.input, {onExcessProperty:\"error\"})({x:1});\nconsole.log(Exit.isSuccess(d), JSON.stringify(d.value));\n'; cd ../.. && timeout 280 bun run typecheck --filter=@tempo/tempod 2>&1 | tail -5; npx --no-install eslint packages/tempod/src/tempo-mcp.ts packages/tempod/test/tempo-mcp.test.ts 2>&1 | tail -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e '\nimport { Schema, JsonSchema, Exit } from \"effect\";\nimport { ISSUE_TOOLS } from \"@tempo/protocol\";\nconsole.log(JSON.stringify(JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(ISSUE_TOOLS.list_issue_labels.input, { onExcessProperty: \"error\" })).schema));\nconst d = Schema.decodeUnknownExit(ISSUE_TOOLS.list_issue_labels.input, {onExcessProperty:\"error\"})({x:1});\nconsole.log(Exit.isSuccess(d), JSON.stringify(d.value));\n'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 280 bunx tsc --noEmit -p . 2>&1 | tail -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3 && grep -n '\"lint\"' package.json packages/tempod/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bunx oxlint --deny-warnings packages/tempod/src/tempo-mcp.ts packages/tempod/test/tempo-mcp.test.ts"
+      }
+    }
+  ]
+}

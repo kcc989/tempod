@@ -264,3 +264,17 @@ Hosted gate J (not run; needs the owner's account and approval):
 3. A job that runs `git push` and a request to a host outside the allowlist both fail; the job log shows the 403s.
 4. A failing required job blocks the PR merge with `PR_NOT_MERGEABLE`; a rerun that passes allows it.
 5. Cancel stops the job containers; a late result does not change the run.
+
+## Verification (08, proposed)
+
+Not started. It needs the owner's approval of 08, Verification (V1–V9), and Gate I first.
+
+| Milestone | Content | Demo |
+| --- | --- | --- |
+| V0 Experiment | No product code. The owner saves a library agent `verifier` with the prompt in `evals/change-flow/verifier-prompt.txt`, base agent `codex` (a family outside Claude), output kind `review`, read-only, and attaches it to the Tempo project on `{event: "branch.pushed", when: null}` with auto-send off and no other attached agent (so no other run result reaches its context, V2), for 14 days. PRs that fix a merged PR carry `Fixes #<n>`. Each week, new fix PRs join `evals/change-flow/cases.json`, and the stored run results are compared with them | At least one escaped defect has a matching blocking finding before its merge, at most 1 in 6 clean pushes gets a blocking finding, and tokens per push are recorded. If not, V1–V7 stay advisory. |
+| V1 Gates | `AttachmentGate`, model families and alternates, `head_sha` on runs, supersede, `git.readFileAt`, the evidence check | A gate run on a Claude-authored push runs on another family and stores a confirmed or unsupported result |
+| V2 Merge gate | Risk tiers, `reportVerification`, gate states, `tempo.gate.changed`, merge details, both clients | A `high` push with a seeded defect cannot merge |
+| V3 Guide | Output kind `guide`, `guides`, `acknowledgeGuide`, the Guide tab and Mac panel at the head SHA | The Guide follows each push; a `high` merge waits for Acknowledge |
+| V4 Post-merge and metrics | `tempo.pr.merged`, `post_merge` gates, `regressed` issues, Change metrics | A post-merge finding opens one issue; Metrics shows fix PRs, minutes, tokens and CI minutes |
+
+Hosted Gate V is listed in 08.

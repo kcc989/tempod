@@ -1,0 +1,133 @@
+{
+  "case": "C-f29c2bc",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f29c2bc59fe3700079a53fead37c86759de11175",
+  "diffBytes": 4035,
+  "diffCut": false,
+  "steps": 8,
+  "seconds": 52.3,
+  "usage": {
+    "prompt_tokens": 381673,
+    "completion_tokens": 4474,
+    "cost": 0.27643260000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Three narrow fixes, none blocking. (1) conversations.cases.ts: the R2 put spy no longer fails just the next put, whichever object it writes. It now fails only puts to the conversation artifact key (`w.key`, built by the same `conversationKey(projectId, workspaceId)` that saveConversation uses) and passes every other put to the real R2 bucket. An unrelated put inside deleteWorkspace can no longer use up the injected failure. The test still requires unlinkProject to fail with code INTERNAL, so it cannot pass without the failure happening, and the spy is restored in finally. (2) ops.test.ts: a promise gate replaces sleep(300), so the 'one op running, the other pending' check runs while commitAndPush is blocked and does not depend on timing. The gate opens in finally, so a failed waitFor cannot hang the op. The removed check that commitAndPush took at least 250 ms only tested the sleep. The rule that timings record a step's real duration is still tested by the timeout case (timings[\"settings.read\"] >= 200), and the 05 rule on storing timings is tested in many places. (3) Dockerfile: `chmod 0755 /opt/tempo /opt/tempo/pi` runs after `COPY --chmod=0644` makes the profile's parent folders, so user tempo (uid 1000) can enter them and read /opt/tempo/pi/tempo-profile.ts. Spec 01 says pi loads it with -e. packages/tempod/test/image.test.ts already checks read access as uid 1000 with accessSync R_OK. I didn't build the image, so the image test did not run.",
+    "findings": [
+      {
+        "path": "scripts/test-tempod-container.ts",
+        "line": 68,
+        "text": "Not blocking and not part of this change: when TEMPO_TEST_MOUNT_SOURCE=1, this mode mounts the repository read-only over /opt/tempo, which hides the image's /opt/tempo/pi. In that mode the image test's R_OK check on /opt/tempo/pi/tempo-profile.ts cannot see the Dockerfile fix. The default mode builds container/Dockerfile.test and does check it. Running `bun run test:tempod:container` in its default mode would confirm the fix.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: the R2 put that unlinkProject \u2192 deleteWorkspace \u2192 saveConversation makes, and whether the spy's key filter matches the real key",
+        "paths": [
+          "apps/tempo/test/worker/conversations.cases.ts",
+          "apps/tempo/src/do/workspace/conversations.ts",
+          "apps/tempo/src/server/handlers/projects.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: a failed upload still makes unlinkProject fail and keeps the project; the gate opens in finally if waitFor throws",
+        "paths": [
+          "apps/tempo/test/worker/conversations.cases.ts",
+          "apps/tempo/test/worker/ops.test.ts",
+          "apps/tempo/src/server/handlers/projects.ts"
+        ]
+      },
+      {
+        "risk": "Tests: sleeps and timing checks replaced by waiting for state, shared spies under concurrent cases (conversation cases run one at a time inside platform.test.ts), checks that cannot pass without running, coverage the removed timing check leaves behind",
+        "paths": [
+          "apps/tempo/test/worker/ops.test.ts",
+          "apps/tempo/test/worker/platform.test.ts",
+          "apps/tempo/test/worker/conversations.cases.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: folder modes for /opt/tempo/pi under user tempo, and image test coverage",
+        "paths": [
+          "container/Dockerfile",
+          "packages/tempod/test/image.test.ts",
+          "packages/tempod/src/acp/profile.ts",
+          "scripts/test-tempod-container.ts"
+        ]
+      },
+      {
+        "risk": "Spec: pi extension path in 01, op timings in 05; no behavior change, so no spec edit needed",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/05 Security and Ops.md",
+          "docs/IMPLEMENTATION_NOTES.md"
+        ]
+      },
+      {
+        "risk": "Security and idempotency: not affected (test-only changes plus one permission change on a public, read-only profile file)",
+        "paths": ["container/Dockerfile", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,80p container/Dockerfile && sed -n 150,215p apps/tempo/test/worker/conversations.cases.ts",
+        "description": "Show head, Dockerfile, and test case context"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,80p apps/tempo/test/worker/conversations.cases.ts; grep -rn \"conversations.cases\" apps/tempo/test | head; git log --oneline -3",
+        "description": "Show seed helper and case file usage"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"unlinkProject\" apps/tempo/src --include=*.ts | head; grep -rn \"DATA.put\" apps/tempo/src --include=*.ts | head -20",
+        "description": "Find unlinkProject and R2 put callers"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 60,85p apps/tempo/src/do/workspace/conversations.ts; sed -n 1,60p apps/tempo/test/worker/platform.test.ts; sed -n 185,240p apps/tempo/src/server/handlers/projects.ts",
+        "description": "Check conversation upload key and platform test setup"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"timings\" apps/tempo/test/worker/ops.test.ts | head; grep -rn -i \"timings\" docs/*.md | head; sed -n 2106,2150p apps/tempo/test/worker/ops.test.ts",
+        "description": "Check timings coverage in tests and spec"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"opt/tempo\" --include=*.ts --include=*.md --include=*.sh --include=*.json . 2>/dev/null | grep -v node_modules | head -20",
+        "description": "Find references to /opt/tempo path"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,50p packages/tempod/test/image.test.ts; sed -n 55,80p scripts/test-tempod-container.ts",
+        "description": "Read image test and container test runner"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,120p scripts/test-tempod-container.ts",
+        "description": "Read rest of container test runner"
+      }
+    }
+  ]
+}

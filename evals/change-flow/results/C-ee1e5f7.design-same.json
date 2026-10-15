@@ -1,0 +1,130 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 6,
+  "seconds": 47.5,
+  "usage": {
+    "prompt_tokens": 320146,
+    "completion_tokens": 4168,
+    "cost": 0.2013794
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Changes Claude's default mode from bypassPermissions to auto across the server default, web and Mac plan toggles, conformance harness, README and spec tab 01, and rewrites TURN_SUMMARY_RULE, with the spec and IMPLEMENTATION_NOTES updated in the same change. The protocol constant matches the spec text exactly. The recorded adapter data for the pinned claude-agent-acp 0.89.1 lists 'auto'. tempod's failure path matches the notes: a failed mode change is logged and the session keeps its current mode. No blocking issues; live acceptance of 'auto' is not proven by the offline evidence.",
+    "findings": [
+      {
+        "path": "docs/evidence/core/claude.json",
+        "line": 71,
+        "text": "The evidence shows 'auto' is offered but only exercised setting bypassPermissions, and it was not a live run. Whether claude-agent-acp actually accepts session/set_config_option mode=auto with API-key or subscription credentials through the egress proxy is unverified. A live test:conformance run for claude (step 3 now sets 'auto') would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "\"setMode\": \"bypassPermissions\",",
+          "why": "The recorded setMode is the old mode, and the file has \"live\": false, so setting 'auto' is not proven here."
+        }
+      },
+      {
+        "path": "packages/tempod/src/acp/session.ts",
+        "line": 491,
+        "text": "If 'auto' is rejected, the session stays in the adapter's current mode ('default' per evidence), which asks for permission on each action, so unattended turns may stall on permission requests. This matches the documented fallback in IMPLEMENTATION_NOTES, but the notes do not mention the user-visible effect. Not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "this.deps.log.warn(\"setting the mode failed\", { sessionId: this.sessionId, error: errorText(e) });",
+          "why": "A failed mode change is only logged; the session continues in currentModeId 'default'."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (ACP adapter modes, pinned version)",
+        "paths": [
+          "docs/evidence/core/claude.json",
+          "container/versions.json",
+          "packages/tempod/src/acp/session.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths (mode change rejected)",
+        "paths": ["packages/tempod/src/acp/session.ts", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "Idempotency and state (default mode used in session.start, plan toggle fallback)",
+        "paths": [
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/ui/lib/agents.ts",
+          "apps/mac/src/views/chat_model.rs"
+        ]
+      },
+      {
+        "risk": "Security (no secrets or permission checks touched)",
+        "paths": ["packages/protocol/src/tempod.ts", "apps/tempo/src/do/workspace/queue.ts"]
+      },
+      {
+        "risk": "Build and runtime environment (none changed)",
+        "paths": ["container/versions.json"]
+      },
+      {
+        "risk": "Tests (updated assertions still check observable values; conformance harness updated)",
+        "paths": [
+          "apps/tempo/test/ui/logic.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "tests/conformance/test/harness.ts",
+          "tests/conformance/README.md"
+        ]
+      },
+      {
+        "risk": "Spec consistency (01 table and turn-summary text match code; no leftover bypassPermissions default; web and Mac changed together)",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/06 Build Plan.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "packages/protocol/src/tempod.ts",
+          "apps/mac/src/views/chat_model.rs",
+          "apps/tempo/src/ui/lib/agents.ts"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && grep -rn \"bypassPermissions\" --exclude-dir=node_modules --exclude-dir=.git . | grep -v \"^./docs/evidence\" | head -40; echo ---; grep -n '\"auto\"\\|bypassPermissions' docs/evidence/core/claude.json | head; ls docs/evidence/core/ 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,90p docs/evidence/core/claude.json; cat container/versions.json 2>/dev/null | grep -i claude; grep -rn \"modeId\\|set_config_option\\|setSessionMode\\|set_mode\" container/tempod/src 2>/dev/null | head -30; ls container"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps packages; grep -rln \"modeId\" --include=*.ts apps/tempod* packages/tempod* 2>/dev/null | head; grep -rn \"TURN_SUMMARY_RULE\\|DEFAULT_MODE\\|PLAN_MODE\" --include=*.ts --include=*.tsx --include=*.rs -r apps packages tests | grep -v node_modules | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"modeId\\|setMode\\|set_config\\|setSessionConfigOption\\|setSessionMode\" packages/tempod/src/acp/session.ts packages/tempod/src/acp/manager.ts | head -40; grep -rn \"plan_target\" apps/mac --include=*.rs | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 465,500p packages/tempod/src/acp/session.ts; sed -n 120,145p apps/mac/src/views/chat_model.rs; sed -n 80,100p apps/tempo/src/ui/lib/agents.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"which checks you ran\\|summary of that turn\" --exclude-dir=node_modules --exclude-dir=.git . | head; grep -rn \"requiredModes\\|defaultMode\" tests/conformance/test/*.ts | head"
+      }
+    }
+  ]
+}

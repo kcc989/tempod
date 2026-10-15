@@ -1,0 +1,308 @@
+{
+  "case": "R-8f23c85",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8f23c85befce80c0a1c94a727017b59ee1d24f03",
+  "diffBytes": 35884,
+  "diffCut": false,
+  "steps": 23,
+  "seconds": 161.1,
+  "usage": {
+    "prompt_tokens": 1262100,
+    "completion_tokens": 13837,
+    "cost": 0.9586788
+  },
+  "report": {
+    "status": "pass",
+    "summary": "No blocking findings. The CI cache pruning is guarded: it prunes only when CI_CHECKS_OK is true, the run wrote new entries and every Turbo run summary can be read; otherwise it removes nothing. The save step now depends on prune.outputs.changed. A failed run saves every entry. deploy-worker.ts now always builds, verifies and pins the image digest. It fails if the build id is missing from the image's tempod, so a stale Turbo-cached tempod build is caught too (TEMPO_BUILD_ID is part of the task hash). tempod's VERSION now uses dot access, which matches `bun build --env=TEMPO_BUILD_*`. Every RPC name and input shape in the forge demo matches packages/protocol/src/api.ts, and the expected PR_NOT_MERGEABLE when reopening a merged PR matches apps/tempo/src/artifacts/pull-requests.ts and 09 'Merged PRs cannot reopen'. Docs were updated in the same change (CI.md, IMPLEMENTATION_NOTES, CORE-TEST-DEPLOYMENT). Caveat: node_modules is not installed in this worktree, so I could not run bun typecheck, lint or tests, or read the installed Turbo docs. The notes below are not blocking.",
+    "findings": [
+      {
+        "path": "scripts/ci.ts",
+        "line": 66,
+        "text": "Deadline enforcement now depends on Bun 1.4.2 honouring `detached: true` (setsid). If Bun ignored the option, `process.kill(-pid, ...)` would fail with ESRCH, the empty catch would swallow it, and the 300 s timer would no longer kill the check (before, child.kill killed at least the direct child). Confirm with `bun run typecheck` (SpawnOptions typing) and a CI run where one check passes its deadline.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const timer = setTimeout(() => killGroup(child.pid, \"SIGTERM\"), Math.max(0, remaining));",
+          "why": "killGroup swallows every error, so if the child is not a process-group leader the deadline kill silently does nothing."
+        }
+      },
+      {
+        "path": "scripts/ci-cache.ts",
+        "line": 44,
+        "text": "Detecting changes by mtime assumes actions/cache keeps archive mtimes on extract, which GNU tar does by default, and that Turbo never rewrites restored entries. If either assumption fails, `changed` would be true on every run. That only causes extra saves; no entries are lost.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const changed = files.some((file) => statSync(path.join(cacheDir, file)).mtimeMs > since);",
+          "why": "Correctness depends on the timestamps that the restore step leaves on extracted files. Only fail-safe behaviour was observed here; it was not verified on a runner."
+        }
+      },
+      {
+        "path": "tests/e2e/tests/forge-demo.spec.ts",
+        "line": 112,
+        "text": "`test:e2e` runs every spec, so each live e2e run now also runs this hour-long demo. Each run creates a new `tempo-demo-<tag>` repository that is never deleted, and that adds up on the test deployment. Consider excluding this file from the default e2e config.",
+        "blocking": false,
+        "evidence": {
+          "quote": "    name: `tempo-demo-${tag}`,",
+          "why": "The README says the repository is deliberately left in place, and the default `playwright test` matches this file too."
+        }
+      },
+      {
+        "path": "scripts/ci-cache.test.ts",
+        "line": 1,
+        "text": "The tests cover only the pure helpers. The main block (marker mtime comparison, the CI_CHECKS_OK gate, rmSync, GITHUB_OUTPUT) has no test.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (GitHub Actions cache, Turbo run summary and local cache layout, Bun spawn/build --env, Docker CLI, Tempo RPC API)",
+        "paths": [
+          ".github/workflows/ci.yml",
+          "scripts/ci-cache.ts",
+          "scripts/ci.ts",
+          "turbo.json",
+          "packages/tempod/package.json",
+          "packages/tempod/src/config.ts",
+          "scripts/deploy-worker.ts",
+          "container/Dockerfile",
+          "packages/protocol/src/api.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "tests/e2e/tests/lib/api.ts",
+          "tests/e2e/tests/lib/flows.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths (prune fails closed on bad summaries or failed checks; deploy fails if build id missing; group kill errors swallowed)",
+        "paths": [
+          "scripts/ci-cache.ts",
+          "scripts/ci.ts",
+          "scripts/deploy-worker.ts",
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (cache save per run key, marker after restore, failed runs keep all entries)",
+        "paths": [".github/workflows/ci.yml", "scripts/ci-cache.ts", "docs/CI.md"]
+      },
+      {
+        "risk": "Security (CA mounted only as a BuildKit secret, no new secrets in logs or env)",
+        "paths": ["scripts/deploy-worker.ts", "docs/deployment/CORE-TEST-DEPLOYMENT.md"]
+      },
+      {
+        "risk": "Build and runtime environment (grep available in image, tempod path, TEMPO_BUILD_ID in Turbo task hash, Effect 4 Schema API)",
+        "paths": ["container/Dockerfile", "turbo.json", "packages/tempod/package.json", "bun.lock"]
+      },
+      {
+        "risk": "Tests (no sleeps; waitFor polls observable CI state; unit tests assert outcomes; scripts tests picked up by scripts/test.ts)",
+        "paths": [
+          "scripts/ci-cache.test.ts",
+          "scripts/test.ts",
+          "tests/e2e/tests/forge-demo.spec.ts",
+          "tests/e2e/tests/lib/util.ts",
+          "tests/e2e/tests/lib/flows.ts"
+        ]
+      },
+      {
+        "risk": "Spec (PR_NOT_MERGEABLE for merged PR and gate, native merge methods, CI doc rules, implementation notes)",
+        "paths": [
+          "docs/09 Git Forge.md",
+          "docs/10 Project CI.md",
+          "docs/02 Data and API.md",
+          "docs/CI.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "CLAUDE.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,100p .github/workflows/ci.yml && cat scripts/ci.ts | head -60 && grep -n \"buildId\\|TEMPO_BUILD_ID\" scripts/deploy-worker.ts | head -20 && grep -rn \"TEMPO_BUILD_ID\\|--env\" packages/tempod/package.json container/Dockerfile | head; grep -n \"tempod\\|grep\" container/Dockerfile | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat turbo.json | head -80; grep -rn \"noPropertyAccessFromIndexSignature\" tsconfig*.json packages/tempod/tsconfig.json; grep -rn \"process.env\\.[A-Z]\" packages/tempod/src | head -5; grep -n \"ci-cache\\|scripts/\" scripts/test.ts | head; ls node_modules/turbo* -d 2>/dev/null; node -p \"require('turbo/package.json').version\" 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/turbo.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "noPropertyAccessFromIndexSignature|ci-cache|scripts/\\*|\\.test\\.ts",
+        "glob": "{tsconfig*.json,scripts/test.ts,package.json,packages/tempod/tsconfig.json}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/turbo*/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"turbo\"' package.json bun.lock | head -3; ls node_modules/.bin | grep -i turbo; ls node_modules | grep -i turbo"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"effect\"' package.json bun.lock | head -5; grep -rln \"fromJsonString\" --include=*.ts packages apps scripts 2>/dev/null | head; grep -rn \"decodeUnknownOption\" --include=*.ts packages scripts | head -3; ls ~/.bun/install/cache 2>/dev/null | grep -E \"^(turbo|effect)\" | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "fromJsonString|\"effect\": \\[|\"effect\":",
+        "glob": "{package.json,bun.lock,packages/**/*.ts,scripts/*.ts}",
+        "output_mode": "content",
+        "head_limit": 15
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "turbo|summarize|cache-dir",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"(typecheck|lint|test:ci|format:check|build:tempod)\":",
+        "glob": "{package.json,tests/e2e/package.json}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "for n in createRepository getRepository updateCiPipeline listCiRuns getCiRun getCiJobLog getRepositoryPullRequest listCheckRuns mergePullRequest updateRepositoryPullRequest listRepositoryCommits createPullRequest; do printf \"%s \" $n; grep -rlw \"$n\" packages/protocol/src | wc -l; done; grep -rn \"PR_NOT_MERGEABLE\" docs/*.md | head -8"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\b(createRepository|getRepository|updateCiPipeline|listCiRuns|getCiRun|getCiJobLog|getRepositoryPullRequest|listCheckRuns|updateRepositoryPullRequest|listRepositoryCommits)\\b\\s*[:=(]",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/packages/protocol/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "PR_NOT_MERGEABLE",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "updateRepositoryPullRequest|reopen",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "merged.*PR_NOT_MERGEABLE|PR_NOT_MERGEABLE.*merged",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps",
+        "output_mode": "content",
+        "-C": 2
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "state === \"merged\"|\\.merged|\"merged\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/app/src",
+        "output_mode": "content",
+        "glob": "!**/ui/**",
+        "-C": 2,
+        "head_limit": 40
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "merged.{0,80}PR_NOT_MERGEABLE|PR_NOT_MERGEABLE.{0,80}merged|cannot reopen|can't reopen",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85",
+        "output_mode": "content",
+        "glob": "*.ts",
+        "-i": true,
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "updateRepositoryPullRequest|updatePullRequest\\b",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85",
+        "glob": "!{tests/**,docs/**,**/*.test.ts,**/*.cases.ts,**/protocol/**,**/ui/**}",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "merged",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/tempo/src/server",
+        "output_mode": "content",
+        "glob": "!**/*.test.ts",
+        "-n": true,
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "state === \"merged\"|\"merged\"\\)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 3,
+        "head_limit": 40
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/packages/protocol/src/api.ts",
+        "offset": 94,
+        "limit": 72
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "kind: Schema.Literal\\(\"new\"\\)|createWorkspace:",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/packages/protocol/src",
+        "output_mode": "content",
+        "-A": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export (const|async function|function) (rpcFails|rpcRetry|requireChannels|allowOption|answerPermissionsUntilEnd|readySession|cleanupTest|sh|nonce|waitFor|env|ENABLED|SKIP_REASON)\\b.*",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/tests/e2e/tests/lib",
+        "output_mode": "content",
+        "-A": 4
+      }
+    }
+  ]
+}

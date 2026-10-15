@@ -1,0 +1,54 @@
+{
+  "case": "S4",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "b0fb1293df8bf25e2e3fa593fbb51836e2ac760c",
+  "diffBytes": 615,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 20.9,
+  "usage": {
+    "prompt_tokens": 117296,
+    "completion_tokens": 1495,
+    "cost": 0.1895388
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff deletes the early return in prepareArtifactMerge for a pull request that is already merged. A call on a merged pull request now throws PR_NOT_MERGEABLE when it used to return { pullRequest, mergeSha }. That breaks the rule that every op step can run again safely (CLAUDE.md rule 5). It also breaks an existing test that the diff leaves unchanged. The same check is still done after a failed update further down, which shows the merged-state return is meant to be there. The request asks to simplify merge preparation, not to change what it does, and no spec or IMPLEMENTATION_NOTES change comes with it (rule 16).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 320,
+        "text": "Removing `if (pullRequest.state === \"merged\" && pullRequest.mergeSha) return { pullRequest, mergeSha }` means a second call on a merged pull request now throws PR_NOT_MERGEABLE. The git.merge op step in apps/tempo/src/do/workspace/steps.ts (~line 746) relies on the `\"mergeSha\" in merge` result to finish quietly when the merge already happened. One case is an op run again without pushedMergeSha in its state or input after the merge completed, for example after a lost ack or a second merge request. That run now fails the op instead of marking prState merged. This breaks rule 5 (every op step is idempotent and checks state before it acts). It also leaves the code inconsistent: the same merged check is kept on the path after a failed update (lines ~343-346) but removed at the start.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "line": 364,
+        "text": "The existing test expects `prepareArtifactMerge` on a merged pull request to equal `{ pullRequest: merged, mergeSha: MERGED }`. With this diff the call rejects with PR_NOT_MERGEABLE, so `bun run test` fails (rule 15). The diff neither updates the test nor justifies the change.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 320,
+        "text": "This is a change in behavior, not a simplification, and it comes with no spec or docs/IMPLEMENTATION_NOTES.md update. Rule 16 requires a behavior change to update the spec in the same pull request.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 290,400p apps/tempo/src/artifacts/pull-requests.ts; grep -rn \"prepareArtifactMerge\" --include=*.ts . | grep -v node_modules; grep -rn -i \"already merged\\|mergeSha\" docs | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 335,390p apps/tempo/test/worker/native-pull-requests.cases.ts; sed -n 725,790p apps/tempo/src/do/workspace/steps.ts"
+      }
+    }
+  ]
+}

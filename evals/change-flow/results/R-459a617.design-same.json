@@ -1,0 +1,220 @@
+{
+  "case": "R-459a617",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 14,
+  "seconds": 118.0,
+  "usage": {
+    "prompt_tokens": 1088320,
+    "completion_tokens": 10197,
+    "cost": 0.5387727999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Adds Codex device-code login (startCodexLogin/pollCodexLogin/cancelCodexLogin), handled in CredentialDO, with web and Mac UI and updates to spec tabs 01, 02, 04 and 07. Read statically: the server state machine is serialized and the attempt-identity check before saving is synchronous with the write, so cancel, removal or a manual upload cannot be overwritten by an in-flight exchange. Upstream bodies and tokens never reach errors or logs. The functions are owner-scoped and require authentication. Wire types live in packages/protocol and match the generated Rust. Web and Mac call real APIs with matching signatures. I could not run the tests, typecheck or cargo check because those commands needed approval, so this verdict comes from reading the code against the real signatures. The OpenAI device-auth contract has no vendored source in the repo, only the spec text added here. Non-blocking notes are below.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/lib/codex-login.ts",
+        "line": 3,
+        "text": "The upstream contract (endpoints, 403/404 meaning pending, response field names, client ID) cannot be checked in the repo: no codex-rs source is vendored, and the only reference is the spec paragraph this change adds. The worker tests fake fetch with the shapes the code expects, so they cannot show that the real auth.openai.com behaves this way. The spikes are recorded as not run in IMPLEMENTATION_NOTES.md. A live device login, or reading codex-rs login/device_code_auth, would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "// Matches codex-rs/login's device_code_auth and auth::CLIENT_ID.",
+          "why": "This is a claim of matching upstream behavior, and no source or generated type in the repo backs it up."
+        }
+      },
+      {
+        "path": "apps/tempo/test/ui/components/codex-login.test.tsx",
+        "line": 49,
+        "text": "This test uses real timers: two 1000 ms polls must finish inside waitFor budgets of 2000 and 3000 ms. It could be flaky on a loaded runner. Fake timers, or a smaller intervalMs, would remove that.",
+        "blocking": false,
+        "evidence": {
+          "quote": "{ timeout: 3000 },",
+          "why": "The budget depends on wall-clock time, not on waiting for observable state."
+        }
+      },
+      {
+        "path": "apps/tempo/src/do/credential.ts",
+        "line": 292,
+        "text": "An auth.json upload made while a device login is pending clears the attempt. The web CodexDeviceLogin component keeps polling, gets 'expired', and shows 'Codex login expired' even though the upload succeeded. This is a UX issue, not a data issue.",
+        "blocking": false,
+        "evidence": {
+          "quote": "this.codexLogin = null;",
+          "why": "replaceCodexAuth invalidates the attempt, and the poller in the other component reports this as an expiry error."
+        }
+      },
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 224,
+        "text": "The Mac upload clears the pasted auth.json before the request finishes. If the save fails, the user must paste it again. Minor.",
+        "blocking": false,
+        "evidence": {
+          "quote": ".update(cx, |input, cx| input.set_value(\"\", window, cx));",
+          "why": "The input is cleared before SetCodexAuth resolves."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: DO RPC Result/capture/unwrap, Handler/runFn signatures, web call/invalidateCalls, Mac tempo_client::Client::call, WorkspaceStore.clear_credential_invalid, generated Rust types; OpenAI endpoints unverifiable in repo",
+        "paths": [
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/lib/codex-login.ts",
+          "packages/protocol/src/errors.ts",
+          "apps/tempo/src/server/run.ts",
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "apps/tempo/src/server/registry.ts",
+          "apps/tempo/src/ui/lib/api.ts",
+          "apps/tempo/src/ui/hooks/useCall.ts",
+          "crates/tempo-client/src/server.rs",
+          "crates/tempo-client/src/state/workspace.rs",
+          "apps/mac/src/app.rs",
+          "apps/mac/src/stores/workspace.rs",
+          "crates/tempo-protocol/src/generated.rs",
+          "apps/mac/src/views/settings.rs"
+        ]
+      },
+      {
+        "risk": "Failure paths: upstream errors map to CREDENTIAL_INVALID; the attempt is cleared on error; the poller stops on error or expiry in web and Mac; an existing login is kept on failure",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx",
+          "apps/mac/src/views/settings.rs"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: login lock, repeated start returns the active attempt, nextPollAt throttle, identity re-checks around seal/store, cancel/delete/replace invalidation, connected is idempotent; offerCodexAuth ordering by lastRefresh",
+        "paths": ["apps/tempo/src/do/credential.ts"]
+      },
+      {
+        "risk": "Security: owner-scoped CredentialDO by user id, runFn requireOwner, no tokens in responses/errors/logs, redirect:error, encrypted storage, nothing in browser storage, no container involvement",
+        "paths": [
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "apps/tempo/src/server/run.ts",
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/do/credential.ts"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment: no image or container changes; Worker fetch only",
+        "paths": ["apps/tempo/wrangler.jsonc"]
+      },
+      {
+        "risk": "Tests: mock clearing between cases (setup.ts clearAllMocks), fetch spy reaches the same-isolate DO under vitest-pool-workers, real-timer budgets in the UI test",
+        "paths": [
+          "apps/tempo/test/ui/components/codex-login.test.tsx",
+          "apps/tempo/test/ui/components/setup.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/test/worker/codex-login.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: tabs 01, 02, 04 and 07 updated in the same change; behavior matches (15-minute TTL, 1 s minimum interval, 15 s request bound, Reconnect label, banner clearing, Mac opens the default browser)",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/07 Mac Client.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "CLAUDE.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && grep -rn \"export const capture\\|export const unwrap\\|export function capture\\|export function unwrap\" packages/protocol/src | head; grep -n \"forgetInvalid\" -r apps/tempo/src | head; grep -rn \"clearMocks\\|mockReset\\|restoreMocks\" apps/tempo/vitest* apps/tempo/test/*.ts 2>/dev/null | head; ls apps/tempo; grep -n \"const creds\\|function creds\" -A4 apps/tempo/src/server/handlers/credentials.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/vitest.components.config.ts apps/tempo/vitest.ui.config.ts; sed -n 95,130p packages/protocol/src/errors.ts; sed -n 40,60p apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx; cat package.json | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/test/ui/components/setup.ts; cat apps/tempo/package.json | grep -n test"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo && timeout 300 npx vitest run test/worker/codex-login.test.ts 2>&1 | tail -30; timeout 200 npx vitest run -c vitest.components.config.ts test/ui/components/codex-login.test.tsx 2>&1 | tail -20",
+        "timeout": 600000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo && timeout 300 npx vitest run test/worker/codex-login.test.ts",
+        "timeout": 400000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"export const runFn\\|export async function runFn\" -A12 apps/tempo/src/server/run.ts; grep -rn \"fn clear_credential_invalid\\|pub fn call\\b\\|pub fn call<\" apps/mac crates | head; grep -n \"pub struct SetCodexAuthIn\" -A4 crates/tempo-protocol/src/generated.rs; grep -n \"fn client\" -A5 apps/mac/src/app.rs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 440,480p crates/tempo-client/src/server.rs; grep -rn \"workspaces\" apps/mac/src/app.rs | head -5; grep -rn \"\\.state\\b\" apps/mac/src/views/*.rs | grep -n \"workspace\" | head -3; grep -rn \"client.call::<\" apps/mac/src | grep -v settings.rs | head -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"pub state\\|pub struct WorkspaceStore\" -A3 apps/mac/src/stores/workspace.rs | head; grep -rn \"aria_label\\|Disableable\\|InputState::new\\|set_value(\" apps/mac/src | grep -v settings.rs | head -6; grep -n \"pub struct CredentialStatus\\b\" -A12 crates/tempo-protocol/src/generated.rs | head -14"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "deviceauth|app_EMoamEEZ73f0CkXaXp7hrann",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"Codex\\|codex\" docs/IMPLEMENTATION_NOTES.md | head -20; sed -n 120,175p apps/tempo/src/server/handlers/credentials.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"deleteCredential = \" -A16 apps/tempo/src/server/handlers/credentials.ts; grep -n \"SECRET_KEYS = \" -A8 apps/tempo/src/do/credential.ts; grep -n \"setCodexAuth = \" -A20 apps/tempo/src/server/handlers/credentials.ts | head -25"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"parseCodexAuth = \\|function parseCodexAuth\" -A14 apps/tempo/src | head -20; grep -n \"async offerCodexAuth\" -A16 apps/tempo/src/do/credential.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rln \"spyOn(globalThis, \\\"fetch\\\")\" apps/tempo/test/worker | head; grep -n \"main\\|durable_objects\\|class_name\" apps/tempo/wrangler.jsonc | head; grep -n \"poolOptions\\|wrangler\\|main\" apps/tempo/vitest.config.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"export const call\\|export async function call\\|export function call\" apps/tempo/src/ui/lib/api.ts; grep -n \"export const invalidateCalls\\|export function invalidateCalls\" -A4 apps/tempo/src/ui/hooks/useCall.ts"
+      }
+    }
+  ]
+}

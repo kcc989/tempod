@@ -1,0 +1,84 @@
+{
+  "case": "S4",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "b0fb1293df8bf25e2e3fa593fbb51836e2ac760c",
+  "diffBytes": 615,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 32.6,
+  "usage": {
+    "prompt_tokens": 167284,
+    "completion_tokens": 2670,
+    "cost": 0.2478168
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change deletes the early return in prepareArtifactMerge that handled a PR already marked merged. With it gone, preparing an already-merged PR throws PR_NOT_MERGEABLE when it used to return the stored mergeSha. That breaks three things. (1) The existing worker test 'prepares only open merges ... with stable retries' expects prepareArtifactMerge on a merged PR to return {pullRequest, mergeSha}, so it now fails (read, not run). (2) Retries break. A merge_pr operation that is not resuming a recorded push reaches prepareArtifactMerge with nothing to resume from: a retried merge action after a lost result, or a second request for the same merge. On an already-merged PR it now fails. It never reaches the code that sets the workspace prState to merged, so a workspace whose earlier attempt finished the D1 merge but not that update stays wrong. (3) Spec 09 says 'Retrying the action reconciles an already-pushed result before attempting another merge', and no spec change is included (CLAUDE.md rule 16). The similar check after a failed update, inside the `if (!updated)` branch, only runs for a PR that is open when first read, so it does not replace the deleted one.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 320,
+        "text": "Preparing a PR that is already merged now throws PR_NOT_MERGEABLE instead of returning the stored mergeSha. Retrying a merge is no longer safe.",
+        "blocking": true,
+        "evidence": {
+          "quote": "  if (pullRequest.state !== \"open\") throw new TempoError(\"PR_NOT_MERGEABLE\");",
+          "why": "This line now runs first for a merged PR (state 'merged', mergeSha set) and throws. In steps.ts, git.merge calls `const merge = await prepareArtifactMerge(core.env, project, number);` whenever there is no pushedMergeSha in the operation's state or input. It relied on the `\"mergeSha\" in merge` result to skip the tempod merge and still run `core.updateWs({ prState: \"merged\", checksState: null })`. A retried merge action now fails, and the workspace prState is never reconciled. That contradicts 09 Git Forge.md: 'Retrying the action reconciles an already-pushed result before attempting another merge.'"
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "line": 364,
+        "text": "The existing test of the merged-PR retry still expects the old result, so the suite now fails. The change does not update the test or the spec.",
+        "blocking": true,
+        "evidence": {
+          "quote": "    expect(await prepareArtifactMerge(s.env, s.project, pr.number)).toEqual({",
+          "why": "This test runs completeArtifactMerge first, so the PR is merged when it calls prepareArtifactMerge, and it expects {pullRequest: merged, mergeSha: MERGED}. At the head commit that call rejects with PR_NOT_MERGEABLE, so `bun run test` fails (CLAUDE.md rule 15)."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Idempotency and state: retrying a merge after a lost result or a partial failure",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts", "apps/tempo/src/do/workspace/steps.ts"]
+      },
+      {
+        "risk": "Failure paths: is the merged state still handled by the check that runs after a failed update",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts"]
+      },
+      {
+        "risk": "Tests: existing tests that cover the removed branch",
+        "paths": ["apps/tempo/test/worker/native-pull-requests.cases.ts"]
+      },
+      {
+        "risk": "Spec: native merge retry and reconciliation rules",
+        "paths": ["docs/09 Git Forge.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Real contracts, security, build/runtime environment: not affected (the change only removes 3 lines in a TypeScript function and adds no calls, secrets or image changes)",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 b0fb1293 && sed -n 280,420p apps/tempo/src/artifacts/pull-requests.ts && grep -rn \"prepareArtifactMerge\" --include=*.ts . | grep -v node_modules"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 700,820p apps/tempo/src/do/workspace/steps.ts; sed -n 330,395p apps/tempo/test/worker/native-pull-requests.cases.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls docs; grep -rn -i \"already merged\\|mergeSha\\|git.merge\" docs | head -30; grep -rn \"prepareArtifactMerge\\|already merged\" docs/IMPLEMENTATION_NOTES.md | head"
+      }
+    }
+  ]
+}

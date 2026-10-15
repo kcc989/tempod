@@ -1,0 +1,71 @@
+{
+  "case": "R-459a617",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 4,
+  "seconds": 51.2,
+  "usage": {
+    "prompt_tokens": 353742,
+    "completion_tokens": 3958,
+    "cost": 0.1905688
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Codex device-code login is added end to end: protocol schema, fixtures and generated Rust types; CredentialDO start/poll/cancel; server functions and registry; web Logins tab; Mac Settings; and spec updates to 01, 02, 04 and 07 in the same PR. CredentialDO keeps one attempt in memory per owner and runs start and poll one at a time. A cancel, removal or manual upload stops an attempt, including an in-flight exchange. Tokens are encrypted before saving and never appear in errors. Upstream requests have time limits and honor the poll interval. Worker tests use vitest-pool-workers and, with the UI tests, cover the main paths. Typecheck, lint and tests were not run (read-only review). No blocking issues found; three minor UX notes.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 224,
+        "text": "upload_codex clears the auth.json input before SetCodexAuth returns. If the call fails (for example VALIDATION_FAILED), the owner has to paste the file again. Consider clearing it only on success.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 236,
+        "text": "The Mac Codex card shows only Set / Not set. 04 says each login shows set or not set and last updated; the web row shows updatedAt and lastRefresh. 07 says Logins should be the same on both, so the Mac version falls short.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/credential.ts",
+        "line": 140,
+        "text": "Any non-pending upstream error during polling (such as a single 5xx) clears the attempt, so the client has to start a new login and get a new code. This matches the spec's wording but is unforgiving of brief upstream errors. Consider keeping the attempt on 5xx.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; git log --oneline -2; grep -rn \"export const capture\\|export const unwrap\\|export function capture\\|export function unwrap\\|export type Result\" packages/protocol/src | head; grep -n \"forgetInvalid\" -r apps/tempo/src | head; grep -rn \"fn clear_credential_invalid\" apps crates | head; ls docs; grep -n -i \"codex\" docs/IMPLEMENTATION_NOTES.md | head",
+        "description": "Check helpers and references exist"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; grep -n \"pub fn client\\|pub workspaces\\|fn try_global\" -r apps/mac/src/app* | head; grep -rn \"pub state\" apps/mac/src | head -5; sed -n 80,125p packages/protocol/src/errors.ts; grep -n \"CREDENTIAL_INVALID\\|deviceauth\\|outbound\\|fetch\" \"docs/05 Security and Ops.md\" | head -20",
+        "description": "Check Mac app state API and error helpers"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; grep -rln \"Disableable\\|InputState::new\\|aria_label\" apps/mac/src | head; grep -rn \"fn aria_label\\|fn placeholder\\|fn set_value\" $(find / -path /proc -prune -o -type d -name \"gpui*kit*\" -print 2>/dev/null | head -3) 2>/dev/null | head",
+        "description": "Check gpui_kit API usage elsewhere"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Disableable|InputState::new|aria_label|open_url",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/src",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

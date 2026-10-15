@@ -1,0 +1,191 @@
+{
+  "case": "C-bfb05a8",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "bfb05a8457a01e04a5a4671db947f7ca4c4f4085",
+  "diffBytes": 16681,
+  "diffCut": false,
+  "steps": 14,
+  "seconds": 105.0,
+  "usage": {
+    "prompt_tokens": 592985,
+    "completion_tokens": 7688,
+    "cost": 0.49775939999999996
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Recommend merge; no blocking findings, and I ran nothing myself (running Bun needed approval). The test fix replaces a fixed 100 ms sleep with a gate on the fake's real /v1/connect response, copying the existing holdHealth pattern; the DO's reconnect waits on that fetch with no timeout of its own, and cleanup releases the gate if the test fails. The filtered Bun installs (tempo plus @tempo/tempod) cover everything the daemon's source and tests import and the root scripts the image workflow runs. Docs-only PRs install only root tools, which is all lint/format with the anti-slop plugin needs. Code PRs still install every workspace. Spec tab 06 and CI.md are updated in the same change. One non-blocking item: I did not run the filtered installs.",
+    "findings": [
+      {
+        "path": "container/Dockerfile.test",
+        "line": 11,
+        "text": "Not blocking. I did not run the filtered install, so I have not confirmed that Bun 1.4.2's `--filter` installs the external dependencies of the daemon's workspace dependencies (ulid for @tempo/protocol, yaml for @tempo/settings) along with the frozen lockfile. The author reports one local run: 251 packages installed and 154 daemon tests passing. The image workflow runs only on main, so a gap would appear after merge, not in PR CI. To confirm: run `bun install --frozen-lockfile --filter tempo --filter @tempo/tempod` in a clean copy, check that packages/protocol and packages/settings resolve ulid and yaml, then dispatch the image workflow.",
+        "blocking": false,
+        "evidence": {
+          "quote": "bun install --frozen-lockfile --filter tempo --filter @tempo/tempod",
+          "why": "This depends on Bun installing the external dependencies of transitively linked workspaces. That is Bun's documented behavior, but I did not run it in this check."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: the DO reconnect path calls the fake's /v1/connect through getTcpPort().fetch. Checked that there is no fetch timeout and that concurrent callers share one attempt, so holding the response cannot cause duplicate sockets or a lost connection.",
+        "paths": [
+          "apps/tempo/src/do/workspace/tempod-client.ts",
+          "apps/tempo/src/do/workspace/container.ts",
+          "apps/tempo/test/worker/fakes.ts"
+        ]
+      },
+      {
+        "risk": "Tests: replaced sleep with observable state, gate cleanup on failure, double release is harmless, the 'no prompt' assertion is meaningful (the new session had sent no prompts before the close), and each concurrent case uses its own fixture.",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts", "apps/tempo/test/worker/fakes.ts"]
+      },
+      {
+        "risk": "Build/runtime environment: dependencies needed by the filtered installs (daemon imports, root scripts check:versions/build:tempod, turbo config, image COPY inputs, ignore file).",
+        "paths": [
+          "package.json",
+          "packages/tempod/package.json",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "turbo.json",
+          "scripts/test-tempod-container.ts",
+          "container/Dockerfile",
+          "container/Dockerfile.test",
+          ".dockerignore",
+          ".github/workflows/container-test.yml",
+          "packages/tempod"
+        ]
+      },
+      {
+        "risk": "Failure paths and fail-closed CI classification: docs-only install branch, skipping the Playwright version read only when Chromium steps are skipped, and full install for code PRs or an unavailable base.",
+        "paths": [".github/workflows/ci.yml", "scripts/ci.ts"]
+      },
+      {
+        "risk": "Security: no secrets, credentials or container env changes in this diff.",
+        "paths": [
+          ".github/workflows/ci.yml",
+          ".github/workflows/container-test.yml",
+          "container/Dockerfile.test"
+        ]
+      },
+      {
+        "risk": "Spec/rules: CI behavior change reflected in tab 06 and CI.md in the same change; no new dependencies or version changes; CI timing evidence included.",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "docs/CI_PLAYBOOK.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8; git rev-parse HEAD; cat package.json; cat packages/tempod/package.json; sed -n 1,80p .github/workflows/ci.yml; cat .github/workflows/container-test.yml; cat container/Dockerfile.test; grep -n \"holdHealth\\|healthGate\\|onHealthProbe\" -r apps/tempo/test | head -30",
+        "description": "Inspect manifests, workflows, and fake usage"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8; cat scripts/test-tempod-container.ts; grep -n \"docs-only\\|docsOnly\" -A15 scripts/ci.ts | head -60; bun --version; grep -rn \"import\" packages/tempod/src packages/tempod/test 2>/dev/null | grep -o \"from \\\"[^\\\".][^\\\"]*\\\"\" | sort | uniq -c | sort -rn | head -30",
+        "description": "Read container test script, ci docs path, tempod imports"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/scripts/test-tempod-container.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "docs-only|docsOnly",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/scripts/ci.ts",
+        "output_mode": "content",
+        "-C": 8
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"[^.][^\"]*\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/packages/tempod",
+        "output_mode": "content",
+        "-o": true,
+        "-n": false
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"\\.\\./\\.\\./|\"\\.\\./\\.\\./\\.\\.|apps/|tests/e2e",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/packages/tempod",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat turbo.json packages/protocol/package.json packages/settings/package.json",
+        "description": "Read turbo config and dependency manifests"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^import",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/container",
+        "output_mode": "content",
+        "glob": "*.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"COPY\\|bun install\\|node_modules\" container/Dockerfile; cat .dockerignore",
+        "description": "Check image Dockerfile copies and dockerignore"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "v1/connect",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 12
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "openTempodSocket\\(|reconnect",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/apps/tempo/src/do",
+        "output_mode": "content",
+        "-C": 4
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/apps/tempo/test/worker/fakes.ts",
+        "offset": 60,
+        "limit": 160
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version",
+        "description": "Show installed Bun version"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 2755,
+        "limit": 45
+      }
+    }
+  ]
+}

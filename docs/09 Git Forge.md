@@ -68,9 +68,21 @@ Artifacts provides Git storage, not pull requests. D1 table `pull_requests` owns
 - The daemon adds `git.merge` with `{baseBranch, headBranch, method: merge \| squash, headSha, baseSha, operationId}` → `{commitSha}`. It fetches the exact remote tips, validates expected SHAs, computes the merge using Git object operations and pushes with compare-and-swap protection for the base tip. It MUST leave the current branch, user's files and index unchanged. Conflicts or changed tips fail before pushing. The operation identifier permits retry after a lost push acknowledgement without creating another merge.
 - Native merges reserve a durable `merge_pr` operation with one `git.merge` step (five minute timeout, one attempt). The caller awaits its Result. While it is pending or running, prompt execution and sleep/archive admission obey the existing operation runner's exclusion rules. A merge failure does not change the workspace lifecycle state. Retrying the action reconciles an already-pushed result before attempting another merge.
 - Mark the PR merged only after the target ref is confirmed pushed. Record `merge_sha` and `merged_at`. A successful remote push with a lost metadata acknowledgement must be recoverable on retry. Closing a PR never changes a Git ref.
+- Proposed (08, Verification): when the merge is confirmed pushed, the merging WorkspaceDO emits `tempo.pr.merged` once, also after a recovered lost acknowledgement.
 - `git.deleteBranch` `{branch}` → `{}` performs native archive deletion through Git transport. Both new daemon operations have explicit deadlines below their protocol timeout and tests in the pinned container.
 - The updated daemon is version `0.2.0`, matching the Worker release. New native Git operations require its rebuilt image; old GitHub-only containers retain their existing operations until sleep/restart.
 - Native branch deletion runs before container shutdown. If branch deletion is enabled and a native workspace is already sleeping, archive fails before changing state with `WORKSPACE_BUSY` and asks the owner to wake it and retry. It never silently skips the configured deletion.
+
+## Change metrics
+
+**Status: proposed on 2026-10-15. Not implemented.** It measures whether verification pays for itself: fix PRs for each feature PR, and the owner's minutes, agent tokens and CI minutes for each merged change.
+
+- `pull_requests` gains `fixes_number` (nullable integer), the number of an earlier merged PR of the same project that this PR fixes. `createRepositoryPullRequest` and `updateRepositoryPullRequest` accept `fixesNumber?`. A body line `Fixes #<n>` sets it when the field is absent. The PR prompt for agents asks for the line when the change fixes a merged PR. The owner can set or clear it in PR detail.
+- Owner minutes: each client sends `recordAttention {workspaceId, headSha, surface, ms}` at most once a minute while the Guide, a diff or the PR detail of that head is visible and the window has focus. `surface` is `guide`, `diff` or `pr`; `ms` is at most 60,000. The WorkspaceDO adds it to its `attention(head_sha, surface, ms)` table. No content is sent.
+- Tokens: the sum of `usage.totalTokens` of `agent.turn.ended` for the changes that pushed the PR's commits, split into author turns and run turns by `runId`.
+- CI minutes: the sum of job durations (`completedAt - startedAt`) of the project CI runs for the PR's head SHAs, from `RepositoryCiDO`.
+- `getChangeMetrics {projectId, since?, offset?}` → at most 50 `ChangeMetrics` rows, newest merge first: `prNumber`, `mergedAt`, `tier` (nullable), `fixesNumber` (nullable), `fixedBy` (PR numbers), `ownerMinutes`, `authorTokens`, `runTokens`, `ciMinutes`, `gateHolds` (the count of `closed` states), `guideAcknowledged`. Both clients show a Metrics section in the repository view with the totals for the last 7 and 30 days.
+- Until it ships, `evals/change-flow` reports the same numbers from Git history and the replay results.
 
 ## Tempo issues
 

@@ -1,0 +1,81 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 28.8,
+  "usage": {
+    "prompt_tokens": 186173,
+    "completion_tokens": 2261,
+    "cost": 0.1516866
+  },
+  "report": {
+    "status": "pass",
+    "summary": "No blocking issues. Claude's default mode is now `auto` everywhere it is set: spec 01 Agents table, the Workspace DO (queue.ts), the web and Mac plan-mode toggles (rule 17 is met), and the conformance harness and README. The recorded adapter output (docs/evidence/core/claude.json) lists `auto`. The new turn-summary text matches between spec 01 and TURN_SUMMARY_RULE, and worker tests use the constant. The tests that checked for `bypassPermissions` were updated. IMPLEMENTATION_NOTES records the owner's decision. Three small issues remain. Review was read-only; typecheck, lint and tests were not run.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/chat_model.rs",
+        "line": 1536,
+        "text": "The Mac plan-toggle test covers only Codex and Pi. No Mac test checks that leaving plan mode for a Claude session returns to `auto`, although the web logic test does. Add a Claude case so the changed line has a test.",
+        "blocking": false
+      },
+      {
+        "path": "docs/01 Runtime and Agents.md",
+        "line": 104,
+        "text": "This line still explains IS_SANDBOX=1 by saying Claude Code hides `bypassPermissions` for root. That mode is no longer the default, so update the reason or confirm it still applies.",
+        "blocking": false
+      },
+      {
+        "path": "docs/IMPLEMENTATION_NOTES.md",
+        "line": 481,
+        "text": "The note says that if an adapter does not offer `auto`, tempod logs the failed mode change and keeps the current mode. Spec 01 does not state this for modes; it only gives that fallback for model and reasoning level. Point to where this behavior is specified or implemented.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "bypassPermissions",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"auto\"|end every turn|checks you ran",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "plan_target|bypass",
+        "path": "apps/mac",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 35,80p docs/evidence/core/claude.json; grep -rn \"TURN_SUMMARY_RULE\" --include=*.ts --include=*.rs . | grep -v node_modules | head",
+        "description": "View Claude evidence modes and find rule usages"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1525,1550p apps/mac/src/views/chat_model.rs; grep -n -i \"mode\" \"docs/01 Runtime and Agents.md\" | grep -i -E \"fail|not offer|keeps|current mode\" | head",
+        "description": "View Mac plan test and spec mode failure behavior"
+      }
+    }
+  ]
+}

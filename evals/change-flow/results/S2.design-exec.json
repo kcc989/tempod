@@ -1,0 +1,84 @@
+{
+  "case": "S2",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5770819eb7eea0219eecaa4e0176daaa1e2837e1",
+  "diffBytes": 718,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 31.5,
+  "usage": {
+    "prompt_tokens": 171782,
+    "completion_tokens": 2516,
+    "cost": 0.2468532
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change lets a required CI job with conclusion `skipped` pass the native merge gate. That goes against docs/10 Project CI.md, which requires every required job to be `success`. Jobs are marked `skipped` exactly when one of their needs failed, so a failing dependency now opens the gate for merges. No spec or IMPLEMENTATION_NOTES change goes with it (CLAUDE.md rule 16).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "The merge gate now treats a `skipped` required job as passed. The spec requires `success`, and `skipped` is the conclusion the runner gives a job whose need failed. So when a dependency of a required job fails or times out, the merge is allowed.",
+        "blocking": true,
+        "evidence": {
+          "quote": "jobs.some((job) => job.key === key && job.status === \"completed\" && (job.conclusion === \"success\" || job.conclusion === \"skipped\")),",
+          "why": "docs/10 Project CI.md:172: 'a native merge needs the newest run for the exact head SHA and the current revision, with every `required` job `success`.' docs/10 Project CI.md:84: 'If a need ends without success, the job completes as `skipped`.' This is implemented at repository-ci.ts:531-532 (`if (needs.some((need) => need?.status === \"completed\" && need.conclusion !== \"success\")) { this.completeJob(job, \"skipped\", ...`). Example: required job `deploy` needs `test`. `test` fails, so `deploy` becomes skipped and mergeBlock returns null, letting the merge through. The spec is unchanged and IMPLEMENTATION_NOTES records no deviation, which breaks CLAUDE.md rule 16. It also conflicts with CLOUDFLARE-CODE-HOSTING-PLAN.md:108 ('Empty, unknown, incomplete, cancelled, or stale required results cannot grant merge permission')."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/project-ci.cases.ts",
+        "line": 256,
+        "text": "Not blocking: none of the mergeBlock assertions (lines 256-291) has a required job ending as `skipped`. I didn't read the setup around those assertions to rule it out fully. With the spec's gate, the right test is a required job left skipped by a failed need, expecting mergeBlock to return the block message.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "The spec: merge gate rule and job conclusion rules",
+        "paths": [
+          "docs/10 Project CI.md",
+          "docs/CLOUDFLARE-CODE-HOSTING-PLAN.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "docs/02 Data and API.md"
+        ]
+      },
+      {
+        "risk": "Failure paths: guard must fail closed; how `skipped` is produced",
+        "paths": ["apps/tempo/src/do/repository-ci.ts"]
+      },
+      {
+        "risk": "Tests covering mergeBlock",
+        "paths": ["apps/tempo/test/worker/project-ci.cases.ts"]
+      },
+      {
+        "risk": "Repository rules (spec change in same PR)",
+        "paths": ["CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD; sed -n 240,320p apps/tempo/src/do/repository-ci.ts; grep -rn -i \"skipped\\|required check\\|conclusion\" docs/ | head -50",
+        "description": "Show changed code and spec mentions"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff --stat f1b8a672ada10526e1035fd4f3b4a9d7500fe921 5770819eb7eea0219eecaa4e0176daaa1e2837e1; grep -n \"skipped\" apps/tempo/src/do/repository-ci.ts; grep -rn -i \"merge gate\\|skipped\" docs/IMPLEMENTATION_NOTES.md | head; grep -rln \"mergeBlock\" apps/tempo | head",
+        "description": "Check skipped handling and tests"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 515,540p apps/tempo/src/do/repository-ci.ts; grep -n -i \"mergeBlock\\|skipped\\|Required checks\" apps/tempo/test/worker/project-ci.cases.ts",
+        "description": "Show skip path and tests"
+      }
+    }
+  ]
+}

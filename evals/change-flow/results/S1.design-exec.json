@@ -1,0 +1,151 @@
+{
+  "case": "S1",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "0b524cf545d50518420d361fd5cc80b095bd542c",
+  "diffBytes": 1374,
+  "diffCut": false,
+  "steps": 10,
+  "seconds": 54.5,
+  "usage": {
+    "prompt_tokens": 302079,
+    "completion_tokens": 4746,
+    "cost": 0.3290404
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change makes the protected login/config file guard fail open. Every readFile rejection, not just ENOENT, is now recorded as null, the same value as an absent file. If the read fails both before and after a run turn, the guard compares null with null, reports no change, and the run passes without the file ever being read. The spec says changes to protected files fail the run with RUN_ACCESS_VIOLATION, guards must fail closed, and there is no spec change or test.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "Guard fails open: any readFile rejection (transport error, container restart, permission or type error) is treated as 'file absent'. Before the change only SandboxFileError ENOENT was treated that way, and everything else threw RUN_ACCESS_VIOLATION.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const response = await files.readFile(path).catch(() => null);",
+          "why": "prepare stores protectedFileHashes as runGuard:<turnId>, and protectedFilesChanged compares it with a second call using `before[path] !== after[path]`. If readFile rejects for a path at both points, both values are null, so protectedFilesChanged returns false and the run passes without checking the file. If the file was absent before the turn and the agent leaves it in a state where the read throws, the result is also 'unchanged'. The catch in runs.ts:450 and the RUN_ACCESS_VIOLATION branch in queue.ts:694, which turn a failed check into a failed run, can no longer be reached for a rejected read."
+        }
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 19,
+        "text": "The behaviour change is not reflected in the spec (tabs 01 and 08 say protected-file changes fail the run) or in docs/IMPLEMENTATION_NOTES.md, against CLAUDE.md rule 16.",
+        "blocking": false,
+        "evidence": {
+          "quote": "// A file the SDK cannot read counts as absent, so a missing login never blocks a run.",
+          "why": "This states a new policy (an unreadable file counts as absent) that no spec tab allows."
+        }
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "No test covers the guard's error handling. No .test.ts under apps/ mentions protectedFileHashes or the 'could not be checked' path, so nothing pins the ENOENT-only behaviour this change removes. I could not check the real Sandbox SDK error contract because @cloudflare/sandbox is not installed in this worktree. Reading its readFile rejection types would show which errors occur in practice.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Failure paths / guards fail closed",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "apps/tempo/src/do/workspace/queue.ts"
+        ]
+      },
+      {
+        "risk": "Security (protected credential files guard)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/src/do/workspace/runs.ts"]
+      },
+      {
+        "risk": "Spec conformance",
+        "paths": ["docs/08 Events and Agents.md", "docs/01 Runtime and Agents.md", "docs/02 Data and API.md"]
+      },
+      {
+        "risk": "Real contracts (Sandbox SDK Files.readFile errors) \u2014 SDK not installed in this worktree, so not verified",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Tests",
+        "paths": ["apps"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 0b524cf545d50518420d361fd5cc80b095bd542c:apps/tempo/src/agents/protected-files.ts | cat -n; grep -rn \"protectedFileHashes\\|PROTECTED_AGENT_FILES\" apps/tempo/src | grep -v \"^apps/tempo/src/agents/protected-files.ts\"; grep -rln \"RUN_ACCESS_VIOLATION\\|protected\" docs/ | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 335,375p apps/tempo/src/do/workspace/runs.ts; grep -n \"protectedFilesChanged\" -A8 apps/tempo/src/do/workspace/runs.ts | head -30; grep -n -i \"protected\\|RUN_ACCESS_VIOLATION\" docs/0*.md | head -20; grep -rn \"class SandboxFileError\\|ENOENT\" node_modules/@cloudflare/sandbox/dist/*.d.ts 2>/dev/null | head; grep -rln \"protectedFileHashes\\|protected-files\" apps/tempo/test* apps/tempo/src --include=*.test.ts 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/apps/tempo/src/do/workspace/runs.ts",
+        "offset": 330,
+        "limit": 50
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protectedFilesChanged|RUN_ACCESS_VIOLATION",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 4
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(?i)protected (login|file|agent)|RUN_ACCESS_VIOLATION",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/docs",
+        "output_mode": "content",
+        "glob": "0*.md"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"protected\" \"docs/01 Runtime and Agents.md\" | cut -c1-1500"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/node_modules/@cloudflare/sandbox/dist/ 2>/dev/null || ls node_modules/@cloudflare/sandbox/dist/"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "class SandboxFileError|readFile\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/node_modules/@cloudflare/sandbox/dist",
+        "output_mode": "content",
+        "glob": "*.d.ts",
+        "-C": 6
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/@cloudflare/sandbox/**/*.d.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protectedFileHashes|protected-files|could not be checked",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/apps",
+        "glob": "**/*.test.ts",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

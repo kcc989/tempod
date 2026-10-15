@@ -1,0 +1,234 @@
+{
+  "case": "R-de82a91",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "de82a91d26288b4a13ed049ad627394d87d92717",
+  "diffBytes": 42558,
+  "diffCut": false,
+  "steps": 20,
+  "seconds": 118.9,
+  "usage": {
+    "prompt_tokens": 1174110,
+    "completion_tokens": 9931,
+    "cost": 0.6926406
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Test-infrastructure change: the worker, UI and components Vitest suites now run as projects in one `vitest run`; UI and components use vmThreads; most worker event tests run concurrently (maxConcurrency 4) with test-context expect. Concurrent cases are independent: each seeds its own user, project and workspace DO, and the shared seedCounter slug race cannot collide because slug and branch are unique per project. No mocks, globals or hooks are shared. docs/CI.md is updated to match. Typecheck and tests could not run because node_modules is not installed. Two non-blocking concerns: maxWorkers set per project may not be honored by Vitest 4, and short wall-clock deadlines may be tight under concurrency.",
+    "findings": [
+      {
+        "path": "apps/tempo/vitest.config.ts",
+        "line": 5,
+        "text": "maxWorkers: 2 and silent now live only in the per-project configs; the root config sets only projects. If Vitest 4.1.11 treats maxWorkers as root-only, as earlier versions did, each project gets the default worker count, contrary to docs/CI.md ('each project is limited to two workers'), and CI could exceed its budget. To confirm, check ProjectConfig in the installed vitest or the worker count in a CI run.",
+        "blocking": false,
+        "evidence": {
+          "quote": "projects: [\"./vitest.worker.config.ts\", \"./vitest.ui.config.ts\", \"./vitest.components.config.ts\"],",
+          "why": "The root config has no maxWorkers. The per-project values only apply if Vitest supports maxWorkers per project; not verifiable without node_modules."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/workspace-events.test.ts",
+        "line": 704,
+        "text": "With four cases now sharing one workerd isolate, the batch-count bound and the 3-5 s waitFor deadlines are more sensitive to a loaded runner. The ack test bounds acks by count while acks also flush on a 250 ms timer, so slow application of 250 events yields more acks. Not shown to fail; CI timing for the branch would confirm the headroom.",
+        "blocking": false,
+        "evidence": {
+          "quote": "expect(acks.length).toBeLessThan(25);",
+          "why": "Ack batching is time-based as well as count-based (250 ms), so CPU contention from concurrent cases raises the ack count."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: shared state, globals, spies and fixtures under the new describe.concurrent cases",
+        "paths": [
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/test/worker/setup.ts",
+          "apps/tempo/src/db/migrations/0000_init.sql"
+        ]
+      },
+      {
+        "risk": "Tests: timing and waits (sleeps, deadlines) under concurrency",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts", "apps/tempo/test/worker/fakes.ts"]
+      },
+      {
+        "risk": "Tests: assertions still meaningful (artifact card test rewrite, test-context expect, it.for timeout)",
+        "paths": [
+          "apps/tempo/test/ui/components/artifacts.test.tsx",
+          "apps/tempo/test/worker/workspace-events.test.ts"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment: Vitest projects configuration, pool settings, tool versions, turbo cache inputs",
+        "paths": [
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/package.json",
+          "apps/tempo/tsconfig.json",
+          "turbo.json"
+        ]
+      },
+      {
+        "risk": "Spec/docs: CI.md updated with the change; no spec tab references the changed test commands",
+        "paths": ["docs/CI.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Real contracts, failure paths, idempotency, security: not applicable (no product code changed; test-only fakes unchanged)",
+        "paths": ["apps/tempo/test/worker/fakes.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91; git rev-parse HEAD; cat turbo.json; grep -n '\"vitest\"\\|vitest-pool\\|happy-dom' apps/tempo/package.json; cat node_modules/vitest/package.json 2>/dev/null | grep '\"version\"'; ls apps/tempo/node_modules/vitest 2>/dev/null | head -2; cat apps/tempo/node_modules/vitest/package.json 2>/dev/null | grep '\"version\"'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/turbo.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"vitest\"|vitest-pool|happy-dom|testing-library",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/worker/ && cat apps/tempo/test/worker/setup.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "limit": 340
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^(export )?(const|let|var|class|function|async function) |globalThis|vi\\.|setSystemTime|useFakeTimers|registry|new Map",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/fakes.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/fakes.ts",
+        "offset": 300,
+        "limit": 200
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "UNIQUE|unique",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/src/db/migrations",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.|globalThis|fetchMock|beforeEach|afterEach|beforeAll|afterAll|^let |^const \\w+ = \\[|expect\\(|describe\\(|it\\.each|\\btest\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "count"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.|globalThis|fetchMock|beforeEach|afterEach|beforeAll|afterAll|^let |describe\\(|it\\.each|\\btest\\(|^\\s+it\\(\\s*$",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -c 'async ({ expect })\\|async (stopReason, { expect })' apps/tempo/test/worker/workspace-events.test.ts; grep -cE '^\\s+it(\\.for\\(.*\\))?\\($' apps/tempo/test/worker/workspace-events.test.ts; grep -nE 'it\\.for|it\\.each|^describe' apps/tempo/test/worker/workspace-events.test.ts | grep -v concurrent"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^describe|it\\.for|async \\(\\) =>\\s*\\{\\s*$",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "noEmit|\"types\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/tsconfig.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 2020,
+        "limit": 260
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 655,
+        "limit": 170
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "find / -path /proc -prune -o -type d -name vitest -path '*node_modules/vitest' -print 2>/dev/null | head -3"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/vitest/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vitest\\.(ui|components|worker)?\\.?config|vitest run",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91",
+        "glob": "!**/node_modules/**",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vitest\\.config|ui\\.config|components\\.config|@tempo/tempo#test|tempo#test",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91",
+        "glob": "!**/node_modules/**",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

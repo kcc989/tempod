@@ -1,0 +1,13 @@
+diff --git a/apps/tempo/src/do/repository-ci.ts b/apps/tempo/src/do/repository-ci.ts
+index 164b6a8..cd4b63d 100644
+--- a/apps/tempo/src/do/repository-ci.ts
++++ b/apps/tempo/src/do/repository-ci.ts
+@@ -286,7 +286,7 @@ export class RepositoryCiDO extends DurableObject<Env> {
+     const jobs = run ? this.jobsOf(run.id) : [];
+ 
+     const passed = spec.required.every((key) =>
+-      jobs.some((job) => job.key === key && job.status === "completed" && job.conclusion === "success"),
++      jobs.some((job) => job.key === key && job.status === "completed" && (job.conclusion === "success" || job.conclusion === "skipped")),
+     );
+ 
+     return passed ? null : `Required checks have not passed for ${sha.slice(0, 7)}.`;

@@ -1,0 +1,154 @@
+{
+  "case": "R-eaf0b28",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "eaf0b2894068c621e49284ddf30b43dfe91b6645",
+  "diffBytes": 161562,
+  "diffCut": false,
+  "steps": 15,
+  "seconds": 93.7,
+  "usage": {
+    "prompt_tokens": 1363863,
+    "completion_tokens": 7473,
+    "cost": 1.1615298000000003
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change splits Worker, UI and component tests and the two browser fixture builds into separately cached Turbo tasks. It adds a documentation-only CI path that fails closed, cuts duplicated phone browser runs, and makes many Worker RPC and op test groups concurrent. Cache inputs, fixture outputs, the docs-only check and the test-context cleanup all look correct. One problem blocks: the newly concurrent 'step runner rules' group changes the global STEP_LIMITS['settings.read'] timeout to 300 ms while its other tests run create ops that use that step, so those tests can fail at random.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 1938,
+        "text": "The 'step runner rules' group is now describe.concurrent, with up to four tests at once. Its test 'aborts a step at its timeout\u2026' changes the shared module-level STEP_LIMITS['settings.read'] to timeoutMs 300 for the whole test. The other tests in the group ('runs one op at a time', both 'recovery after a DO restart' cases, 'a step's timing includes\u2026', 'WorkspaceDetail.op\u2026') call readyWs/seedWs, whose create op runs settings.read. Any of them that overlaps can time out after 300 ms under load, retry, then skip with TEMPOD_TIMEOUT and use default settings, so the test fails at random. This breaks the rule this branch adds to AGENTS.md: keep shared global state in sequential groups and keep short timeouts local. Move this test into a plain describe group, or keep the group sequential.",
+        "blocking": true
+      },
+      {
+        "path": "docs/CI.md",
+        "text": "docs/CI.md says suite changes must include the stage timings from the CI summary. Nothing in this diff shows the new times for the Worker, UI and component tasks or the reduced browser runs. Add them to the pull request description.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; git status --short | head; ls apps/tempo/*.config.ts apps/tempo/test; grep -n \"oxlint\\|oxfmt\" package.json; grep -n \"STEP_LIMITS\\[\" apps/tempo/test/worker/ops.test.ts; grep -rn \"transit\" package.json apps/*/package.json packages/*/package.json | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; for f in apps/tempo/vitest*.ts; do echo \"== $f\"; cat $f; done; awk '/^describe/{d=$0} /vi\\.spyOn|Date\\.now = |vi\\.useFakeTimers|STEP_LIMITS\\[.*\\] =|globalThis\\./{print NR\": \"substr(d,1,60)\" :: \"$0}' apps/tempo/test/worker/ops.test.ts apps/tempo/test/worker/workspace-rpc.test.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; cat apps/tempo/vitest.config.ts apps/tempo/vitest.worker.config.ts apps/tempo/vitest.ui.config.ts apps/tempo/vitest.components.config.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; awk '/^describe/{d=$0} /vi\\.spyOn|Date\\.now = |useFakeTimers|STEP_LIMITS\\[.*\\] = |\\bexpect\\(/{ if ($0 ~ /expect\\(/ && d==\"\") print FILENAME\":\"NR\": helper-expect :: \"$0; else if ($0 !~ /expect\\(/) print FILENAME\":\"NR\": \"substr(d,1,70)\" :: \"$0}' apps/tempo/test/worker/ops.test.ts apps/tempo/test/worker/workspace-rpc.test.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.spyOn|Date\\.now = |useFakeTimers|STEP_LIMITS\\[.*\\] = |^describe",
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.spyOn|Date\\.now = |useFakeTimers|^describe|^  expect\\(|^const .*=> \\{$",
+        "path": "apps/tempo/test/worker/workspace-rpc.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "expect",
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "output_mode": "content",
+        "head_limit": 8
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/ops.test.ts",
+        "offset": 1902,
+        "limit": 52
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"(\\.\\./)+(src/(ui|routes)|ui|routes)|routeTree|from \"\\.\\./(ui|web|browser)/",
+        "path": "apps/tempo/test/worker",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"(\\.\\.?/)+(ui|routes)/|routeTree",
+        "path": "apps/tempo/src",
+        "glob": "!{ui,routes}/**",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "router|from \"~/ui|from \"~/routes",
+        "path": "apps/tempo",
+        "glob": "{src,test/worker}/**/*.{ts,tsx}",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "outDir|root:|\\.\\./\\.\\./|tests/e2e",
+        "path": "apps/tempo",
+        "glob": "{vite.web-test.config.ts,test/browser/vite.config.ts}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"\\.\\./(?!\\.\\./src|src)[^\"]*\"",
+        "path": "apps/tempo/test",
+        "glob": "{browser,web,ui}/**/*.{ts,tsx}",
+        "output_mode": "content",
+        "head_limit": 15
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"\\.\\./(\\.\\./)?(worker|web|browser|ui|wrangler)",
+        "path": "apps/tempo/test",
+        "output_mode": "content",
+        "head_limit": 15
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls -a | grep -i -E \"oxlint|oxfmt\" && cat .oxlintrc.json 2>/dev/null | head -30"
+      }
+    }
+  ]
+}

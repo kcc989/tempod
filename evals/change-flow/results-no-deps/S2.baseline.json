@@ -1,0 +1,83 @@
+{
+  "case": "S2",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5770819eb7eea0219eecaa4e0176daaa1e2837e1",
+  "diffBytes": 718,
+  "diffCut": false,
+  "steps": 4,
+  "seconds": 26.2,
+  "usage": {
+    "prompt_tokens": 126630,
+    "completion_tokens": 2127,
+    "cost": 0.27647639999999996
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change lets a required CI job that ended as `skipped` satisfy the merge gate. In RepositoryCiDO a job is skipped only when one of its `needs` ended without success, so this lets merges through after upstream failures. It also goes against `docs/10 Project CI.md` without changing it, and adds no test.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "Accepting `skipped` lets failed CI through the merge gate. `pump()` (lines 531-532) marks a job `skipped` only when one of its needs completed with a conclusion other than success: failure, timed_out, cancelled or skipped. So a skipped required job always means something upstream did not succeed. Example: required = [deploy], where deploy needs test (not itself listed in required). If test fails, deploy is skipped and mergeBlock now returns null, so the merge goes ahead on a failing commit. If `required` already lists every upstream job, the upstream failure blocks the merge anyway and this change does nothing. So the only cases it affects are the ones where the gate should hold.",
+        "blocking": true
+      },
+      {
+        "path": "docs/10 Project CI.md",
+        "line": 172,
+        "text": "The spec says the merge gate needs the newest run for the head SHA 'with every `required` job `success`'. The diff changes this behaviour without changing the spec. CLAUDE.md rules 1 and 16 say the spec is the source of truth and must change in the same pull request, with the change named in its description. If the owner still wants this after weighing the failure-bypass problem, the spec needs to state exactly when a skipped job counts as passing. For example: only when none of the jobs it transitively needs failed, timed out or was cancelled.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 288,
+        "text": "There is no test for the changed mergeBlock behaviour. CLAUDE.md rule 14 says every server function needs a test, run with @cloudflare/vitest-pool-workers. Whatever rule is finally chosen, the RepositoryCiDO tests should cover a required job that was skipped because a need failed.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "line": 289,
+        "text": "The changed line is about 150 characters long, much longer than the lines around it. `bun run format:check` will probably flag it. If the logic stays, split it across lines or pull the accepted conclusions into a named constant.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "skipped",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2",
+        "output_mode": "content",
+        "glob": "!node_modules"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2/apps/tempo/src/do/repository-ci.ts",
+        "offset": 250,
+        "limit": 70
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(Merge gate|skipped)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2/docs",
+        "output_mode": "content",
+        "-C": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"skipped\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S2/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 3
+      }
+    }
+  ]
+}

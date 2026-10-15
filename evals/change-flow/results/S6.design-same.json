@@ -1,0 +1,76 @@
+{
+  "case": "S6",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "da9729f15a8dc00e65021597253cd5c3cb1c0d72",
+  "diffBytes": 611,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 28.6,
+  "usage": {
+    "prompt_tokens": 122237,
+    "completion_tokens": 2375,
+    "cost": 0.1127174
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The only change makes /opt/tempo/pi/tempo-profile.ts mode 0600. COPY leaves it owned by root, but the image runs as `USER tempo` (uid 1000), and pi, started by tempod through pi-acp, must read the file via `-e /opt/tempo/pi/tempo-profile.ts`. pi can't load the Tempo extension, so the pi agent breaks or loses the tools allow/deny enforcement and per-session MCP registration that the spec says only this extension provides. The image test's R_OK check on this path would also fail. Revert to 0644.",
+    "findings": [
+      {
+        "path": "container/Dockerfile",
+        "line": 36,
+        "text": "tempo-profile.ts is copied as root-owned 0600 while every process in the container runs as user tempo, so pi can't read or load the Tempo extension.",
+        "blocking": true,
+        "evidence": {
+          "quote": "COPY --chmod=0600 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts",
+          "why": "COPY without --chown makes the file root:root, and 0600 lets only root read it. Line 79 `USER tempo` runs tempod, and so pi-acp and pi, as uid 1000. The spec (01, pi wrapper) loads `-e /opt/tempo/pi/tempo-profile.ts`, which now fails with EACCES. That disables the tool_call guard that enforces tools.allow/deny (the spec says the flags only hide tools) and the per-session MCP registration. packages/tempod/test/image.test.ts asserts `accessSync(\"/opt/tempo/pi/tempo-profile.ts\", constants.R_OK)` as uid 1000, which would throw. `chmod 0755 /opt/tempo /opt/tempo/pi` covers only the folders."
+        }
+      },
+      {
+        "path": "container/Dockerfile",
+        "line": 36,
+        "text": "No spec or IMPLEMENTATION_NOTES change goes with this permission change. The file holds no secrets (it reads mcp.json and env when it runs), so making it private gives no security benefit.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Build and runtime environment: file mode, owner and the user that runs processes",
+        "paths": [
+          "container/Dockerfile",
+          "packages/tempod/src/acp/profile.ts",
+          "packages/tempod/test/image.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: pi extension loading and enforcement",
+        "paths": ["docs/01 Runtime and Agents.md", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "Security: whether the file holds secrets that would justify 0600",
+        "paths": ["container/pi/tempo-profile.ts", "docs/01 Runtime and Agents.md"]
+      },
+      {
+        "risk": "Tests: whether any test covers file readability",
+        "paths": ["packages/tempod/test/image.test.ts", "packages/tempod/test/profile.test.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show da9729f:container/Dockerfile | cat -n; grep -rn \"tempo-profile\" --exclude-dir=node_modules . | head -40",
+        "description": "Show Dockerfile and references to profile file"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,45p packages/tempod/test/image.test.ts; grep -n \"Container image\" -A30 \"docs/01 Runtime and Agents.md\" | grep -in \"opt/tempo\\|0644\\|readable\\|root\" | head",
+        "description": "Read image test and spec on image file modes"
+      }
+    }
+  ]
+}

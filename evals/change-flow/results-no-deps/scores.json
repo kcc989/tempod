@@ -1,0 +1,776 @@
+[
+  {
+    "case": "R-459a617",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F1": false
+    },
+    "tokens": 432658,
+    "cost": 0.575,
+    "steps": 5,
+    "diffCut": false,
+    "seconds": 59.9,
+    "coverage": 0.8,
+    "unsupported": 0
+  },
+  {
+    "case": "R-459a617",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F1": false
+    },
+    "tokens": 552832,
+    "cost": 0.722,
+    "steps": 11,
+    "diffCut": false,
+    "seconds": 84.8,
+    "coverage": 0.8,
+    "unsupported": 0
+  },
+  {
+    "case": "R-de82a91",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F2": false
+    },
+    "tokens": 680845,
+    "cost": 0.591,
+    "steps": 12,
+    "diffCut": false,
+    "seconds": 74.7,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "R-de82a91",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "blocked",
+    "blocking": 0,
+    "caught": {
+      "F2": false
+    },
+    "tokens": 1363481,
+    "cost": 0.972,
+    "steps": 25,
+    "diffCut": false,
+    "seconds": 139.9,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "R-68910d4",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "F3": false
+    },
+    "tokens": 778920,
+    "cost": 1.272,
+    "steps": 4,
+    "diffCut": true,
+    "seconds": 52.3,
+    "coverage": 0.6229508196721312,
+    "unsupported": 0
+  },
+  {
+    "case": "R-68910d4",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 2,
+    "caught": {
+      "F3": false
+    },
+    "tokens": 1594416,
+    "cost": 1.813,
+    "steps": 9,
+    "diffCut": true,
+    "seconds": 101.6,
+    "coverage": 0.7704918032786885,
+    "unsupported": 0
+  },
+  {
+    "case": "R-41372df",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F5": false,
+      "F7": false,
+      "F10": false,
+      "F12": false
+    },
+    "tokens": 802460,
+    "cost": 1.116,
+    "steps": 5,
+    "diffCut": true,
+    "seconds": 57.8,
+    "coverage": 0.12307692307692308,
+    "unsupported": 0
+  },
+  {
+    "case": "R-41372df",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F5": false,
+      "F7": false,
+      "F10": false,
+      "F12": false
+    },
+    "tokens": 7837346,
+    "cost": 3.905,
+    "steps": 37,
+    "diffCut": true,
+    "seconds": 313.5,
+    "coverage": 0.38974358974358975,
+    "unsupported": 0
+  },
+  {
+    "case": "R-8f23c85",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F6": false
+    },
+    "tokens": 788320,
+    "cost": 0.643,
+    "steps": 12,
+    "diffCut": false,
+    "seconds": 113.2,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "R-8f23c85",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F6": false
+    },
+    "tokens": 1275937,
+    "cost": 0.959,
+    "steps": 23,
+    "diffCut": false,
+    "seconds": 161.1,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "R-eaf0b28",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "F8": false
+    },
+    "tokens": 1371336,
+    "cost": 1.162,
+    "steps": 15,
+    "diffCut": false,
+    "seconds": 93.7,
+    "coverage": 0.9090909090909091,
+    "unsupported": 0
+  },
+  {
+    "case": "R-eaf0b28",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "F8": false
+    },
+    "tokens": 1672492,
+    "cost": 1.293,
+    "steps": 14,
+    "diffCut": false,
+    "seconds": 114.2,
+    "coverage": 0.9090909090909091,
+    "unsupported": 0
+  },
+  {
+    "case": "R-2bbfc39",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F9": false
+    },
+    "tokens": 1801380,
+    "cost": 1.522,
+    "steps": 12,
+    "diffCut": true,
+    "seconds": 87.8,
+    "coverage": 0.26704545454545453,
+    "unsupported": 0
+  },
+  {
+    "case": "R-2bbfc39",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F9": false
+    },
+    "tokens": 7895656,
+    "cost": 3.853,
+    "steps": 35,
+    "diffCut": true,
+    "seconds": 297.6,
+    "coverage": 0.3522727272727273,
+    "unsupported": 0
+  },
+  {
+    "case": "R-2ff48c5",
+    "kind": "fix",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F11": false
+    },
+    "tokens": 659616,
+    "cost": 1.306,
+    "steps": 3,
+    "diffCut": true,
+    "seconds": 42.6,
+    "coverage": 0.49295774647887325,
+    "unsupported": 0
+  },
+  {
+    "case": "R-2ff48c5",
+    "kind": "fix",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "F11": false
+    },
+    "tokens": 5346725,
+    "cost": 3.066,
+    "steps": 24,
+    "diffCut": true,
+    "seconds": 162.9,
+    "coverage": 0.5211267605633803,
+    "unsupported": 0
+  },
+  {
+    "case": "S1",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S1": true
+    },
+    "tokens": 165198,
+    "cost": 0.238,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 31.4,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S1",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S1": true
+    },
+    "tokens": 258741,
+    "cost": 0.28,
+    "steps": 6,
+    "diffCut": false,
+    "seconds": 42.2,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S2",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 3,
+    "caught": {
+      "S2": true
+    },
+    "tokens": 128757,
+    "cost": 0.276,
+    "steps": 4,
+    "diffCut": false,
+    "seconds": 26.2,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S2",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 2,
+    "caught": {
+      "S2": true
+    },
+    "tokens": 174482,
+    "cost": 0.25,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 31.2,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S3",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S3": true
+    },
+    "tokens": 196387,
+    "cost": 0.219,
+    "steps": 5,
+    "diffCut": false,
+    "seconds": 32.5,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S3",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {
+      "S3": false
+    },
+    "tokens": 432189,
+    "cost": 0.348,
+    "steps": 11,
+    "diffCut": false,
+    "seconds": 54.3,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S4",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 2,
+    "caught": {
+      "S4": true
+    },
+    "tokens": 118791,
+    "cost": 0.19,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 20.9,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S4",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 2,
+    "caught": {
+      "S4": true
+    },
+    "tokens": 169954,
+    "cost": 0.248,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 32.6,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S5",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S5": true
+    },
+    "tokens": 113386,
+    "cost": 0.161,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 20.5,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S5",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S5": true
+    },
+    "tokens": 119992,
+    "cost": 0.19,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 24.7,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S6",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S6": true
+    },
+    "tokens": 78447,
+    "cost": 0.17,
+    "steps": 1,
+    "diffCut": false,
+    "seconds": 17.7,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S6",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S6": true
+    },
+    "tokens": 170809,
+    "cost": 0.242,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 30.5,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S7",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 2,
+    "caught": {
+      "S7": true
+    },
+    "tokens": 158958,
+    "cost": 0.204,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 24.6,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S7",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S7": true
+    },
+    "tokens": 121251,
+    "cost": 0.192,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 21.3,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S8",
+    "kind": "seed",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S8": true
+    },
+    "tokens": 122050,
+    "cost": 0.206,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 21.8,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "S8",
+    "kind": "seed",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {
+      "S8": true
+    },
+    "tokens": 174840,
+    "cost": 0.259,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 32.4,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-8159759",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 210699,
+    "cost": 0.252,
+    "steps": 7,
+    "diffCut": false,
+    "seconds": 30.6,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-8159759",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 329627,
+    "cost": 0.372,
+    "steps": 6,
+    "diffCut": false,
+    "seconds": 52.1,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-f29c2bc",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "fail",
+    "blocking": 1,
+    "caught": {},
+    "tokens": 684875,
+    "cost": 0.439,
+    "steps": 14,
+    "diffCut": false,
+    "seconds": 70.5,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-f29c2bc",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "blocked",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 790170,
+    "cost": 0.599,
+    "steps": 21,
+    "diffCut": false,
+    "seconds": 93.4,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-1ec4cc3",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 165258,
+    "cost": 0.224,
+    "steps": 3,
+    "diffCut": false,
+    "seconds": 27.7,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-1ec4cc3",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 1056380,
+    "cost": 0.681,
+    "steps": 21,
+    "diffCut": false,
+    "seconds": 94.1,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-f1b8a67",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 393725,
+    "cost": 0.319,
+    "steps": 10,
+    "diffCut": false,
+    "seconds": 41.2,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-f1b8a67",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "blocked",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 582599,
+    "cost": 0.502,
+    "steps": 15,
+    "diffCut": false,
+    "seconds": 74.7,
+    "coverage": 1.0,
+    "unsupported": 0
+  },
+  {
+    "case": "C-ee1e5f7",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 314024,
+    "cost": 0.301,
+    "steps": 8,
+    "diffCut": false,
+    "seconds": 35.7,
+    "coverage": 0.7777777777777778,
+    "unsupported": 0
+  },
+  {
+    "case": "C-ee1e5f7",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 231696,
+    "cost": 0.318,
+    "steps": 4,
+    "diffCut": false,
+    "seconds": 42.5,
+    "coverage": 0.8888888888888888,
+    "unsupported": 0
+  },
+  {
+    "case": "C-bfb05a8",
+    "kind": "clean",
+    "condition": "baseline",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 135211,
+    "cost": 0.234,
+    "steps": 2,
+    "diffCut": false,
+    "seconds": 25.3,
+    "coverage": 0.8333333333333334,
+    "unsupported": 0
+  },
+  {
+    "case": "C-bfb05a8",
+    "kind": "clean",
+    "condition": "design-same",
+    "model": "claude-cli:claude-opus-5-5",
+    "status": "pass",
+    "blocking": 0,
+    "caught": {},
+    "tokens": 1431817,
+    "cost": 0.901,
+    "steps": 24,
+    "diffCut": false,
+    "seconds": 132.5,
+    "coverage": 0.8333333333333334,
+    "unsupported": 0
+  }
+]

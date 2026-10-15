@@ -1,0 +1,78 @@
+{
+  "case": "R-41372df",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "41372df80b5a1eb6daeaa812857da2be299a9c08",
+  "diffBytes": 1472020,
+  "diffCut": true,
+  "steps": 5,
+  "seconds": 57.8,
+  "usage": {
+    "prompt_tokens": 798712,
+    "completion_tokens": 3748,
+    "cost": 1.1156878
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Reviewed the visible part of the diff: the Mac Repositories, Issues and Checks views, the ci_model labels, the agent issue tool (apps/tempo/src/agents/issues.ts) and the D1 issue store (apps/tempo/src/artifacts/issues.ts). Tempo cut the diff at 256 KiB, so the server CI coordinator, RepositoryCiDO, tempod ci.checkout/script.start and the web Checks tab were not visible. I did not review them. I checked the repo directly for the docs, error codes and Worker test layout; I did not run the test suite. Nothing blocks the merge. Mutating agent issue tools check run access, run and session identity, and the session profile's frozen tool allow and deny lists. Mutating calls mask secrets in titles and bodies before writing. Project and author come from the workspace, not from the agent. Issue numbers come from a counter that never goes back down. The Mac client ships with the web UI changes (rule 17). The new error codes exist in packages/protocol. The new Worker cases are folded into two .test.ts files, so the four-file limit holds. Four non-blocking findings: the README says the opposite of what this PR ships about CI; the agent rules files don't count the new spec tab 10; the CI timing record misses the CI commits and has no hosted run; and the Mac Checks view has a loading flag that can get stuck.",
+    "findings": [
+      {
+        "path": "README.md",
+        "line": 7,
+        "text": "The README still says \"Artifacts repositories have no CI checks integration yet.\" This PR adds project CI for Tempo-hosted repositories: native check runs, merges gated on required jobs, and a Checks tab in both clients. That sentence is now wrong and should describe project CI instead (spec tab 10).",
+        "blocking": false
+      },
+      {
+        "path": "AGENTS.md",
+        "line": 3,
+        "text": "AGENTS.md (and CLAUDE.md) now say the spec is \"tabs 00 to 09\", but this PR adds docs/10 Project CI.md as the source of truth for CI. Agents following the rules will skip tab 10. Change the range to 00 to 10.",
+        "blocking": false
+      },
+      {
+        "path": "docs/CI.md",
+        "line": 218,
+        "text": "The new CI.md sections record local timing only for the forge/issues and agent-tools stages. There is no entry for the project-CI commits, and no hosted check time or total time. The commit message says the cold Worker suite went from 82 s to 91.5 s locally. The last cold hosted main run was already 292 s against the 300 s command deadline. The CI budget rules ask for check time and total time to be reported when the suite changes. Record a measured hosted run before relying on the deadline holding.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/repository_checks.rs",
+        "line": 88,
+        "text": "load_runs and open_run use the same generation counter. mutate() and refresh() call load_runs and then open_run right away, so open_run bumps the counter first. When the list response arrives, it is dropped before `loading` is cleared. `loading` stays true until the next load_runs call. While a run is open, the 5 s poll keeps bumping the counter too. Only the Back button recovers, because it calls load_runs again. Give the list its own generation counter, or clear `loading` before the generation check.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-41372df; ls docs; git log --oneline -3; grep -n \"no CI checks\" README.md; grep -n \"00 to\" AGENTS.md CLAUDE.md; grep -rn \"CI_NOT_CONFIGURED\\|CI_PIPELINE_CHANGED\" packages/protocol/src | head; grep -n \"CI_\\|ARTIFACTS_\" \"docs/03 API.md\" docs/*Errors* 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-41372df; cat apps/tempo/vitest*.ts 2>/dev/null | head -40; ls apps/tempo/test 2>/dev/null | head -50; grep -rln \"Project CI\\|tab 10\\|10 Project\" \"docs/00 Overview.md\" docs/IMPLEMENTATION_NOTES.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-41372df; grep -n \"include\" apps/tempo/vitest.worker.config.ts; ls apps/tempo/test/worker | head -40; ls apps/tempo/test/worker/*.test.ts | wc -l; for f in apps/tempo/test/worker/forge*.test.ts; do echo $f; grep -c \"^\\s*\\(it\\|test\\)(\" $f; done"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-41372df; grep -n \"include\" apps/tempo/vitest.worker.config.ts; ls apps/tempo/test/worker"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-41372df; git diff --stat --diff-filter=A HEAD~1 HEAD -- apps/tempo/test/worker | cat; git diff HEAD~1 HEAD -- docs/CI.md | head -40; grep -c \"it(\\|test(\" apps/tempo/test/worker/forge.test.ts apps/tempo/test/worker/forge-workspace.test.ts apps/tempo/test/worker/*.cases.ts"
+      }
+    }
+  ]
+}

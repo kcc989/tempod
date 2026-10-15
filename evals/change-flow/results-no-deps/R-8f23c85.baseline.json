@@ -1,0 +1,127 @@
+{
+  "case": "R-8f23c85",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8f23c85befce80c0a1c94a727017b59ee1d24f03",
+  "diffBytes": 35884,
+  "diffCut": false,
+  "steps": 12,
+  "seconds": 113.2,
+  "usage": {
+    "prompt_tokens": 779970,
+    "completion_tokens": 8350,
+    "cost": 0.6430176000000001
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change matches the request and can merge; nothing is blocking. CI cache: saved only when the run wrote new entries, and unused entries removed only after every check passed. An unreadable or empty run summary removes nothing, and the save is still skipped when install fails. Deploy: always builds, checks and pins the image digest. The build id reaches the tempod build, Turbo's cache key for that build includes TEMPO_BUILD_ID, and the grep check works with the Dockerfile. The process.env.TEMPO_BUILD_ID fix lets bun inline the build id. Forge demo: expecting PR_NOT_MERGEABLE on reopening a merged PR matches the server and tab 09, and the workspace is cleaned up. Typecheck, lint and tests were not run because node_modules is not installed in this worktree, and the demo has not yet been run against a deployment. Three minor problems: Ctrl-C or a cancelled run leaves the check processes running, the demo also runs in every test:e2e, and the demo does not close its connection when it fails.",
+    "findings": [
+      {
+        "path": "scripts/ci.ts",
+        "line": 66,
+        "text": "Each check now runs in its own process group (detached: true), but ci.ts has no SIGINT or SIGTERM handler. Ctrl-C locally, or cancelling a GitHub run, now stops ci.ts and leaves the checks running (vitest/workerd, Playwright, turbo), because the terminal and the runner only signal the foreground group. Cancelled runs can then still reach the slow 'Cleaning up orphan processes' step. Add a handler that kills the active groups and then exits.",
+        "blocking": false
+      },
+      {
+        "path": "tests/e2e/tests/forge-demo.spec.ts",
+        "line": 107,
+        "text": "playwright.config.ts uses testMatch '**/*.spec.ts', so `bun run test:e2e` (and gate runs with E2E_REPEAT=3) also runs this up-to-60-minute demo. Each run creates a new tempo-demo-<tag> repository and never deletes it. The README presents the demo as run only through test:demo. Exclude it from the default config, or document that test:e2e includes it.",
+        "blocking": false
+      },
+      {
+        "path": "tests/e2e/tests/forge-demo.spec.ts",
+        "line": 189,
+        "text": "watch.close() is only reached when the test succeeds. A failed assertion leaves the workspace WebSocket open. Use try/finally.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; git log --oneline -2; git status --short | head; sed -n 1,60p scripts/ci.ts; grep -n \"buildId\\|TEMPO_BUILD_ID\" -r scripts/deploy-worker.ts container/Dockerfile packages/tempod/package.json packages/tempod/tsconfig*.json tsconfig*.json 2>/dev/null; grep -rn \"noPropertyAccessFromIndexSignature\\|useLiteralKeys\" --include=*.json . 2>/dev/null | grep -v node_modules | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; sed -n 60,140p scripts/ci.ts; cat turbo.json | head -80; grep -n \"tempod\\|grep\\|ENTRYPOINT\" container/Dockerfile | head -30; sed -n 30,62p scripts/deploy-worker.ts; cat packages/tempod/package.json | grep -n build"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; grep -rn \"detached\" node_modules/bun-types/*.d.ts 2>/dev/null | head -5; cat packages/tempod/tsconfig.json; ls tsconfig*; grep -n \"noPropertyAccess\\|noUnchecked\" tsconfig*.json packages/*/tsconfig.json; grep -rn \"TEMPO_BUILD_ID\" packages/tempod/src --include=*.d.ts; grep -n \"\\\"hash\\\"\\|summary\" node_modules/turbo/docs/*.md 2>/dev/null | head; ls node_modules/turbo 2>/dev/null; cat node_modules/turbo/package.json 2>/dev/null | grep '\"version\"'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; ls node_modules 2>&1 | head -3; ls ~/.bun/install/cache 2>/dev/null | grep -i \"bun-types\\|^turbo\" | head; grep -n '\"turbo\"\\|bun-types\\|@types/bun' package.json; grep -n \"PR_NOT_MERGEABLE\" -r docs | head -5; grep -rn \"updateRepositoryPullRequest\" packages/protocol/src | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; ls node_modules | wc -l; grep -n '\"turbo\"\\|bun-types\\|@types/bun' package.json; grep -rn \"PR_NOT_MERGEABLE\" docs | head -5; grep -rln \"updateRepositoryPullRequest\\|listCheckRuns\\|getCiJobLog\" packages/protocol/src | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; grep -n \"updateRepositoryPullRequest\\|reopen\\|merged\" \"docs/09 Git Forge.md\" | head -20; grep -rn \"updateRepositoryPullRequest\" -A12 apps/app/src 2>/dev/null | grep -n \"merged\\|PR_NOT_MERGEABLE\\|state\" | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "cannot reopen|merged.*PR_NOT_MERGEABLE|PR_NOT_MERGEABLE.*merged",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps",
+        "output_mode": "content",
+        "-i": true,
+        "head_limit": 10
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "state === \"merged\"|\"merged\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/app/src/server",
+        "output_mode": "content",
+        "-C": 2,
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "merged.*(reopen|cannot|PR_)|(reopen|cannot).*merged",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/app/src",
+        "output_mode": "content",
+        "-i": true,
+        "-C": 2,
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; ls apps; grep -rn \"Merged pull requests\\|merged.*reopen\\|cannot reopen\" --include=*.ts apps packages | grep -v node_modules | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; sed -n 238,250p apps/tempo/src/artifacts/pull-requests.ts; grep -n \"export const rpcRetry\\|export const rpcFails\\|export const requireChannels\" tests/e2e/tests/lib/api.ts; grep -n \"export const readySession\\|export const allowOption\\|export const answerPermissionsUntilEnd\\|export const cleanupTest\" tests/e2e/tests/lib/flows.ts; grep -n \"testDir\\|testIgnore\\|testMatch\" tests/e2e/playwright.config.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; ls scripts/*.test.ts; grep -n \"scripts\" scripts/test.ts package.json | head; grep -n \"id: tasks\\|key:\" .github/workflows/ci.yml"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+diff --git a/apps/tempo/src/agents/issues.ts b/apps/tempo/src/agents/issues.ts
+index 8db8a76..89980c7 100644
+--- a/apps/tempo/src/agents/issues.ts
++++ b/apps/tempo/src/agents/issues.ts
+@@ -47,7 +47,7 @@ const page = (items: ReadonlyArray<RepositoryIssue | RepositoryIssueComment>, of
+ 
+   return Schema.decodeUnknownSync(Schema.Json)({
+     items: bounded,
+-    nextOffset: bounded.length < items.length || items.length === 50 ? offset + bounded.length : null,
++    nextOffset: bounded.length < items.length || items.length === 50 ? offset + bounded.length + 1 : null,
+   });
+ };
+ 

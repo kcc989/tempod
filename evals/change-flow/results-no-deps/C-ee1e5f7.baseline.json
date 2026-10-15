@@ -1,0 +1,103 @@
+{
+  "case": "C-ee1e5f7",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "ee1e5f7b4023bb0c97d762b4420afa136ebf5353",
+  "diffBytes": 11184,
+  "diffCut": false,
+  "steps": 8,
+  "seconds": 35.7,
+  "usage": {
+    "prompt_tokens": 311343,
+    "completion_tokens": 2681,
+    "cost": 0.3013166
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Claude's default mode moves from bypassPermissions to auto in every place that sets it: spec 01 Agents table, the server default (queue.ts), the web plan toggle (agents.ts), the Mac plan toggle (chat_model.rs), and the conformance harness and README. The tests that check it are updated. The new turn-summary rule in protocol is word for word the same as spec 01, and the workspace-events tests use the constant, so they follow it. The implementation note matches the code: the evidence lists auto, and tempod logs a failed mode change and keeps the current mode. Nothing is blocking; three small gaps remain.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/chat_model.rs",
+        "line": 126,
+        "text": "No Mac test checks the Claude branch of plan_target. The existing tests cover only Codex and Pi, so nothing checks that leaving plan mode as Claude returns to \"auto\". Rule 14 asks for a test for changed behavior; consider adding a Claude case next to the Codex one at about line 1541.",
+        "blocking": false
+      },
+      {
+        "path": "docs/evidence/core/claude.json",
+        "line": 71,
+        "text": "The implementation note cites this file as proof that auto is supported. The file is marked \"live\": false and still records setMode: \"bypassPermissions\", so no live run has yet shown that setting auto succeeds. A conformance run with the updated harness should refresh this evidence.",
+        "blocking": false
+      },
+      {
+        "path": "docs/06 Build Plan.md",
+        "line": 67,
+        "text": "The pass criterion for spike S3 still requires the modes to include bypassPermissions. docs/01 line 104 still explains that IS_SANDBOX=1 exists so bypassPermissions is shown. Both may need a review now that auto is the default. They are still true as written, so this is not blocking.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "bypassPermissions",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "says what you changed|End every turn with",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-ee1e5f7/docs/evidence/core/claude.json",
+        "limit": 90
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "plan_target|bypass|\"auto\"",
+        "path": "apps/mac",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "modeId",
+        "path": "container",
+        "output_mode": "content",
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "set_config_option|setSessionConfigOption|setSessionMode",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "modeId|setMode|set_config_option|log\\.",
+        "path": "packages/tempod/src/acp/session.ts",
+        "output_mode": "content",
+        "-C": 2
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "summary of that turn|TURN_SUMMARY_RULE",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

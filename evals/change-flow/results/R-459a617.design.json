@@ -1,0 +1,359 @@
+{
+  "case": "R-459a617",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 29,
+  "seconds": 215.5,
+  "usage": {
+    "prompt_tokens": 2359254,
+    "completion_tokens": 18746,
+    "cost": 1.1017242000000003
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "The server, DO, UI and Mac code for Codex device-code login read correctly. Attempts are serialized, stale attempts are checked by identity, upstream data is never exposed, ownership is scoped to the user's CredentialDO, and spec tabs 01/02/04/07 are updated together. Two things that matter could not be checked. (1) All Bash builds and tests (bun typecheck/lint/test, cargo check of the Mac crate) needed approval in this sandbox, so nothing was compiled or run. (2) codex-login.ts calls fetch with redirect: \"error\". As I recall, workerd accepts only \"follow\" or \"manual\" and throws TypeError otherwise. The code would turn that into CREDENTIAL_INVALID, so every real device login would fail. The worker tests stub globalThis.fetch and never reach the real runtime. I could not confirm this from the repository because the runtime types only say `redirect?: string` and the workerd package is outside the readable folders.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/lib/codex-login.ts",
+        "line": 24,
+        "text": "Unconfirmed: workerd's fetch/Request may reject redirect: \"error\". As I recall, it throws TypeError: Invalid redirect value, must be one of \"follow\" or \"manual\" (\"error\" won't be implemented...). The surrounding catch turns that into failed(), so startCodexLogin would always return CREDENTIAL_INVALID in production. The tests replace fetch with vi.spyOn(globalThis, \"fetch\"), so the real runtime contract is never exercised. To confirm, run one workers-pool test or a wrangler dev request without the fetch spy. If it throws, use redirect: \"manual\" and treat any 3xx response as failed().",
+        "blocking": false,
+        "evidence": {
+          "quote": "      redirect: \"error\",",
+          "why": "The only in-repo contract is worker-runtime.d.ts `redirect?: string`, which neither allows nor rules this out. The test fake (mocked fetch) differs from the real fetch on exactly this point. Other repo code only uses redirect: \"manual\"."
+        }
+      },
+      {
+        "path": "apps/tempo/test/ui/components/codex-login.test.tsx",
+        "line": 70,
+        "text": "The 'stops polling after the view closes' assertion can pass without checking anything. After Cancel, login is null, so no poll timer is scheduled. Fake timers are installed only after unmount, so advancing them cannot fire any real timer that was left running.",
+        "blocking": false,
+        "evidence": {
+          "quote": "    vi.useFakeTimers();\n    await act(() => vi.advanceTimersByTimeAsync(5000));\n    expect(call).toHaveBeenCalledTimes(2);",
+          "why": "To catch a leaked poll, the test would need fake timers from the start and an unmount while a poll is pending."
+        }
+      },
+      {
+        "path": "apps/tempo/test/ui/components/codex-login.test.tsx",
+        "line": 50,
+        "text": "The test runs two polls on real 1-second timers with waitFor limits of 2000 and 3000 ms. That leaves little margin on a loaded test runner. Fake timers would be more robust.",
+        "blocking": false,
+        "evidence": {
+          "quote": "      { timeout: 3000 },",
+          "why": "This waits on real wall-clock timers rather than an advanced fake clock."
+        }
+      },
+      {
+        "path": "apps/tempo/src/lib/codex-login.ts",
+        "line": 10,
+        "text": "Login errors use CREDENTIAL_INVALID with custom text. Tab 02's error table gives that code the UI message 'Your <agent> login stopped working. Add it again.' Tab 04 asks for the device-code explanation, so this is defensible, but the deviation is not recorded in IMPLEMENTATION_NOTES. Also, any transient upstream 5xx or timeout during polling ends the attempt, and the user must start again.",
+        "blocking": false,
+        "evidence": {
+          "quote": "    \"CREDENTIAL_INVALID\",",
+          "why": "The message differs from the error-table text in docs/02 for the same code."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: OpenAI device-auth endpoints, the workerd fetch contract, the DO RPC Result envelope, the Mac tempo_client call contract and gpui_kit APIs",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/worker-runtime.d.ts",
+          "apps/tempo/wrangler.jsonc",
+          "packages/protocol/src/errors.ts",
+          "crates/tempo-client/src/server.rs",
+          "crates/tempo-client/src/state/workspace.rs",
+          "crates/tempo-protocol/src/lib.rs",
+          "crates/tempo-protocol/src/generated.rs",
+          "apps/mac/src/app.rs",
+          "apps/mac/src/views/settings.rs",
+          "apps/tempo/src/http/native.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: upstream errors become a safe CREDENTIAL_INVALID, the attempt is cleared on failure, the existing login is kept, and the UI and Mac surface errors",
+        "paths": [
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx",
+          "apps/tempo/src/ui/lib/toast.ts",
+          "apps/tempo/src/ui/hooks/useCall.ts",
+          "apps/tempo/src/ui/lib/api.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: start/poll lock, identity checks after each await, a repeated connected poll, cancel/delete/replace invalidating in-flight exchanges, the poll-interval gate",
+        "paths": ["apps/tempo/src/do/credential.ts", "apps/tempo/test/worker/codex-login.test.ts"]
+      },
+      {
+        "risk": "Security: owner auth through runFn, per-user CredentialDO, no secrets in logs, errors or responses, tokens sealed before storage, nothing enters a container",
+        "paths": [
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "apps/tempo/src/server/run.ts",
+          "apps/tempo/src/server/registry.ts",
+          "apps/tempo/src/server/fns.ts",
+          "apps/tempo/src/http/native.ts",
+          "apps/tempo/src/do/credential.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: no new dependencies; Mac code checked by reading against real APIs. typecheck, lint, test and cargo check could not run (commands needed approval)",
+        "paths": ["apps/mac/Cargo.toml", "apps/tempo/package.json", "apps/mac/src/views/settings.rs"]
+      },
+      {
+        "risk": "Tests: shared mocks are cleared between cases, the cancellation test waits on observable state, timing in the UI tests, assertions that can pass without checking anything",
+        "paths": [
+          "apps/tempo/test/ui/components/codex-login.test.tsx",
+          "apps/tempo/test/ui/components/setup.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/test/worker/codex-login.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: tabs 01/02/04/07 updated, wire types only in packages/protocol, error table, Mac parity, banner copy",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/07 Mac Client.md",
+          "packages/protocol/src/api.ts",
+          "packages/protocol/scripts/samples.ts",
+          "CLAUDE.md",
+          "apps/tempo/src/ui/components/chat/Composer.tsx"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && git status --short | head && grep -n \"forgetInvalid\\|^import\\|errorText\" apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx | head -30 && grep -rn \"clearMocks\\|restoreMocks\\|mockReset\" apps/tempo/vitest*.ts apps/tempo/vite*.ts apps/tempo/test/*.ts 2>/dev/null; ls apps/tempo; grep -rn \"export const capture\\|export const unwrap\\|export function capture\\|export function unwrap\\|export type Result\" packages/protocol/src | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/vitest.components.config.ts apps/tempo/vitest.ui.config.ts; sed -n 60,130p packages/protocol/src/errors.ts; cat apps/tempo/package.json | grep -n test"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,75p apps/tempo/src/server/handlers/credentials.ts; grep -n \"SECRET_KEYS\" -A8 apps/tempo/src/do/credential.ts | head -20; sed -n 150,180p apps/tempo/src/do/credential.ts; sed -n 220,330p apps/tempo/src/do/credential.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/test/ui/components/setup.ts; grep -n \"deleteCredential\" -A15 apps/tempo/src/server/handlers/credentials.ts | head -30; grep -n \"CREDENTIAL_INVALID\" packages/protocol/src/errors.ts; sed -n 40,60p apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/ui/lib/toast.ts | head -60; sed -n 1,60p apps/tempo/src/ui/lib/api.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"CREDENTIAL_INVALID\" apps/tempo/src apps/mac/src crates/tempo-client/src 2>/dev/null | grep -v \"^.*test\" | head -20; grep -n \"CREDENTIAL_INVALID\" -B2 -A4 \"docs/02 Data and API.md\" | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"fn try_global\\|fn client\\|pub workspaces\\|fn clear_credential_invalid\" apps/mac/src crates | head; grep -rn \"fn aria_label\\|fn placeholder\\|fn set_value\" $(find . -path ./node_modules -prune -o -type d -name gpui_kit -print 2>/dev/null | head -3) 2>/dev/null | head; grep -n \"gpui_kit\\|gpui-kit\" apps/mac/Cargo.toml; which cargo"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"fn try_global\\|fn client\\|pub workspaces\\|fn clear_credential_invalid\" apps/mac/src crates | head; grep -n \"gpui\" apps/mac/Cargo.toml; which cargo; ls ~/.cargo/git/checkouts 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "fn try_global|fn client\\(|pub workspaces|fn clear_credential_invalid|gpui",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac",
+        "output_mode": "content",
+        "glob": "{**/*.rs,Cargo.toml}",
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\.disabled\\(|aria_label|InputState::new|set_value\\(|cx\\.open_url|background_executor\\(\\)\\s*$|\\.timer\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/src",
+        "output_mode": "content",
+        "head_limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "clear_credential_invalid|pub state:|placeholder\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "content",
+        "glob": "{apps/mac/**/*.rs,crates/**/*.rs}"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "CARGO_TARGET_DIR=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-459a617/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/target timeout 500 cargo check --offline -p tempo-mac 2>&1 | tail -20",
+        "timeout": 520000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cargo --version"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,80p apps/tempo/src/ui/hooks/useCall.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "pub struct SetCodexAuthIn|pub struct SetCodexAuthInAuthJson|impl ::std::convert::TryFrom<::std::string::String> for SetCodexAuthInAuthJson|pub struct Empty",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/crates/tempo-protocol/src/generated.rs",
+        "output_mode": "content",
+        "-A": 4
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Empty \\{\\}|struct Empty|type Empty",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "content",
+        "glob": "{apps/mac/src/**/*.rs,crates/**/*.rs}",
+        "head_limit": 10
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "pub fn call|pub async fn call",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/crates/tempo-client/src",
+        "output_mode": "content",
+        "-A": 8
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export (const|async function|function) runFn|export interface HandlerCtx|export type HandlerCtx",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/src/server/run.ts",
+        "output_mode": "content",
+        "-A": 12
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "WEB_ONLY|webOnly|BEARER_|allowBearer: (true|false)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/src",
+        "output_mode": "content",
+        "-n": true
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/src/http/native.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "FN_NAMES|NonWorkspace|WORKSPACE_FNS",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/packages/protocol/src",
+        "output_mode": "content",
+        "-A": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(?i)new upload|upload a new|auth\\.json again",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "content",
+        "glob": "{apps/**/*.{ts,tsx,rs},crates/**/*.rs,docs/*.md}"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(?i)new upload|upload a new|auth\\.json again|stopped working",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**",
+        "head_limit": 20
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "deviceauth|app_EMoamEEZ73f0CkXaXp7hrann",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "redirect\\?:|\"error\" won't|RequestRedirect",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/worker-runtime.d.ts",
+        "output_mode": "content",
+        "-B": 3,
+        "-A": 2
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rl \"since it does not make sense at the edge\" node_modules/workerd node_modules/@cloudflare 2>/dev/null"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "does not make sense at the edge",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/node_modules",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "redirect: \"(error|manual)\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "compatibility_date|compatibility_flags",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/wrangler.jsonc",
+        "output_mode": "content",
+        "-A": 2
+      }
+    }
+  ]
+}

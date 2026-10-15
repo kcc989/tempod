@@ -1,0 +1,96 @@
+{
+  "case": "S4",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "b0fb1293df8bf25e2e3fa593fbb51836e2ac760c",
+  "diffBytes": 615,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 43.4,
+  "usage": {
+    "prompt_tokens": 264279,
+    "completion_tokens": 3720,
+    "cost": 0.211167
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change removes the already-merged early return from prepareArtifactMerge, so an already-merged native PR now throws PR_NOT_MERGEABLE instead of returning its recorded mergeSha. That breaks the lost-acknowledgement retry the spec requires (09 Git Forge: \"A successful remote push with a lost metadata acknowledgement must be recoverable on retry\"; \"Retrying the action reconciles an already-pushed result\"). It also contradicts the existing worker test that expects prepareArtifactMerge on a merged PR to return {pullRequest, mergeSha}. No spec or implementation-notes change comes with it.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 320,
+        "text": "With the early return gone, a merged PR reaches the not-open guard and throws PR_NOT_MERGEABLE. The git.merge step in steps.ts only skips prepareArtifactMerge when state/input has pushedMergeSha, and mergePullRequest in rpc.ts only recovers that value from this workspace's last 50 merge_pr ops. A retry from another workspace on the same PR, or after the prior op has left recent(50), now fails instead of reconciling. The `\"mergeSha\" in merge` branch in steps.ts can now only be reached through the !updated race fallback.",
+        "blocking": true,
+        "evidence": {
+          "quote": "  if (pullRequest.state !== \"open\") throw new TempoError(\"PR_NOT_MERGEABLE\");",
+          "why": "Input: a native PR whose D1 row already has state 'merged' and merge_sha set, and a merge_pr op with no pushedMergeSha. Before the change, prepareArtifactMerge returned {pullRequest, mergeSha} and the step marked the workspace merged. Now this line throws PR_NOT_MERGEABLE. That breaks docs/09 Git Forge.md: \"Retrying the action reconciles an already-pushed result before attempting another merge\" and \"must be recoverable on retry\". No spec change comes with it, which CLAUDE.md rule 16 requires."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "line": 364,
+        "text": "The existing test still expects the removed behavior, so the worker suite should fail at this head (bun run test must pass under CLAUDE.md rule 15). Inferred from the code; the suite was not run.",
+        "blocking": true,
+        "evidence": {
+          "quote": "    expect(await prepareArtifactMerge(s.env, s.project, pr.number)).toEqual({",
+          "why": "This runs after completeArtifactMerge has marked the PR merged and expects {pullRequest: merged, mergeSha: MERGED}. At the head commit the call throws PR_NOT_MERGEABLE, so the await rejects and the test fails."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Idempotency and state: retry after lost merge acknowledgement",
+        "paths": [
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/do/workspace/steps.ts",
+          "apps/tempo/src/do/workspace/rpc.ts"
+        ]
+      },
+      {
+        "risk": "Spec conformance (09 Git Forge native merges)",
+        "paths": ["docs/09 Git Forge.md", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "Tests covering prepareArtifactMerge",
+        "paths": ["apps/tempo/test/worker/native-pull-requests.cases.ts"]
+      },
+      {
+        "risk": "Failure paths: guard behavior for non-open PRs",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S4; git rev-parse HEAD; sed -n 280,420p apps/tempo/src/artifacts/pull-requests.ts; grep -rn \"prepareArtifactMerge\" --include=*.ts . | grep -v node_modules"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S4; sed -n 720,800p apps/tempo/src/do/workspace/steps.ts; sed -n 330,400p apps/tempo/test/worker/native-pull-requests.cases.ts; grep -rn -i \"already merged\\|mergeSha\\|merge_sha\" docs/*.md | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S4; sed -n 60,75p \"docs/09 Git Forge.md\"; grep -n -i \"merge\" docs/IMPLEMENTATION_NOTES.md | head; git log --oneline -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S4; grep -rn \"pushedMergeSha\\|merge_pr\" apps/tempo/src | grep -v \"steps.ts:7[34]\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S4; sed -n 1140,1200p apps/tempo/src/do/workspace/rpc.ts"
+      }
+    }
+  ]
+}

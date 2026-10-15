@@ -1,0 +1,22 @@
+diff --git a/apps/tempo/src/server/handlers/issues.ts b/apps/tempo/src/server/handlers/issues.ts
+index 788af07..0fdae6e 100644
+--- a/apps/tempo/src/server/handlers/issues.ts
++++ b/apps/tempo/src/server/handlers/issues.ts
+@@ -16,7 +16,7 @@ import {
+ } from "../../artifacts/issues.ts";
+ import type { ProjectRow } from "../../db/d1.ts";
+ import type { HandlerCtx } from "../run.ts";
+-import { requireProject } from "./common.ts";
++import { requireReadableProject } from "./common.ts";
+ 
+ const withOwnedRepository = async <T>(
+   ctx: HandlerCtx,
+@@ -24,7 +24,7 @@ const withOwnedRepository = async <T>(
+   action: (project: ProjectRow) => Promise<T>,
+ ): Promise<T> => {
+   try {
+-    const project = await requireProject(ctx.env, ctx.user.id, projectId);
++    const project = await requireReadableProject(ctx.env, ctx.user, projectId);
+ 
+     if (project.provider !== "artifacts" || !project.artifactRepoId)
+       throw new TempoError("VALIDATION_FAILED", undefined, "Issues are available for Tempo repositories.");

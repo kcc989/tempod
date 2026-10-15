@@ -1,0 +1,185 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 15,
+  "seconds": 74.7,
+  "usage": {
+    "prompt_tokens": 576231,
+    "completion_tokens": 6368,
+    "cost": 0.5021644
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "The change treats a missing protected file (an ENOENT from Files.readFile) as having no hash, and still fails closed with RUN_ACCESS_VIOLATION on any other error. That is sound logic and doesn't weaken the protected-file check. But I couldn't verify the real Sandbox SDK 1.0.0 contract: the package isn't installed in this worktree and I couldn't fetch it. So it's unconfirmed that SandboxFileError is exported, how SandboxFileError.is matches, and whether readFile really throws code ENOENT for a missing file. The new worker test fakes the error with a plain Error carrying name and code, so it doesn't show what the real SDK does. The UI test change waits for observable state and is fine.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 21,
+        "text": "This fix only works if the real SDK throws a SandboxFileError that SandboxFileError.is accepts, with code \"ENOENT\", for a missing file. @cloudflare/sandbox 1.0.0 isn't vendored or installed here, so I couldn't check its types or source. If the real code differs, the guard still fails closed (no security loss), but runs for owners without a Codex login would keep failing with RUN_ACCESS_VIOLATION. To confirm, read the SandboxFileError definition and the Files.readFile error path in node_modules/@cloudflare/sandbox.",
+        "blocking": false,
+        "evidence": {
+          "quote": "if (SandboxFileError.is(cause) && cause.code === \"ENOENT\") return null;",
+          "why": "The check depends on the SDK's error class, its type guard and its error code, and none of those could be verified against the real package in this run."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 289,
+        "text": "The test fakes the SDK error as a plain Error with name and code copied onto it, not a real SandboxFileError. If SandboxFileError.is checks instanceof or a brand marker, this test fails. If it checks only name and code, the test passes but doesn't prove the real readFile behaves this way. To confirm, run bun run test and compare against the SDK's implementation of SandboxFileError.is.",
+        "blocking": false,
+        "evidence": {
+          "quote": "throw Object.assign(new Error(`readFile '${path}': No such file or directory (os error 2)`), {",
+          "why": "The fake differs from a real SandboxFileError instance, so it isn't proof of how the real SDK behaves."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Sandbox SDK Files.readFile, SandboxFileError): could not verify, because the package isn't installed and the network fetch needed approval",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/package.json",
+          "bun.lock",
+          "docs/01 Runtime and Agents.md"
+        ]
+      },
+      {
+        "risk": "Failure paths: errors other than ENOENT throw RUN_ACCESS_VIOLATION; a file missing at start and present at the end (or the reverse) still counts as a change; the caller fails the run when the check throws",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/src/do/workspace/runs.ts"]
+      },
+      {
+        "risk": "Idempotency and state: the hash function only reads; the baseline is stored in runGuard KV and compared with the same function",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/src/do/workspace/runs.ts"]
+      },
+      {
+        "risk": "Security: no secret or file content goes into error messages; the guard stays fail-closed",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Tests: the worker test uses waitFor on run status; the UI test waits for observable DOM state, not a sleep; mocks are restored in afterEach",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "apps/tempo/test/ui/components/issues.test.tsx"]
+      },
+      {
+        "risk": "Spec: tab 08 says to compare protected file hashes and doesn't cover missing files; treating a missing file as null matches the existing 404 handling",
+        "paths": ["docs/08 Events and Agents.md", "docs/02 Data and API.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat apps/tempo/src/agents/protected-files.ts && ls node_modules/@cloudflare/sandbox apps/tempo/node_modules/@cloudflare/sandbox 2>&1 | head; grep -rn \"SandboxFileError\" --include=*.d.ts -l node_modules/@cloudflare/sandbox apps/tempo/node_modules/@cloudflare/sandbox 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls; find / -path /proc -prune -o -type d -path \"*@cloudflare/sandbox\" -print 2>/dev/null | head; grep -rn \"SandboxFileError\\|ENOENT\\|readFile\" --include=*.ts --include=*.md . 2>/dev/null | grep -v node_modules | head -40"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError|ENOENT",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/@cloudflare/sandbox/**/*.d.ts",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "@cloudflare/sandbox",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "readFile|\\.status === 404|Files\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\.readFile\\(|404|SandboxError|\\.catch\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/do/workspace",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "[Pp]rotected|auth\\.json|RUN_ACCESS_VIOLATION",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,80p apps/tempo/test/worker/runs.cases.ts; sed -n 255,305p apps/tempo/test/worker/runs.cases.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Files|readFile|SandboxFileError|errors",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs/01 Runtime and Agents.md",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/@cloudflare/sandbox*/**/*.d.ts",
+        "path": "/root"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/sandbox/package.json",
+        "path": "/home/user"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protectedFileHashes|protectedFilesChanged",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 4
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 340,400p apps/tempo/test/ui/components/issues.test.tsx; git log --oneline -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "curl -sS https://unpkg.com/@cloudflare/sandbox@1.0.0/package.json | head -60"
+      }
+    }
+  ]
+}

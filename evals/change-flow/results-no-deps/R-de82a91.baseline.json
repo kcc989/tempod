@@ -1,0 +1,126 @@
+{
+  "case": "R-de82a91",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "de82a91d26288b4a13ed049ad627394d87d92717",
+  "diffBytes": 42558,
+  "diffCut": false,
+  "steps": 12,
+  "seconds": 74.7,
+  "usage": {
+    "prompt_tokens": 675190,
+    "completion_tokens": 5655,
+    "cost": 0.5906026
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Merges the three Vitest invocations into one run with worker/ui/components projects, runs UI and component tests in vmThreads, and makes every workspace-events describe concurrent (maxConcurrency 4) using test-context expect. Each concurrent case seeds its own user, project, credentials, WorkspaceDO and FakeTempod. No module-level mocks, timers or hooks are shared, and the D1 slug/branch unique indexes are per project, so a seedCounter race on slugs cannot collide. All describes in the file were converted and the global expect import was removed, so typecheck would catch any stray global expect. Turbo default inputs cover the new config files, and docs/CI.md was updated. Nothing blocking; only minor follow-ups.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/ui/components/artifacts.test.tsx",
+        "line": 79,
+        "text": "The queries changed from getByRole('img') / getByRole('button', {name}) to getByAltText / getByLabelText with a role selector, apparently to work under the new vmThreads pool. Coverage is about the same, but this suggests role-based queries behave differently under vmThreads + happy-dom. Say why in the PR, and check that no other component test silently depends on accessible-name computation.",
+        "blocking": false
+      },
+      {
+        "path": "docs/CI.md",
+        "line": 24,
+        "text": "CLAUDE.md requires the relevant CI stage timing whenever the suite changes. The diff has no timing evidence. Put before/after timings for the tempo test stage in the PR description, showing the run stays within the 270 s budget.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/fakes.ts",
+        "line": 435,
+        "text": "seedWorkspace reads the module-level seedCounter after an await, so concurrent cases can get the same slug/branch. This is harmless today because the unique indexes are scoped to project_id and each case seeds its own project. Consider taking the slug from the Seeded value so the fixture stays independent if a test ever reuses a project.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91; git log --oneline -2; grep -rn \"vitest\\.\\(ui\\|components\\|worker\\)\\|vitest.config\" --include=*.json --include=*.ts --include=*.mjs --include=*.yml --include=*.md . 2>/dev/null | grep -v node_modules | head -30; sed -n 1,145p apps/tempo/test/worker/workspace-events.test.ts | grep -n \"^let\\|^const\\|let \\|expect\" | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo; f=test/worker/workspace-events.test.ts; grep -n \"describe(\\|describe.concurrent\\|vi\\.\\|useFakeTimers\\|stubGlobal\\|globalThis\\|beforeEach\\|afterEach\\|beforeAll\" $f | head -40; cat test/worker/setup.ts | head -60; grep -rn \"waitFor\\b\" test/worker/helpers* 2>/dev/null | head; ls test/worker | head -50"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "describe\\(|describe\\.concurrent|vi\\.|useFakeTimers|stubGlobal|globalThis|beforeEach|afterEach|beforeAll|^\\s*expect\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content",
+        "head_limit": 60
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo && cat test/worker/setup.ts && ls test/worker && sed -n 80,125p test/worker/workspace-events.test.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^describe\\(|^\\s+async \\(\\) =>|async \\([a-zA-Z]+\\) =>|vi\\b",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 238,330p test/worker/workspace-events.test.ts; sed -n 2020,2047p test/worker/workspace-events.test.ts; sed -n 2232,2270p test/worker/workspace-events.test.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^(let|const|var) |globalThis|setTimeout|Date\\.now|export (const|function|async function) (seed|waitFor)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/fakes.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 395,500p test/worker/fakes.ts; grep -n \"fakes\\|registry\\|Map<\" test/worker/entry.ts | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "UNIQUE.*(slug|branch)|unique.*slug|slug.*UNIQUE",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/src/db",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91 && cat turbo.json | head -80; cat apps/tempo/turbo.json 2>/dev/null; grep -n \"vmThreads\\|requireAssertions\\|maxConcurrency\" -r apps/tempo/node_modules/vitest/package.json 2>/dev/null | head -2; node -p \"require('./apps/tempo/node_modules/vitest/package.json').version\" 2>/dev/null || grep '\"vitest\"' apps/tempo/package.json"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/turbo.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"vitest\"|\"@cloudflare/vitest-pool-workers\"|\"happy-dom\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/package.json",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

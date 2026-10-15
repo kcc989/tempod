@@ -1,0 +1,176 @@
+{
+  "case": "R-eaf0b28",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "eaf0b2894068c621e49284ddf30b43dfe91b6645",
+  "diffBytes": 161562,
+  "diffCut": false,
+  "steps": 14,
+  "seconds": 114.2,
+  "usage": {
+    "prompt_tokens": 1663449,
+    "completion_tokens": 9043,
+    "cost": 1.293157
+  },
+  "report": {
+    "status": "fail",
+    "summary": "CI/test-runtime change (split Turbo test tasks, docs-only classifier, concurrent Worker groups, phone browser project). One blocking problem: ops.test.ts makes the 'step runner rules' group describe.concurrent while one case changes the module-global STEP_LIMITS['settings.read'] to a 300 ms timeout for several seconds. Sibling cases in the same group get their setup script from settings.read at the same time, so on a loaded runner they can time out three times, fall back to defaults and never start setup. Everything else checked out: the classifier fails closed, the Turbo inputs and outputs are consistent, the browser fixtures exist, and the docs and spec are updated.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 1938,
+        "text": "The 'step runner rules' group is now describe.concurrent (maxConcurrency 4), but one case changes the shared STEP_LIMITS['settings.read'] to timeoutMs 300 for its whole run (3 attempts with backoff, several seconds). The DO shares that module object (the test depends on this), so concurrent siblings 'recovery after a DO restart: a running op that waits\u2026' and 'a step's timing includes the time it waited\u2026' run settings.read with a 300 ms timeout. Those siblings supply their setup script only through the fake settings.read reply. On a loaded runner a reply slower than 300 ms fails 3 times, the step is skipped with default settings, script.start never comes and the 'setup start' wait times out. This is a shared global under concurrent cases, against the repo rule to keep global-state groups sequential. Fix: keep this group, or this case, sequential.",
+        "blocking": true,
+        "evidence": {
+          "quote": "STEP_LIMITS[\"settings.read\"] = { ...original, timeoutMs: 300 };",
+          "why": "It is inside `describe.concurrent(\"step runner rules\", { timeout: 60_000 }, () => {`. Sibling cases run `seedWs({ effective: settingsWith({ scripts: { setup: \"npm ci\" } }) })`, where effective settings come only from the settings.read reply (useEffective). They then wait for `w.tempod.requestsOf(\"script.start\").length === 1`, which never happens if settings.read times out 3 times and is skipped with defaults."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: shared spies, globals or clock under concurrent cases; test-context expect; cleanup",
+        "paths": [
+          "apps/tempo/test/worker/ops.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/vitest.worker.config.ts"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment: Turbo task graph (^transit instead of ^build), task inputs and outputs, fixture outDirs, scripts",
+        "paths": [
+          "turbo.json",
+          "apps/tempo/package.json",
+          "package.json",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "packages/cities/package.json",
+          "packages/tempod/package.json",
+          "apps/tempo/test/worker/entry.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/vite.web-test.config.ts",
+          "apps/tempo/test/browser/vite.config.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths / fail closed: docs-only classification (missing, zero or invalid base, fetch failure, renames, empty diff, timeouts), workflow gating, required check kept",
+        "paths": [
+          "scripts/ci-changes.ts",
+          "scripts/ci-changes.test.ts",
+          ".github/workflows/ci.yml",
+          "scripts/ci.ts"
+        ]
+      },
+      {
+        "risk": "Tool versions: pinned oxlint/oxfmt via bunx on the docs-only path; lint config needs no node_modules plugins",
+        "paths": ["package.json", ".oxlintrc.json", "scripts/ci.ts"]
+      },
+      {
+        "risk": "Browser tests: phone project grep, tap support, fixture contracts (requests, Chose text, Back button)",
+        "paths": [
+          "tests/e2e/playwright.browser.config.ts",
+          "tests/e2e/playwright.web.config.ts",
+          "tests/e2e/browser-tests/workspace.spec.ts",
+          "tests/e2e/browser-tests/fixture.ts",
+          "tests/e2e/web/client.spec.ts",
+          "apps/tempo/src/ui/components/chat/TranscriptItems.tsx",
+          "apps/tempo/src/ui/components/settings/SettingsPage.tsx"
+        ]
+      },
+      {
+        "risk": "Spec/docs updated with behavior change; no secrets or credentials touched",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "AGENTS.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; git rev-parse HEAD; ls apps/tempo/vitest*.ts apps/tempo/test/browser/vite.config.ts; grep -n \"STEP_LIMITS\\[\\|vi.spyOn\\|Date.now = \\|vi.useFakeTimers\\|globalThis\\.\\|describe\" apps/tempo/test/worker/ops.test.ts | head -80"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/ops.test.ts",
+        "offset": 1900,
+        "limit": 190
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; cat apps/tempo/vitest.worker.config.ts; grep -n \"maxConcurrency\\|sequence\\|concurrent\" apps/tempo/vitest*.ts; grep -n \"settings.read\\|effective\" apps/tempo/test/worker/ops.test.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; f=apps/tempo/test/worker/workspace-rpc.test.ts; grep -n \"vi\\.\\|^describe\\|STEP_LIMITS\\|expect(\" $f | grep -v \"^\\S*:\\s\\+expect(\" | head -60; echo ---; awk 'NR<320' $f | grep -n \"expect\" "
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n \"vi\\.\\|^describe\\|STEP_LIMITS\" apps/tempo/test/worker/workspace-rpc.test.ts; echo ---; head -320 apps/tempo/test/worker/workspace-rpc.test.ts | grep -n \"expect\""
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; for p in packages/*/package.json apps/*/package.json tests/*/package.json; do echo \"== $p\"; node -e 'const j=require(\"./'$p'\");console.log(j.name, JSON.stringify(j.scripts), JSON.stringify(j.main||j.exports||\"\"), Object.keys({...j.dependencies,...j.devDependencies}).filter(d=>d.startsWith(\"@tempo\")).join(\",\"))'; done; cat .oxlintrc.json 2>/dev/null | head -30; grep -n '\"oxlint\"\\|\"oxfmt\"\\|\"turbo\"' package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n '\"build\"\\|\"main\"\\|\"exports\"\\|\"name\"\\|\"test\"' packages/*/package.json apps/*/package.json; ls -a | grep -i oxlint; grep -n '\"oxlint\"\\|\"oxfmt\"' package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n '@tempo/' apps/tempo/package.json; grep -rln 'dist/tempod' apps/tempo/test apps/tempo/vitest*.ts 2>/dev/null | head; cat .oxlintrc.json | head -40; grep -rn \"import\" apps/tempo/test/worker/*.ts | grep -v \"\\.\\./\\.\\./src\\|\\./\\|vitest\\|cloudflare:test\\|@tempo/protocol\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -rhoE \"from \\\"\\.\\./[^\\\"]+\\\"\" apps/tempo/test/worker | sort -u | grep -v '\"\\.\\./\\.\\./src' | head; ls apps/tempo/test; grep -rhoE \"from \\\"[./]+[^\\\"]+\\\"\" apps/tempo/test/ui | sort -u | grep -v \"src/\" | head; grep -rhoE \"from \\\"[./]+[^\\\"]+\\\"\" apps/tempo/test/worker/*.ts | grep -E \"ui/|routes/\" | sort -u | head; grep -n \"include\\|setupFiles\" apps/tempo/vitest.ui.config.ts apps/tempo/vitest.components.config.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; cat apps/tempo/test/worker/entry.ts | head -20; grep -rlE \"from \\\"[^\\\"]*(/ui/|/routes/|routeTree)\" apps/tempo/src --include=*.ts --include=*.tsx | grep -v \"^apps/tempo/src/ui/\\|^apps/tempo/src/routes/\" | head; grep -rlE \"src/(ui|routes)/|~/(ui|routes)\" apps/tempo/test/worker | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -n \"outDir\\|root\\b\\|root:\" apps/tempo/vite.web-test.config.ts apps/tempo/test/browser/vite.config.ts; grep -n \"on:\" -A8 .github/workflows/ci.yml | head -14; grep -n \"web\\|browser\" scripts/ci.ts | head; grep -rn \"router\" apps/tempo/test/worker | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -rn \"requests\\b\\|requests:\" tests/e2e/browser-tests/*.ts | head -5; grep -rn \"Chose:\" apps/tempo/src | head -3; grep -rn \"\\\"Back\\\"\\|aria-label=\\\"Back\\\"\\|'Back'\" apps/tempo/src/ui | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -rn \"Back\\b\" apps/tempo/src/ui --include=*.tsx | grep -i \"label\\|>Back<\" | head -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28; grep -rn \"Back\" apps/tempo/src --include=*.tsx | head -8"
+      }
+    }
+  ]
+}

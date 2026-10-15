@@ -1,0 +1,344 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 48,
+  "seconds": 206.1,
+  "usage": {
+    "prompt_tokens": 252780,
+    "completion_tokens": 2642,
+    "cost": 0.0,
+    "neurons": 15937.909072875977
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "Could not fully verify the real contract between MCP clients and the Effect schema output. The change adds `toolInputSchema` to force an empty object schema when `ISSUE_TOOLS[name].input` has no fields. I read the modified code and tests, but could not locate the vendored/generated MCP spec or `toJsonSchemaDocument` behavior in node_modules to confirm the claim that clients require `type: \"object\"`. The test only checks the syntactic shape returned by `tools/list` and does not exercise a real client or JSON Schema generation edge cases such as a struct with optional fields only. Without independent confirmation from a real MCP contract or the Effect docs, I cannot rule out that the hard-coded `{ properties: {}, additionalProperties: false }` may be incomplete (e.g., missing `required: []`) or that the special-case should apply more broadly.",
+    "checked": [
+      {
+        "risk": "Real contracts",
+        "paths": [
+          "/workspace/packages/tempod/src/tempo-mcp.ts",
+          "/workspace/packages/tempod/test/tempo-mcp.test.ts",
+          "/workspace/packages/protocol/src/issue-tools.ts",
+          "/workspace/docs/01 Runtime and Agents.md"
+        ]
+      },
+      {
+        "risk": "Tests",
+        "paths": ["/workspace/packages/tempod/test/tempo-mcp.test.ts"]
+      }
+    ],
+    "findings": [
+      {
+        "blocking": true,
+        "path": "/workspace/packages/tempod/src/tempo-mcp.ts",
+        "line": 224,
+        "text": "Hard-coded empty object schema may not match the real MCP client contract. The function returns `{ type: \"object\", properties: {}, additionalProperties: false }` when a struct has no fields, but there is no MCP protocol document in the repo asserting this is sufficient. The generated `JsonSchema.toDocumentDraft07(...).schema` may include additional required fields (e.g., `required: []`) that are omitted in the fallback. Without verifying against the actual MCP specification or a real client, the branch cannot be proven correct.",
+        "evidence": {
+          "quote": "const toolInputSchema = (input: Schema.Struct<Schema.Struct.Fields>) =>\n  Object.keys(input.fields).length === 0\n    ? { type: \"object\", properties: {}, additionalProperties: false }\n    : JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(input, { onExcessProperty: \"error\" })).schema;",
+          "why": "The fallback object is constructed ad-hoc and diverges from the normal `JsonSchema.toDocumentDraft07` path. The comment claims MCP clients require this, but no vendored MCP spec or generated type was produced to confirm the shape. A blocking finding requires independent evidence of contract; that evidence is missing."
+        }
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git -C /workspace log --oneline -5"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git -C /workspace diff f29c2bc59fe3700079a53fead37c86759de11175 1ec4cc30b7bbf14339434b45e04f6a052c592c80 --stat"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -maxdepth 3 -name \"CLAUDE.md\" -o -name \"AGENTS.md\" -o -name \"docs\" -type d"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/CLAUDE.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/AGENTS.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/tempod/src/tempo-mcp.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/tempod/test/tempo-mcp.test.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace/docs -maxdepth 1 -type f -name \"*.md\" | sort"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"ISSUE_TOOLS\" /workspace/packages/protocol -l"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"MCP\" /workspace/docs -l"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/docs/01 Runtime and Agents.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/protocol/src/issue-tools.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/docs/IMPLEMENTATION_NOTES.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/docs/IMPLEMENTATION_NOTES.md",
+        "start": 1,
+        "end": 30
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"tools/list\" /workspace/docs -l"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"inputSchema\" /workspace/docs -l"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"MCP.*schema\" /workspace/docs -i -l"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n -A 20 -B 5 \"tools/list\" /workspace/docs/01\\ Runtime\\ and\\ Agents.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n -A 5 \"issue tools\" /workspace/docs/09\\ Git\\ Forge.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"projectInput\" /workspace/packages/tempod/src/tempo-mcp.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n -B 2 -A 10 \"report_result\" /workspace/packages/tempod/src/tempo-mcp.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "cat /workspace/packages/tempod/package.json"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "cat /workspace/packages/protocol/package.json"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"const ISSUE_TOOL_NAMES\" /workspace/packages/protocol/src -n -A 20"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/protocol/src/issue-tools.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"input: Schema.Struct\" /workspace/packages/tempod/src/tempo-mcp.ts | head -30"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"Schema.Struct\" /workspace/packages/tempod/src/tempo-mcp.ts | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"input: Schema.Struct\" /workspace/packages/tempod/src/tempo-mcp.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/tempod/src/tempo-mcp.ts",
+        "start": 1,
+        "end": 320
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/tempod/src/tempo-mcp.ts",
+        "start": 320,
+        "end": 461
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"AgentProposal\" /workspace/packages/protocol/src -r"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"RUN_REPORTS\" /workspace/packages/protocol/src -r"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/protocol/src/agent-proposals.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/protocol/src/runs.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/packages/tempod/test/tempo-mcp.test.ts",
+        "start": 1,
+        "end": 120
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -maxdepth 4 -type d -name \"mcp\" -o -type f -name \"*.md\" | xargs grep -l \"inputSchema\" 2>/dev/null | head -10"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"additionalProperties\" /workspace/packages -n | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"additionalProperties\" /workspace/packages -n | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R additionalProperties /workspace/packages -n | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"additionalProperties\" /workspace/packages -n | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "cat /workspace/packages/tempod/package.json | grep -A5 '@effect/schema'"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "cat /workspace/packages/tempod/package.json"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls /workspace/packages/tempod/node_modules/effect/dist/schema/"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"toJsonSchemaDocument\" /workspace/packages/tempod/node_modules/effect/dist/schema/index.d.ts | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n toJsonSchemaDocument /workspace/packages/tempod/node_modules/effect/dist/schema/index.d.ts | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "sed -n '1,50p' /workspace/packages/tempod/node_modules/effect/dist/schema/index.d.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -R \"toJsonSchemaDocument\" /workspace/packages/tempod/node_modules/effect/dist -n | head -20"
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

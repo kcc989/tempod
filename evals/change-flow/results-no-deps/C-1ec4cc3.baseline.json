@@ -1,0 +1,48 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 27.7,
+  "usage": {
+    "prompt_tokens": 162976,
+    "completion_tokens": 2282,
+    "cost": 0.22431279999999998
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The fix is correct: ISSUE_TOOLS inputs with no fields (list_issue_labels after projectId is stripped) now get {type:\"object\",properties:{},additionalProperties:false}. That matches onExcessProperty:\"error\" and the list_agents schema, and inputs with fields keep the Effect-generated schema. The new test checks every tool from tools/list in both chat mode and run mode (including report_result) and fails if any inputSchema.type is not \"object\". One non-blocking problem: the handleMcpMessage doc comment was moved off its function. Typecheck and tests were not run because the worktree has no dependencies installed.",
+    "findings": [
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 223,
+        "text": "toolInputSchema was inserted between handleMcpMessage and its doc comment. \"Handles one JSON-RPC message; returns the response, or null for a notification.\" now sits stacked above the helper's own comment, and handleMcpMessage has none. Move it back down to sit above `export const handleMcpMessage`.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 200,320p packages/tempod/src/tempo-mcp.ts && grep -n \"inputSchema\\|toJsonSchema\" packages/tempod/src/*.ts && grep -rn \"list_issue_labels\" packages --include=*.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,40p packages/protocol/src/issue-tools.ts; sed -n 85,100p packages/protocol/src/issue-tools.ts; grep -n \"input:\" packages/protocol/src/issue-tools.ts | head -20; grep -n \"^import\\|Schema\" packages/tempod/test/tempo-mcp.test.ts | head; git log --oneline -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/tempod/package.json | grep -A8 '\"scripts\"'; cat packages/tempod/tsconfig.json; ls node_modules | head -3"
+      }
+    }
+  ]
+}

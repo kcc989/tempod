@@ -1,0 +1,271 @@
+{
+  "case": "R-eaf0b28",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "eaf0b2894068c621e49284ddf30b43dfe91b6645",
+  "diffBytes": 161562,
+  "diffCut": false,
+  "steps": 26,
+  "seconds": 198.4,
+  "usage": {
+    "prompt_tokens": 3172186,
+    "completion_tokens": 15752,
+    "cost": 1.2120826
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change splits Worker/UI/component test tasks and fixture builds into separate Turbo cache entries with transit hashing, adds a fail-closed docs-only CI path, makes many Worker RPC/op test groups concurrent, and narrows phone browser coverage. Most of it checks out: the classifier falls back to the full suite for missing, invalid or unreachable bases, empty diffs and both sides of renames; the required check job always runs; Turbo inputs match the real import graph (Worker tests never import src/ui or src/routes; fixtures only import src and their own folders; Vite outputs match the cached outputs); and Held fakes now clean up per test. One blocking problem: the newly concurrent 'step runner rules' group contains a case that changes the module-global STEP_LIMITS table, so every case running beside it gets a 300 ms settings.read timeout. On a busy runner a neighbour's settings.read can be skipped, its setup script never starts, and the case times out.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/ops.test.ts",
+        "line": 1938,
+        "text": "The 'step runner rules' group is now describe.concurrent (maxConcurrency 4), but its 'aborts a step at its timeout' case changes the module-global STEP_LIMITS table that the WorkspaceDO reads through limitOf(). While it runs, every other case in the group also gets a 300 ms settings.read timeout instead of 10 s. Keep this group sequential, or move the timeout case into a sequential group. This breaks the AGENTS.md rule the same change adds about keeping global-state groups sequential.",
+        "blocking": true,
+        "evidence": {
+          "quote": "STEP_LIMITS[\"settings.read\"] = { ...original, timeoutMs: 300 };",
+          "why": "STEP_LIMITS is exported from src/do/workspace/runner.ts and read at step time through `limitOf = (step) => STEP_LIMITS[step] ?? DEFAULT_LIMIT`. With `describe.concurrent(\"step runner rules\"...)`, the neighbouring cases 'recovery after a DO restart: a running op that waits...' and 'a step's timing includes the time it waited...' seed with `effective: settingsWith({ scripts: { setup: \"npm ci\" } })`, which reaches the workspace only through the fake's settings.read handler. If that request takes over 300 ms on a busy runner, settings.read fails 3 times and is skipped (03 Step limits: 'skip'). Defaults are used, no setup script exists, and `drive(... requestsOf(\"script.start\").length === 1 ...)` never succeeds, so the case times out. This is a shared global under concurrent cases."
+        }
+      },
+      {
+        "path": "scripts/ci.ts",
+        "text": "The docs-only path runs oxlint and oxfmt through `bunx --package <tool>@<pinned devDependency version>` with no node_modules. The .oxlintrc.json and .oxfmtrc.json configs use only built-in plugins, so this should work, but neither the lightweight path nor the git fetch-by-SHA in ci-changes.test.ts was executed here (running the test needed approval). A first docs-only CI run would confirm it.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: Turbo transit nodes, Vite default outDir and cached outputs, Playwright device and tap contracts, GitHub Actions event SHAs and checkout depth",
+        "paths": [
+          "turbo.json",
+          "apps/tempo/package.json",
+          "apps/tempo/vite.web-test.config.ts",
+          "apps/tempo/test/browser/vite.config.ts",
+          "tests/e2e/playwright.web.config.ts",
+          "tests/e2e/playwright.browser.config.ts",
+          ".github/workflows/ci.yml",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "packages/cities/package.json",
+          "packages/tempod/package.json"
+        ]
+      },
+      {
+        "risk": "Failure paths: the classifier fails closed when the base is missing, all zeros, invalid or unreachable, when the diff is empty, and when a git command fails or times out; ci.ts budget and exit handling in docs-only mode",
+        "paths": [
+          "scripts/ci-changes.ts",
+          "scripts/ci-changes.test.ts",
+          "scripts/ci.ts",
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "risk": "Cache correctness: Worker, UI and component inputs against the real import graph, fixture-build inputs including tailwind @source and imports, globalDependencies",
+        "paths": [
+          "turbo.json",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/test/worker/entry.ts",
+          "apps/tempo/test/web",
+          "apps/tempo/test/browser",
+          "apps/tempo/test/ui"
+        ]
+      },
+      {
+        "risk": "Tests: shared spies, globals and cleanup under the new describe.concurrent groups; distinct fixtures per case; per-test hold cleanup",
+        "paths": [
+          "apps/tempo/test/worker/ops.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/src/do/workspace/runner.ts"
+        ]
+      },
+      {
+        "risk": "Security and build environment: no secrets touched; the docs-only path uses pinned tool versions from package.json; no workflow path ignores; required check kept",
+        "paths": ["package.json", ".oxlintrc.json", ".oxfmtrc.json", ".github/workflows/ci.yml", ".gitignore"]
+      },
+      {
+        "risk": "Spec and repo rules: CI docs and Build Plan updated in the same change; AGENTS.md rules compared with the implementation; no code or config reads docs/ or spikes/ files",
+        "paths": ["docs/CI.md", "docs/06 Build Plan.md", "AGENTS.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Browser test coverage changes: phone project grep and tags, tap() requires hasTouch (iPhone 13 device), removed setViewportSize",
+        "paths": [
+          "tests/e2e/web/client.spec.ts",
+          "tests/e2e/browser-tests/workspace.spec.ts",
+          "tests/e2e/playwright.web.config.ts",
+          "tests/e2e/playwright.browser.config.ts"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -1 && ls apps/tempo/ && cat apps/tempo/vitest*.ts && cat turbo.json | head -20 && ls packages && for p in packages/*/package.json; do echo $p; grep -A12 '\"scripts\"' $p; done"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -1 && ls apps/tempo/ packages && cat apps/tempo/vitest.config.ts apps/tempo/vitest.worker.config.ts apps/tempo/vitest.ui.config.ts apps/tempo/vitest.components.config.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test apps/tempo/src; grep -rhoE \"from \\\"[^\\\"]+\\\"\" apps/tempo/test/worker | sort | uniq -c | sort -rn | grep -v '\"\\./' | head -60"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rnE \"src/(ui|routes)|routeTree|~/ui|~/routes\" apps/tempo/test/worker apps/tempo/src --include=*.ts -l | grep -v \"^apps/tempo/src/ui\\|^apps/tempo/src/routes\" | head; cat apps/tempo/test/worker/entry.ts | head -30; grep -rn \"import\" apps/tempo/src/worker.ts apps/tempo/src/server* 2>/dev/null | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "for p in packages/protocol packages/settings packages/cities packages/tempod tests/e2e tests/conformance; do echo \"== $p\"; python3 -c \"import json;d=json.load(open('$p/package.json'));print(d.get('name'),d.get('scripts'),d.get('main'),d.get('exports'),list((d.get('dependencies')or{}).keys()))\"; done; cat turbo.json | sed -n 1,50p; git show de82a91:turbo.json | sed -n 1,30p"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -A8 -E '\"(name|scripts|main|exports)\"' packages/protocol/package.json packages/settings/package.json packages/cities/package.json packages/tempod/package.json | head -120"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/turbo.json",
+        "limit": 50
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -nE \"^describe|vi\\.(spyOn|useFakeTimers|setSystemTime|stubGlobal)|STEP_LIMITS\\[.*\\] =|Date\\.now =|globalThis\\.|mockImplementation\" apps/tempo/test/worker/ops.test.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/ops.test.ts",
+        "offset": 1902,
+        "limit": 185
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"effective\\|settings.read\" apps/tempo/test/worker/ops.test.ts | head -30; grep -rn \"STEP_LIMITS\" apps/tempo/src/do/workspace/*.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -nE \"^describe|vi\\.(spyOn|useFakeTimers|setSystemTime|stubGlobal)|STEP_LIMITS|Date\\.now =|env\\.DB =|\\(env as\" apps/tempo/test/worker/workspace-rpc.test.ts; grep -n \"brokenD1\" -A25 apps/tempo/test/worker/workspace-rpc.test.ts | sed -n 1,35p"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rnE \"docs/|\\.\\./docs|README\\.md|AGENTS\\.md|spikes/\" --include=*.ts --include=*.tsx --include=*.json -l . 2>/dev/null | grep -v node_modules | head -20; ls docs spikes 2>/dev/null | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rnoE \"[\\\"'\\`][^\\\"'\\`]*(docs/|spikes/)[^\\\"'\\`]*\" packages apps/tempo/src apps/tempo/test scripts tests --include=*.ts --include=*.tsx 2>/dev/null | grep -v node_modules | grep -v ci-changes | head -20; grep -rn \"docs\" packages/protocol/scripts/*.ts | head; ls docs/deployment docs/evidence | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -nE \"oxlint|oxfmt\" package.json; ls -a | grep -iE \"oxlint|oxfmt\"; cat .oxlintrc.json 2>/dev/null | head -30; sed -n 1,25p .github/workflows/ci.yml"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat .oxfmtrc.json; sed -n 25,80p scripts/ci.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/vite.web-test.config.ts; cat apps/tempo/test/browser/vite.config.ts; sed -n 1,25p tests/e2e/playwright.web.config.ts; cat .gitignore"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/web apps/tempo/test/browser; grep -rhoE \"from \\\"\\.\\./[^\\\"]+\\\"|@source[^;]*|@import[^;]*\" apps/tempo/test/web apps/tempo/test/browser apps/tempo/src/styles.css | sort -u | head -30; grep -n \"workspace:\" apps/tempo/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rhoE \"from \\\"[^\\\"]*\\.\\./[^\\\"]+\\\"\" apps/tempo/test/ui | grep -vE \"src/\" | sort -u | head -30; grep -rln \"components/\" apps/tempo/test/ui --include=*.test.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"from \\\"\\.\\./fixtures\\\"\\|from \\\"\\.\\./storage-stub\\\"\" apps/tempo/test/ui | head -5; ls apps/tempo/test/ui | head -40; grep -rhoE \"from \\\"[^\\\"]*test/[^\\\"]+\\\"\" apps/tempo/test/ui | sort -u | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"^let \\|^const [a-zA-Z]* = new \\|^const [a-zA-Z]*: .*\\[\\] = \\|^const [a-zA-Z]* = \\[\\]\" apps/tempo/test/worker/ops.test.ts apps/tempo/test/worker/workspace-rpc.test.ts apps/tempo/test/worker/*helpers*.ts apps/tempo/test/worker/fakes*.ts 2>/dev/null; ls apps/tempo/test/worker | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -nE \"^(export )?(let|const|var) |globalThis|vi\\.spyOn|fetchMock|outboundService\" apps/tempo/test/worker/fakes.ts apps/tempo/test/worker/setup.ts | head -40"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker/fakes.ts",
+        "offset": 385,
+        "limit": 45
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -nE \"^\\s+[A-Z_]{4,}(\\[[^]]*\\])?(\\.[a-zA-Z]+)? = |Object\\.assign\\([A-Z_]+|\\.prototype\\.\" apps/tempo/test/worker/ops.test.ts apps/tempo/test/worker/workspace-rpc.test.ts | head; sed -n 2060,2080p apps/tempo/test/worker/workspace-rpc.test.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^\\s+[A-Z_]{4,}\\S* = |\\.prototype\\.",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/apps/tempo/test/worker",
+        "glob": "{ops,workspace-rpc}.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 120 bun test scripts/ci-changes.test.ts 2>&1 | tail -15; git status --short | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun test /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-eaf0b28/scripts/ci-changes.test.ts",
+        "timeout": 120000
+      }
+    }
+  ]
+}

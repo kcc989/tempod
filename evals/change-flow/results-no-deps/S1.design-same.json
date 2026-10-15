@@ -1,0 +1,108 @@
+{
+  "case": "S1",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "0b524cf545d50518420d361fd5cc80b095bd542c",
+  "diffBytes": 1374,
+  "diffCut": false,
+  "steps": 6,
+  "seconds": 42.2,
+  "usage": {
+    "prompt_tokens": 255291,
+    "completion_tokens": 3450,
+    "cost": 0.2801676
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change makes the protected-file guard fail open. Before, only an ENOENT SandboxFileError counted as a missing file, and any other read failure threw RUN_ACCESS_VIOLATION. Now every readFile rejection (EACCES, EIO, transport or container errors) becomes null, which means 'file absent'. If a read fails both before and after a turn, the guard records null both times and sees no change, so a changed credential file is not caught. That goes against the fail-closed intent in runs.ts and spec 08 step 3. The allowance for a missing Codex login should stay limited to ENOENT; if the test's fake error does not pass SandboxFileError.is, fix the fake or the check, not the guard.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "Every readFile error is now treated as 'file absent', so the guard fails open. Example: a file the SDK cannot read (for instance an earlier agent turn ran chmod 000 on ~/.codex/auth.json, or the container RPC has a transient error) hashes to null at run start. The agent can then make the file readable, change the credentials, and make it unreadable again, or simply delete it. The hash after the turn is null again, before[path] === after[path], and no RUN_ACCESS_VIOLATION is raised. The old code threw RUN_ACCESS_VIOLATION here. runs.ts catches errors from protectedFilesChanged and fails the run with 'Protected login or config files could not be checked.', which shows the intended fail-closed design. This change removes that path for read errors.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const response = await files.readFile(path).catch(() => null);",
+          "why": "This catch turns every rejection into null, the same value used for 'file does not exist'. protectedFilesChanged compares `before[path] !== after[path]`, so if the read fails at both checks, the result is null === null and the turn passes. Guards must fail closed (verifier risk 2, spec 08 step 3: 'Compare the protected login and config file hashes ... A change fails with RUN_ACCESS_VIOLATION'). Before this change, only `SandboxFileError.is(cause) && cause.code === \"ENOENT\"` returned null."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 290,
+        "text": "Not blocking: the missing-login test fakes the SDK error with Object.assign on a plain Error using name 'SandboxFileError'. It is not a real SandboxFileError instance. If SandboxFileError.is checks the instance or a brand rather than `name`, the old ENOENT branch would not match the fake. That may be why the author widened the catch. I could not confirm, because @cloudflare/sandbox is not installed in this worktree, so its dist types and source were not available. Building the fake with the SDK's own SandboxFileError constructor would show which. There is also no test for a read error that is not ENOENT, which would have caught this regression.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Failure paths / guards fail closed",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/src/do/workspace/runs.ts"]
+      },
+      {
+        "risk": "Security: protected credential files guard",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "packages/protocol/src/errors.ts"
+        ]
+      },
+      {
+        "risk": "Spec conformance (08 run engine step 3, RUN_ACCESS_VIOLATION)",
+        "paths": ["docs/08 Events and Agents.md", "docs/01 Runtime and Agents.md", "docs/02 Data and API.md"]
+      },
+      {
+        "risk": "Real contracts: Sandbox SDK Files.readFile / SandboxFileError (SDK sources not in the worktree; only the test fake was compared)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Tests",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Repository rules",
+        "paths": ["CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 0b524cf545d50518420d361fd5cc80b095bd542c:apps/tempo/src/agents/protected-files.ts; grep -rn \"protectedFileHashes\\|RUN_ACCESS_VIOLATION\" --include=*.ts apps packages | grep -v node_modules | head -30; grep -rn -i \"protected\\|RUN_ACCESS_VIOLATION\" docs | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "d=$(find node_modules/@cloudflare/sandbox -maxdepth 2 -name package.json | head -1); echo $d; grep -rn \"SandboxFileError\\|readFile\" $(dirname $d)/dist/*.d.ts 2>/dev/null | head -20; sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 440,456p apps/tempo/src/do/workspace/runs.ts; sed -n 260,290p apps/tempo/test/worker/runs.cases.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules/@cloudflare/sandbox/dist apps/tempo/node_modules/@cloudflare/sandbox/dist 2>&1 | head; sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 440,456p apps/tempo/src/do/workspace/runs.ts; sed -n 255,290p apps/tempo/test/worker/runs.cases.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 286,310p apps/tempo/test/worker/runs.cases.ts; find / -path /proc -prune -o -type d -name sandbox -path \"*@cloudflare*\" -print 2>/dev/null | head -3"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1/apps/tempo/test/worker/runs.cases.ts",
+        "offset": 284,
+        "limit": 25
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/@cloudflare/sandbox/package.json"
+      }
+    }
+  ]
+}

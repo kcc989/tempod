@@ -1,0 +1,204 @@
+{
+  "case": "S4",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "b0fb1293df8bf25e2e3fa593fbb51836e2ac760c",
+  "diffBytes": 615,
+  "diffCut": false,
+  "steps": 21,
+  "seconds": 88.4,
+  "usage": {
+    "prompt_tokens": 70205,
+    "completion_tokens": 1379,
+    "cost": 0.0,
+    "neurons": 5445.893737792969
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change removes an early-return idempotency path in prepareArtifactMerge, but the same behavior is now handled inside the lost-update branch after the compare-and-swap update. The code and tests agree: merged PRs return {pullRequest, mergeSha} on retry. No contract, failure-path, security, or spec issues found.",
+    "checked": [
+      {
+        "paths": [
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/do/workspace/steps.ts",
+          "apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "docs/09 Git Forge.md"
+        ],
+        "risk": "Idempotency and state"
+      },
+      {
+        "paths": [
+          "apps/tempo/src/do/workspace/steps.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "docs/09 Git Forge.md"
+        ],
+        "risk": "Failure paths"
+      },
+      {
+        "paths": [
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/test/worker/native-pull-requests.cases.ts"
+        ],
+        "risk": "Tests"
+      },
+      {
+        "paths": ["docs/09 Git Forge.md"],
+        "risk": "The spec"
+      },
+      {
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts"],
+        "risk": "Real contracts"
+      }
+    ],
+    "findings": []
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "start": 280,
+        "end": 380
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la docs/"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "CLAUDE.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "AGENTS.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"prepareArtifactMerge\" --type ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"prepareArtifactMerge\" apps/tempo/src/artifacts/pull-requests.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/09 Git Forge.md",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "start": 1,
+        "end": 120
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"prepareArtifactMerge\\|mergePullRequest\\|merge_pr\\|git.merge\" apps/tempo/src/do/workspace/steps.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"prepareArtifactMerge\" apps/tempo/test/worker/native-pull-requests.cases.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "start": 280,
+        "end": 413
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "start": 300,
+        "end": 500
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "start": 780,
+        "end": 900
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"merge_pr\" apps/tempo/src/do/workspace/steps.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "start": 500,
+        "end": 650
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"merge\" apps/tempo/src/do/workspace/steps.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "start": 650,
+        "end": 780
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/09 Git Forge.md",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

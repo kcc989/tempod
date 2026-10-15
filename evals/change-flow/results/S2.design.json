@@ -1,0 +1,227 @@
+{
+  "case": "S2",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "5770819eb7eea0219eecaa4e0176daaa1e2837e1",
+  "diffBytes": 718,
+  "diffCut": false,
+  "steps": 28,
+  "seconds": 70.6,
+  "usage": {
+    "prompt_tokens": 160765,
+    "completion_tokens": 2513,
+    "cost": 0.0,
+    "neurons": 12507.566429138184
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The single-line change in mergeBlock treats a skipped required job as equivalent to a successful one. The Project CI spec says merge gate requires every required job to be success, and only success. Skipped is explicitly a non-success conclusion and should not satisfy the gate. This weakens the merge gate for the common case where a required job is skipped because one of its dependencies failed.",
+    "checked": [
+      {
+        "risk": "The spec",
+        "paths": ["apps/tempo/src/do/repository-ci.ts", "docs/10 Project CI.md"]
+      }
+    ],
+    "findings": [
+      {
+        "blocking": true,
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "text": "mergeGate allows skipped required jobs to pass",
+        "line": 288,
+        "evidence": {
+          "quote": "    const passed = spec.required.every((key) =>\n      jobs.some((job) => job.key === key && job.status === \"completed\" && (job.conclusion === \"success\" || job.conclusion === \"skipped\")),\n    );",
+          "why": "docs/10 Project CI.md states under Merge gate: \"Merge gate: a native merge needs the newest run for the exact head SHA and the current revision, with every required job success.\" Skipped is a job conclusion defined separately from success; skipped jobs are produced when a need fails. Treating skipped as success lets a required job satisfy the gate even though it did not run successfully (e.g., its dependency failed), which violates the spec and could merge broken code."
+        }
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "start": 1,
+        "end": 350
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -name \"*.md\" -path \"*/docs/*\" | head -50"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -type d -name \"spec*\" -o -type d -name \"docs\" | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -type d -name docs"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -type d -name spec"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la docs 2>/dev/null || echo no docs top"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find . -maxdepth 3 -type d"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs -maxdepth 3 -type d"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "CLAUDE.md",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs -maxdepth 1 -type f | sort"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find docs -maxdepth 1 -type f"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/10 Project CI.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "start": 260,
+        "end": 310
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"Required checks have not passed\" -n"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"checksState|requiredChecks|required.every\" -n apps/tempo"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"checksState|requiredChecks|required.every\" apps/tempo"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/test/worker/project-ci.cases.ts",
+        "start": 1,
+        "end": 350
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/03 Lifecycles.md",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"skipped\" apps/tempo/src/do/repository-ci.ts -n"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "start": 500,
+        "end": 560
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff f1b8a672ada10526e1035fd4f3b4a9d7500fe921 5770819eb7eea0219eecaa4e0176daaa1e2837e1 -- apps/tempo/src/do/repository-ci.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/ci/types.ts",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"conclusion\" apps/tempo/src -n | head -80"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "rg \"conclusion\" apps/tempo/src"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/ui/components/review/checks-model.ts",
+        "start": 1,
+        "end": 100
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "docs/10 Project CI.md",
+        "start": 1,
+        "end": 200
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "apps/tempo/src/do/repository-ci.ts",
+        "start": 230,
+        "end": 300
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

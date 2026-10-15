@@ -1,0 +1,205 @@
+{
+  "case": "R-459a617",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 11,
+  "seconds": 84.8,
+  "usage": {
+    "prompt_tokens": 545481,
+    "completion_tokens": 7351,
+    "cost": 0.7221023999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Adds Codex device-code login (start/poll/cancel) to CredentialDO, server handlers, protocol, web LoginsTab and the Mac settings window, with spec updates to 01/02/04/07. Polling and saving are serialized, cancel/delete/upload invalidate an in-flight exchange, the final identity check and the synchronous store have no await between them, upstream bodies and tokens never reach errors or logs, and every function is scoped to the caller's own CredentialDO and requires auth. No blocking defects found. Caveat: the OpenAI device-auth contract is not in the repo (only test fakes), and typecheck, lint and tests could not be run because apps/tempo has no node_modules.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/lib/codex-login.ts",
+        "line": 60,
+        "text": "The upstream contract (endpoints, client ID, pending statuses 403/404, token response shape, id_token claim path) is based on codex-rs, and no copy of that source is in the repo. Tests only use a faked globalThis.fetch, so real behavior is unverified. A real login (spike S3/S4) or a pinned copy of codex-rs login/device_code_auth would confirm it. The spec admits the dependency.",
+        "blocking": false,
+        "evidence": {
+          "quote": "if (response.status === 403 || response.status === 404) return null;",
+          "why": "Pending detection depends on undocumented upstream status codes that only the fake fetch confirms."
+        }
+      },
+      {
+        "path": "apps/tempo/src/do/credential.ts",
+        "line": 139,
+        "text": "Any upstream error during a poll (including a rate-limit 429 or one transient network failure) clears the attempt, so the user must start over. Safe (fails closed, keeps the existing login) but less forgiving than a backoff.",
+        "blocking": false,
+        "evidence": {
+          "quote": "          this.codexLogin = null;\n          throw error;",
+          "why": "A transient failure ends the attempt instead of backing off."
+        }
+      },
+      {
+        "path": "apps/tempo/test/ui/components/codex-login.test.tsx",
+        "line": 47,
+        "text": "The test depends on real 1-second timer polls inside 2\u20133 second waitFor budgets, which may be flaky on loaded runners. Fake timers or a smaller intervalMs would be more robust.",
+        "blocking": false,
+        "evidence": {
+          "quote": "timeout: 2000,",
+          "why": "A real-time budget only about twice the poll interval."
+        }
+      },
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 151,
+        "text": "The new Mac Codex login flow (connect/poll/cancel/upload) has no test. The server functions it calls are tested in test/worker/codex-login.test.ts.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (DO RPC Result/capture/unwrap, OpenAI device auth, gpui_kit APIs, tempo-client state)",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "packages/protocol/src/errors.ts",
+          "apps/mac/src/views/settings.rs",
+          "apps/mac/src/app.rs",
+          "crates/tempo-client/src/state/workspace.rs"
+        ]
+      },
+      {
+        "risk": "Failure paths (errors masked to generic CREDENTIAL_INVALID, attempt cleared, existing login kept)",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (login lock, repeated start, connected replay, cancel/delete/upload invalidation, identity checks around await)",
+        "paths": ["apps/tempo/src/do/credential.ts", "apps/tempo/test/worker/codex-login.test.ts"]
+      },
+      {
+        "risk": "Security (per-user DO, auth required, no tokens in errors/logs/browser storage, encrypted at rest, deleteCredential key mapping)",
+        "paths": [
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "apps/tempo/src/server/registry.ts",
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/lib/codex-login.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment (no container/image changes; tests not runnable: no node_modules)",
+        "paths": [
+          "apps/tempo/package.json",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/vitest.ui.config.ts"
+        ]
+      },
+      {
+        "risk": "Tests (mock wiring of call via useCall, timing budgets, fetch spy restored per test)",
+        "paths": [
+          "apps/tempo/test/ui/components/codex-login.test.tsx",
+          "apps/tempo/test/worker/codex-login.test.ts",
+          "apps/tempo/src/ui/hooks/useCall.ts"
+        ]
+      },
+      {
+        "risk": "Spec (01/02/04/07 updated in the same change; protocol types only in packages/protocol; web and Mac changed together)",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/07 Mac Client.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "packages/protocol/src/api.ts",
+          "crates/tempo-protocol/src/generated.rs"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; git rev-parse HEAD; grep -n \"forgetInvalid\\|^import\" apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx | head -30; grep -rn \"export const capture\\|export const unwrap\\|export function capture\\|export function unwrap\" packages/protocol/src; grep -rn \"fn clear_credential_invalid\\|fn aria_label\\|pub fn client\\b\\|fn client(\" apps/mac/src crates 2>/dev/null | head; grep -rn \"aria_label\" ~/.cargo/registry 2>/dev/null | head -2; grep -n \"deleteCredential\\|SECRET_KEYS\\b\" -A6 apps/tempo/src/server/handlers/credentials.ts | head -40"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "forgetInvalid|^import",
+        "path": "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export (const|function) (capture|unwrap)",
+        "path": "packages/protocol/src",
+        "output_mode": "content",
+        "-A": 12
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "fn clear_credential_invalid|fn aria_label|fn client\\(|fn try_global",
+        "path": ".",
+        "output_mode": "content",
+        "glob": "*.rs"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/src/server/handlers/credentials.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "aria_label|font_family\\(|open_url|Disableable",
+        "path": "apps/mac/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/src/do/credential.ts",
+        "offset": 150,
+        "limit": 180
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "deviceauth|device_auth_id",
+        "path": ".",
+        "glob": "!apps/tempo/**"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "[Cc]odex|device",
+        "path": "docs/IMPLEMENTATION_NOTES.md",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo && ls node_modules/.bin 2>/dev/null | grep -c . ; cat package.json | grep -n '\"test\\|\"typecheck'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat vitest.components.config.ts vitest.ui.config.ts; grep -n \"call\\b\\|import\" src/ui/hooks/useCall.ts | head -20; grep -rn \"CREDENTIAL_INVALID\" ../../packages/protocol/src/errors.ts"
+      }
+    }
+  ]
+}

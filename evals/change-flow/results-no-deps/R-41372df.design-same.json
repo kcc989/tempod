@@ -1,0 +1,376 @@
+{
+  "case": "R-41372df",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "41372df80b5a1eb6daeaa812857da2be299a9c08",
+  "diffBytes": 1472020,
+  "diffCut": true,
+  "steps": 37,
+  "seconds": 313.5,
+  "usage": {
+    "prompt_tokens": 7816049,
+    "completion_tokens": 21297,
+    "cost": 3.9047835999999996
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Read the server, Durable Object, egress, daemon, migration, protocol and Mac parts of the change against the Artifacts binding types in apps/tempo/worker-runtime.d.ts and the spec tabs 09 and 10. Ownership checks, credential handling, idempotent merges with lost-acknowledgement recovery, read-only CI egress, CI job token checks and migration preservation all hold. I found no blocking defect. Four non-blocking items: the CI log rewrite may exceed the storage value limit, the merge gate runs before lost-ack recovery when the pushed SHA was not recorded, the Browser Run egress rule is reachable in CI mode (harmless 404), and the Mac view looks read-only before the code view loads. The build, lint and tests were not run (read-only review), and the web UI components were only searched, not read line by line.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/workspace/ci-runner.ts",
+        "text": "On every script.output event the CI runner rewrites the whole log tail (up to 1 MiB of UTF-8, from keepTail) into the Durable Object's sync KV. A mostly-ASCII log with any non-Latin-1 character (for example a \u2713 or a progress bar) is serialized as UTF-16, about 2 MiB, which may exceed the per-value storage limit. A failed setKv makes event application throw; TempodClient then closes the socket with 1011 and the replay hits the same event, so the job ends as timed_out instead of reporting. The limit is not documented in the repository, so this is not blocking. To confirm, run a workerd test that emits 1 MiB of output containing one '\u2713'. Separately, rewriting up to 1 MiB on every output event is heavy write amplification.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const next = keepTail(`${core.kv<string>(\"ciLog\") ?? \"\"}${event.data}`);\n    core.setKv(\"ciLog\", next.text);",
+          "why": "The value stored on each event can reach about 2 MiB once serialized as UTF-16, and a failed write is replayed after reconnect."
+        }
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/steps.ts",
+        "text": "Spec 10 says a merge already pushed (lost acknowledgement) is recovered without the gate. When pushedMergeSha was not recorded (the daemon pushed but its response was lost and the one-attempt step failed), the retry checks mergeBlock(headSha) before the daemon's git.merge can find the pushed commit. If a manual rerun of the head SHA is queued, or the pipeline revision changed meanwhile, the retry fails with PR_NOT_MERGEABLE even though the merge is already on the base branch. This is an edge case.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const blocked = await core.env.REPOSITORY_CI.getByName(project.id).mergeBlock(merge.headSha);\n\n        if (blocked) throw new TempoError(\"PR_NOT_MERGEABLE\", undefined, blocked);",
+          "why": "The gate runs before the daemon's completedMerge recovery path, which differs from the spec's lost-acknowledgement rule."
+        }
+      },
+      {
+        "path": "apps/tempo/src/egress/rules.ts",
+        "text": "Spec 10 Egress says rules 11\u201314 never apply in CI mode, but rule 11 (Browser Run) is checked before the CI branch. It is harmless today: browserConnect returns 404 because a CI runner has no workspace row, so no browser session is acquired.",
+        "blocking": false,
+        "evidence": {
+          "quote": "if (host === BROWSER_RUN_HOST) return { rule: 11, action: \"browser\" };",
+          "why": "This line runs before `if (config.ci) return decideForCi(...)`, so CI containers can reach the browser path."
+        }
+      },
+      {
+        "path": "apps/mac/src/views/repositories.rs",
+        "text": "read_only() treats a missing detail as read-only. If the user selects a repository and switches to Pull requests before the Code load returns, the generation bump discards that response. The view then shows 'This repository is read-only.' and disables New pull request and New workspace until the user returns to Code.",
+        "blocking": false,
+        "evidence": {
+          "quote": "self.detail.as_ref().is_none_or(|detail| detail.read_only)",
+          "why": "A cancelled detail load leaves detail as None, which is shown as read-only."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: Artifacts binding (info, log, readCommit with one trailing newline removed, createToken, import/create, readFile, readTree), compared with the test fakes; Sandbox 1.0 container calls; tempod protocol additions",
+        "paths": [
+          "apps/tempo/worker-runtime.d.ts",
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/server/handlers/repositories.ts",
+          "apps/tempo/src/do/workspace/ci-runner.ts",
+          "packages/protocol/src/tempod.ts",
+          "packages/tempod/src/git.ts",
+          "apps/tempo/test/worker/ci-runner.cases.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: swallowed errors, failing closed (CI ingest never fails the caller, credential lookup returns null, errors in issue tools and handlers, profile decode fails closed)",
+        "paths": [
+          "apps/tempo/src/do/workspace/git.ts",
+          "apps/tempo/src/do/workspace/index.ts",
+          "apps/tempo/src/agents/issues.ts",
+          "apps/tempo/src/server/handlers/issues.ts",
+          "apps/tempo/src/server/handlers/pull-requests.ts",
+          "apps/tempo/src/do/repository-ci.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: merge_pr op with pushedMergeSha recovery, daemon operation refs, completeArtifactMerge, CI job tokens, conditional completeJob, ciStart repeated with the same token, ingestion dedupe, issue number counter, PR number allocation",
+        "paths": [
+          "apps/tempo/src/do/workspace/steps.ts",
+          "apps/tempo/src/do/workspace/rpc.ts",
+          "apps/tempo/src/do/workspace/runner.ts",
+          "packages/tempod/src/git.ts",
+          "apps/tempo/src/do/repository-ci.ts",
+          "apps/tempo/src/do/workspace/ci-runner.ts",
+          "apps/tempo/src/artifacts/issues.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/db/migrations/0009_issue_numbers.sql"
+        ]
+      },
+      {
+        "risk": "Security: ownership checks, tokens only added by TempoOutbound, CI read-only token and receive-pack blocked, container start env, issue tool project/author from the workspace, redaction, owner-only links",
+        "paths": [
+          "apps/tempo/src/server/handlers/ci.ts",
+          "apps/tempo/src/server/handlers/common.ts",
+          "apps/tempo/src/egress/rules.ts",
+          "apps/tempo/src/egress/outbound.ts",
+          "apps/tempo/src/do/workspace/tempod-client.ts",
+          "apps/tempo/src/do/workspace/core.ts",
+          "apps/tempo/src/agents/issues.ts",
+          "packages/tempod/src/tempo-mcp.ts",
+          "packages/tempod/src/tempod.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: Dockerfile chmod, image test, deploy bindings (REPOSITORY_CI, ARTIFACTS) in wrangler, the deploy script and test config, DO export, D1 migration preserving cascaded child tables",
+        "paths": [
+          "container/Dockerfile",
+          "packages/tempod/test/image.test.ts",
+          "apps/tempo/wrangler.jsonc",
+          "apps/tempo/test/wrangler.test.jsonc",
+          "scripts/deploy-worker.ts",
+          "alchemy.run.ts",
+          "apps/tempo/src/worker.ts",
+          "apps/tempo/src/env.ts",
+          "apps/tempo/src/db/migrations/0007_artifacts.sql",
+          "apps/tempo/src/db/migrations/0008_issues.sql"
+        ]
+      },
+      {
+        "risk": "Tests: no sleeps (waitFor and deadline loops on observable state), per-case fixtures, fakes match the real shapes, test file grouping and the CI timing documentation",
+        "paths": [
+          "apps/tempo/test/worker/ci-runner.cases.ts",
+          "apps/tempo/test/worker/project-ci.cases.ts",
+          "apps/tempo/test/worker/forge.test.ts",
+          "apps/tempo/test/worker/forge-workspace.test.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/mac/src/views/issues_tests.rs",
+          "apps/mac/src/views/repository_checks_tests.rs",
+          "apps/mac/src/views/repositories.rs",
+          "docs/CI.md"
+        ]
+      },
+      {
+        "risk": "Spec: tab 10 (components, runs, egress, logs, API, merge gate) and tab 09 (PRs, merges, agent issue tools); spec and implementation notes updated in the same change; Mac client changed with the web UI",
+        "paths": [
+          "docs/10 Project CI.md",
+          "docs/09 Git Forge.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "apps/mac/src/views/main_window.rs",
+          "apps/mac/src/views/repository_checks.rs",
+          "apps/mac/src/views/ci_model.rs"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/src/server/handlers/issues.ts apps/tempo/src/server/handlers/common.ts apps/tempo/src/server/handlers/ci.ts apps/tempo/src/server/handlers/pull-requests.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/src/egress apps/tempo/src/do/workspace/steps.ts apps/tempo/src/do/workspace/git.ts apps/tempo/src/do/workspace/tempod-client.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/src/do/workspace/index.ts apps/tempo/src/do/workspace/core.ts apps/tempo/src/do/workspace/runner.ts; cat apps/tempo/src/do/workspace/ci-runner.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/artifacts/pull-requests.ts; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/src/do/workspace/rpc.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rln \"interface ArtifactsRepo\\b\\|interface ArtifactsRepo \" --include=*.d.ts . 2>/dev/null | grep -v \"/\\.git/\" | head; ls node_modules 2>/dev/null | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -1 -- apps/tempo/worker-runtime.d.ts; grep -n \"Artifacts\" apps/tempo/worker-runtime.d.ts | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 10955,11290p apps/tempo/worker-runtime.d.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- packages/tempod/src/git.ts packages/tempod/src/tempod.ts packages/protocol/src/tempod.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"do.req\\|doReq\\|private async onMessage\\|detached\" apps/tempo/src/do/workspace/tempod-client.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 150,222p apps/tempo/src/do/workspace/tempod-client.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,450p apps/tempo/src/do/repository-ci.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 450,877p apps/tempo/src/do/repository-ci.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat \"docs/10 Project CI.md\""
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 155,175p apps/tempo/src/egress/rules.ts; grep -n \"const policy\\b\\|const policy =\" -A25 apps/tempo/src/egress/rules.ts | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"BROWSER_RUN_HOST =\" -r apps/tempo/src | head; grep -n \"browser\" apps/tempo/src/egress/outbound.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 85,122p apps/tempo/src/egress/outbound.ts; grep -rn \"BROWSER_RUN_HOST\" apps/tempo/src | head -3; grep -n \"async browserFetch\\|export const browserFetch\" -A25 apps/tempo/src/do/workspace/browser.ts | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"BROWSER_CDP_HEADER\" -B3 -A12 apps/tempo/src/do/workspace/index.ts | sed -n 1,60p; grep -n \"export const browserConnect\" -A20 apps/tempo/src/do/workspace/browser.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"const browserSession\\|export const browserSession\" -A15 apps/tempo/src/do/workspace/browser.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/db/migrations/0007_artifacts.sql apps/tempo/src/db/migrations/0008_issues.sql apps/tempo/src/db/migrations/0009_issue_numbers.sql"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"REFERENCES \\`\\?\\(projects\\|workspaces\\|project_agents\\|agent_proposal_applications\\)\\`\\?\" apps/tempo/src/db/migrations/000[0-6]*.sql; grep -rn \"references(() => \\(projects\\|workspaces\\)\" apps/tempo/src/db/d1.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/src/server/handlers/projects.ts apps/tempo/src/server/handlers/workspaces.ts; sed -n 1,120p apps/tempo/src/server/handlers/repositories.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 615,650p apps/tempo/src/do/workspace/index.ts; cat apps/tempo/src/ci/types.ts | head -60"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"  setKv\\|  kv<\" -A10 apps/tempo/src/do/workspace/core.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"interface SyncKvStorage\" -A12 apps/tempo/worker-runtime.d.ts; grep -rn \"2 MB\\|2 MiB\\|128 KiB\" docs/*.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/worker/*.test.ts; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/test/worker/*.test.ts apps/tempo/test/worker/entry.ts; grep -n \"setTimeout\\|sleep(\\|waitForTimeout\" apps/tempo/test/worker/{agent-issues,artifacts-*,ci-runner,native-*,project-ci,repositories,repository-issues}.cases.ts apps/tempo/test/ui/components/{ci,issues,repositories}.test.tsx packages/tempod/test/forge-git.test.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls apps/tempo/test/worker/*.test.ts; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/test/worker/server.test.ts apps/tempo/test/worker/ops.test.ts apps/tempo/test/worker/unit.test.ts apps/tempo/test/worker/forge.test.ts apps/tempo/test/worker/forge-workspace.test.ts apps/tempo/test/worker/entry.ts apps/tempo/test/worker/workspace-rpc.test.ts | head -200"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- docs/CI.md docs/IMPLEMENTATION_NOTES.md; grep -n \"setTimeout\\|sleep\\|waitForTimeout\" apps/tempo/test/worker/project-ci.cases.ts apps/tempo/test/worker/ci-runner.cases.ts apps/tempo/test/worker/agent-issues.cases.ts apps/tempo/test/worker/repository-issues.cases.ts apps/tempo/test/worker/native-pull-requests.cases.ts apps/tempo/test/worker/native-workspace-pull-requests.cases.ts apps/tempo/test/worker/repositories.cases.ts apps/tempo/test/ui/components/ci.test.tsx apps/tempo/test/ui/components/issues.test.tsx packages/tempod/test/forge-git.test.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,209p apps/tempo/test/worker/ci-runner.cases.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,120p apps/tempo/test/worker/project-ci.cases.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git grep -n \"interceptOutboundHttps\\|interceptAllOutboundHttp\\|setInactivityTimeout\" d0b8b1f0303bb359024729509a8bfbc7e72d90c6 -- apps/tempo/src | head; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- apps/tempo/wrangler.jsonc apps/tempo/test/wrangler.test.jsonc docs/deployment/core-test.wrangler.jsonc alchemy.run.ts | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"WORKSPACE\\|USER_HUB\\|CREDENTIALS\\|REPOSITORY_CI\\|ARTIFACTS\\|DurableObject\\|wrangler\" alchemy.run.ts | head -30; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- scripts/deploy-worker.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- container/Dockerfile packages/tempod/package.json package.json packages/tempod/test/image.test.ts bun.lock apps/tempo/src/env.ts apps/tempo/src/worker.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"dangerouslySetInnerHTML\\|innerHTML\\|href={\" apps/tempo/src/ui/components/repositories/ | head; git diff d0b8b1f0303bb359024729509a8bfbc7e72d90c6 41372df80b5a1eb6daeaa812857da2be299a9c08 -- packages/tempod/src/tempo-mcp.ts | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n -i \"agent\\|tool\\|mcp\\|reuse\\|merge\" \"docs/09 Git Forge.md\" | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 395,537p apps/tempo/src/artifacts/issues.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 120,341p apps/tempo/src/server/handlers/repositories.ts"
+      }
+    }
+  ]
+}

@@ -1,0 +1,298 @@
+{
+  "case": "R-2ff48c5",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2ff48c57add387786ffe3361209f790f9efeecd4",
+  "diffBytes": 991538,
+  "diffCut": true,
+  "steps": 27,
+  "seconds": 205.6,
+  "usage": {
+    "prompt_tokens": 4949940,
+    "completion_tokens": 12960,
+    "cost": 2.7838644
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Removing the legacy custom-agent and role code matches the updated spec (tabs 01, 02 and 08 and IMPLEMENTATION_NOTES record the owner dropping the Artifacts import and the flat Session fields and model rules). Migration 0012 keeps old profiles and commit SHAs. Stored settings with the removed roles key still decode (checked with a probe against the real schemas). The focused Worker, UI, component and settings tests pass. No blocking findings. Repo typecheck fails only in an e2e file this change does not touch, and I could not compile the Mac crate.",
+    "findings": [
+      {
+        "path": "tests/e2e/tests/gate-b.spec.ts",
+        "line": 73,
+        "text": "bun run typecheck fails in @tempo/e2e (TS2322, number | null where a number is expected, lines 73/77/78). This change does not touch the file or the types it uses, so the failure is probably older. Running typecheck at the base commit would confirm.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/agents_model.rs",
+        "line": 299,
+        "text": "cargo test -p tempo-mac was not run because the command needs approval. I read the Rust changes instead: they are renames, and the fields match the regenerated Session (agent_name, agent_sha, agent_version) and CreateSessionIn (custom_agent_id removed). A cargo test run would confirm.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/runs.ts",
+        "line": 223,
+        "text": "Runs now call sessionModel with frozen=true, so an empty-model OpenCode or Pi saved agent fails with RUN_NO_AGENT instead of using agent.models.<agent>. Tab 01 says this is intended ('OpenCode and Pi still require a selected model').",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Spec conformance (model fallback, frozen session metadata, legacy import waiver)",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/08 Events and Agents.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "docs/tasks/04-AGENTS-AS-DATA.md",
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/do/workspace/rpc.ts",
+          "apps/tempo/src/do/workspace/index.ts",
+          "apps/tempo/src/do/workspace/runs.ts"
+        ]
+      },
+      {
+        "risk": "State and migration: session column rename, nullable version, stored settings containing the removed roles key",
+        "paths": [
+          "apps/tempo/src/db/do-migrations.ts",
+          "apps/tempo/src/db/workspace-do.ts",
+          "apps/tempo/src/do/workspace/core.ts",
+          "apps/tempo/src/db/json.ts",
+          "packages/protocol/src/settings.ts",
+          "packages/settings/src/index.ts",
+          "apps/tempo/test/worker/do-migrations.test.ts"
+        ]
+      },
+      {
+        "risk": "Idempotent library migration and failure paths",
+        "paths": [
+          "apps/tempo/src/agents/library.ts",
+          "packages/settings/src/migrations/roles.ts",
+          "apps/tempo/test/worker/agent-library.test.ts"
+        ]
+      },
+      {
+        "risk": "Real contracts and leftover references (removed APIs, ROLE_* codes, AGENTS Artifacts binding, isomorphic-git)",
+        "paths": [
+          "apps/tempo/src/server/registry.ts",
+          "apps/tempo/src/server/handlers/workspaces.ts",
+          "apps/tempo/src/env.ts",
+          "apps/tempo/wrangler.jsonc",
+          "packages/protocol/src/api.ts",
+          "packages/protocol/src/types.ts",
+          "crates/tempo-protocol/src/generated.rs"
+        ]
+      },
+      {
+        "risk": "Security: ownership checks and secrets in logs",
+        "paths": [
+          "apps/tempo/src/server/handlers/workspaces.ts",
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/agents/library.ts"
+        ]
+      },
+      {
+        "risk": "Web and Mac clients changed together",
+        "paths": [
+          "apps/mac/src/views/agents_model.rs",
+          "apps/mac/src/views/chat_model.rs",
+          "apps/mac/src/views/dialogs.rs",
+          "apps/mac/src/views/settings.rs",
+          "apps/mac/src/views/settings_form.rs",
+          "apps/mac/src/views/events.rs",
+          "apps/tempo/src/ui/components/dialogs/new-workspace-model.ts",
+          "apps/tempo/src/ui/components/chat/chat-tabs-model.ts"
+        ]
+      },
+      {
+        "risk": "Tests and build/CI config",
+        "paths": [
+          "apps/tempo/test/worker/agent-library.test.ts",
+          "apps/tempo/test/ui/agents-model.test.ts",
+          "apps/tempo/test/ui/components/events.test.tsx",
+          "packages/settings/test/migrations/settings.test.ts",
+          "apps/tempo/vitest.worker.config.ts",
+          "turbo.json",
+          "tests/e2e/tests/gate-b.spec.ts"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && git diff a55466dd 2ff48c57 --stat | tail -3 && git diff a55466dd 2ff48c57 -- docs/ packages/protocol/src packages/settings packages/tempod spikes turbo.json scripts tests | head -1500"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/root/.claude/projects/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/tool-results/bdsjom14y.txt",
+        "limit": 400
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff a55466dd 2ff48c57 -- packages/protocol/src packages/settings packages/tempod | head -900"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff a55466dd 2ff48c57 -- packages/protocol/src/types.ts packages/protocol/src/settings.ts packages/protocol/src/api.ts packages/protocol/src/migrations packages/settings packages/tempod packages/protocol/src/lifecycle.ts | grep -v '^-' | head -500"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"SettingsLayer\\b\\|decode.*Settings\\b\\|json.settings\\|settingsJson\" apps/tempo/src --include=*.ts | grep -v \"^.*test\" | head -40; grep -n \"settings\\b.*=\\|layer\\|Layer\" apps/tempo/src/db/json.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,75p apps/tempo/src/db/json.ts; sed -n 235,260p apps/tempo/src/do/workspace/core.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo && cat > /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/p.ts <<'EOF'\nimport { Schema, Exit } from \"effect\";\nimport { Settings, SettingsLayer, DEFAULT_SETTINGS, Session } from \"@tempo/protocol\";\nconst s = { ...DEFAULT_SETTINGS, roles: { enabled: true, max_chain_depth: 10, max_runs_per_change: 20, max_tokens_per_change: 0 } };\nconsole.log(\"settings\", Exit.isSuccess(Schema.decodeUnknownExit(Schema.fromJsonString(Settings))(JSON.stringify(s))));\nconsole.log(\"layer\", Exit.isSuccess(Schema.decodeUnknownExit(SettingsLayer)({ roles: { enabled: false } })));\nconsole.log(\"session old customAgent\", Exit.isSuccess(Schema.decodeUnknownExit(Session)({id:\"s\",agent:\"codex\",title:\"\",status:\"idle\",modeId:null,modes:[],configOptions:[],config:{},commands:[],usage:{},sortOrder:1,customAgent:{id:\"a\"}})));\nEOF\ncp /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/p.ts /tmp/p_probe.ts 2>/dev/null; bun -e \"$(cat /tmp/p_probe.ts)\" 2>&1 | tail -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo && bun -e 'const {Schema,Exit}=require(\"effect\");const P=require(\"@tempo/protocol\");const s=Object.assign({},P.DEFAULT_SETTINGS,{roles:{enabled:true}});console.log(\"settings\",Exit.isSuccess(Schema.decodeUnknownExit(Schema.fromJsonString(P.Settings))(JSON.stringify(s))));console.log(\"layer\",Exit.isSuccess(Schema.decodeUnknownExit(P.SettingsLayer)({roles:{enabled:false}})));' 2>&1 | tail -4"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5 && grep -rnI \"customAgent\\|custom_agent\\|ROLE_\\|rolesChanged\\|env.AGENTS\\|listRoles\\|isomorphic\" --exclude-dir=node_modules --exclude-dir=docs --exclude-dir=.turbo --exclude-dir=target --exclude=bun.lock --exclude=generated.rs . | grep -v \"^./spikes\" | head -30; grep -n \"agentVersion\\|agent_version\" apps/tempo/src/db/workspace-do.ts apps/tempo/src/do/workspace/runs.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"agent_version\" apps/tempo/src/db/do-migrations.ts | head; sed -n 540,600p apps/tempo/src/do/workspace/core.ts; sed -n 155,175p apps/tempo/src/do/workspace/queue.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"const TAB_\" apps/mac/src/views/settings.rs; grep -n \"pub agent_name\\|pub agent_version\\|pub agent_sha\\|pub struct Session \\|pub custom_agent\" crates/tempo-protocol/src/generated.rs | head; grep -n \"model\" apps/tempo/src/do/workspace/index.ts | sed -n 1,12p; which cargo"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"TAB_AGENTS\\s*[:=]\\|TAB_ENVIRONMENTS\\s*[:=]\\|TAB_MCP\\s*[:=]\\|TAB_GENERAL\\s*[:=]\\|TAB_LOGINS\\s*[:=]\" apps/mac/src | head; ls node_modules >/dev/null 2>&1 && echo deps-ok; timeout 300 bun run typecheck 2>&1 | tail -8",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "const TAB_\\w+",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/mac/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 300 bun run typecheck 2>&1 | tail -8",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 300 bun run typecheck 2>&1 | grep -iE \"error|TS[0-9]+\" | head -20",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -1 -- tests/e2e/tests/gate-b.spec.ts; sed -n 68,80p tests/e2e/tests/gate-b.spec.ts; git diff a55466dd 2ff48c57 -- tests/e2e | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff a55466dd 2ff48c57 -- packages/protocol/src | grep -n \"installation\" ; grep -rn \"installationId\" packages/protocol/src/*.ts | head -5; grep -n \"testProject\" -A8 tests/e2e/tests/*.ts tests/e2e/*.ts 2>/dev/null | grep -n \"installationId\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/packages/settings && timeout 200 bunx vitest run 2>&1 | tail -6; cd ../protocol && timeout 200 bun run test 2>&1 | tail -6",
+        "timeout": 420000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo && cat package.json | grep -n '\"test' "
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 500 bunx vitest run --config vitest.worker.config.ts test/worker/agent-library.test.ts test/worker/do-migrations.test.ts 2>&1 | tail -15",
+        "timeout": 520000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 300 bunx vitest run --config vitest.ui.config.ts test/ui/agents-model.test.ts test/ui/region-d/settings-model.test.ts 2>&1 | tail -5; timeout 300 bunx vitest run --config vitest.components.config.ts test/ui/components/events.test.tsx test/ui/components/settings.test.tsx test/ui/components/new-chat-menu.test.tsx test/ui/components/agents.test.tsx 2>&1 | tail -5",
+        "timeout": 620000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/packages/settings && timeout 200 bunx vitest run 2>&1 | tail -4",
+        "timeout": 220000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5 && CARGO_TARGET_DIR=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/target timeout 580 cargo test -p tempo-mac agents_model 2>&1 | tail -12",
+        "timeout": 600000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5 && git diff a55466dd 2ff48c57 -- turbo.json scripts/deploy-worker.ts apps/tempo/src/agents/library.ts | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git -C /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5 diff a55466dd 2ff48c57 -- turbo.json scripts/deploy-worker.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/turbo.json"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo/src/agents/library.ts",
+        "offset": 120,
+        "limit": 90
+      }
+    }
+  ]
+}

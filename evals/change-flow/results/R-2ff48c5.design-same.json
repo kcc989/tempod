@@ -1,0 +1,303 @@
+{
+  "case": "R-2ff48c5",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2ff48c57add387786ffe3361209f790f9efeecd4",
+  "diffBytes": 991538,
+  "diffCut": true,
+  "steps": 25,
+  "seconds": 167.7,
+  "usage": {
+    "prompt_tokens": 5197160,
+    "completion_tokens": 13873,
+    "cost": 1.8015012
+  },
+  "report": {
+    "status": "fail",
+    "summary": "M6 cleanup (removing roles, custom agents and the Artifacts store; flat Session agent metadata; migration 0012) is mostly coherent: migration 0012 preserves profiles and SHAs, the API surface removal is consistent across protocol, Worker, web, Mac and fixtures, and daemon roots are tightened. One blocking regression: the new frozen mode of sessionModel skips the project-level agent.models.<agent> for every library chat and run. A starter agent (baseAgent auto, model \"\") on a project whose default agent is opencode or pi, with agent.models.opencode set as tab 01 requires, now fails RUN_NO_AGENT or MODEL_REQUIRED where it previously worked. Tab 01 'Start a session' step 2 still documents the fallback, so the spec disagrees with itself. Typecheck and tests could not be run in this environment because command approval was unavailable; review was static.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/workspace/queue.ts",
+        "line": 142,
+        "text": "Library sessions and runs no longer fall back to the project model. OpenCode and Pi library agents with an empty saved model, including all three starters when the default agent is opencode or pi, now fail even when agent.models.<agent> is set.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const model = frozen ? own : own || settings.agent.models[agent];",
+          "why": "frozen is true for every run (runs.ts: `sessionModel(agent, { model: definition.model }, this.core.settings(), true);`) and for every session with agentVersion (queue.ts: `session.agentVersion !== null`). Starters decode with `baseAgent: defaulted(AgentBase, \"auto\")` and `model: defaulted(Schema.String, \"\")`. With settings.agent.default = 'opencode' and agent.models.opencode = 'x', own is \"\", so model is \"\" and the call throws MODEL_REQUIRED, which runs.ts turns into RUN_NO_AGENT. Before this change it returned 'x'. Tab 01 still says `model` is the session's choice, `else agent.models.<agent> from the effective settings`, and its model-choice table says `agent.models.opencode` is required, which conflicts with the new tab 01 sentence. The new test only covers claude, which has an adapter default."
+        }
+      },
+      {
+        "path": "apps/mac/src/views/settings_form.rs",
+        "line": 45,
+        "text": "Mac project settings still list a 'Roles' page, but the Roles section was removed from SECTIONS, so the page is empty. The web removed this page (settings.test now expects no Roles). This is a 04/07 parity gap. The file picker also still labels @handles 'Roles \u00b7 \u2026' while tab 04 names the group 'Agents'; that label predates this change.",
+        "blocking": false,
+        "evidence": {
+          "quote": "(\"Roles\", &[\"Roles\"]),",
+          "why": "settings_model.rs SECTIONS no longer contains \"Roles\", so this page renders no fields, while the web sidebar drops it."
+        }
+      },
+      {
+        "path": "docs/02 Data and API.md",
+        "line": 1047,
+        "text": "Tab 02 now has two different user messages for AGENT_INVALID. The code and Mac use 'The agent is not valid.' (tab 02 library error table). The base already had a conflicting row here, which this change replaced with another conflicting message.",
+        "blocking": false,
+        "evidence": {
+          "quote": "| `AGENT_INVALID` | A definition or proposal is invalid | Check the agent definition. |",
+          "why": "Tab 02 also lists `| `AGENT_INVALID` | The agent is not valid. |` and packages/protocol/src/errors.ts has `AGENT_INVALID: \"The agent is not valid.\"`. The table intro says every error has one code and one message."
+        }
+      },
+      {
+        "path": "apps/tempo/src/do/workspace/runs.ts",
+        "line": 223,
+        "text": "A run row with a null agentVersion (legacy-migrated) is prechecked with frozen=true, but its session is started with frozen=false because the session's agentVersion is null. This only makes the precheck stricter, so it is not harmful; noted as inconsistent.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: wire types, generated Rust types, settings decoding of persisted roles keys, DO SQLite RENAME COLUMN, package export of migration modules",
+        "paths": [
+          "packages/protocol/src/types.ts",
+          "packages/protocol/src/api.ts",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "packages/protocol/src/migrations/legacy-agents.ts",
+          "crates/tempo-protocol/src/generated.rs",
+          "apps/tempo/src/server/handlers/common.ts",
+          "packages/settings/src/index.ts",
+          "apps/tempo/src/db/do-migrations.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: model resolution, run start precheck, protected-file error codes, parseRoleFile error code",
+        "paths": [
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "apps/tempo/src/agents/protected-files.ts",
+          "packages/settings/src/migrations/roles.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: migration 0012, migrateAgents without custom_agents import, session columns at create and init",
+        "paths": [
+          "apps/tempo/src/db/do-migrations.ts",
+          "apps/tempo/src/db/workspace-do.ts",
+          "apps/tempo/src/agents/library.ts",
+          "apps/tempo/src/do/workspace/rpc.ts",
+          "apps/tempo/src/do/workspace/index.ts",
+          "apps/tempo/src/do/workspace/core.ts",
+          "apps/tempo/test/worker/do-migrations.test.ts"
+        ]
+      },
+      {
+        "risk": "Security: ownership in createSession/createWorkspace, daemon file roots, secrets",
+        "paths": [
+          "apps/tempo/src/server/handlers/workspaces.ts",
+          "packages/tempod/src/acp/session.ts",
+          "packages/tempod/test/acp.test.ts",
+          "apps/tempo/src/env.ts",
+          "apps/tempo/wrangler.jsonc",
+          "scripts/deploy-worker.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: removed isomorphic-git dependency, turbo inputs, vitest optimizer config",
+        "paths": [
+          "apps/tempo/package.json",
+          "turbo.json",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts"
+        ]
+      },
+      {
+        "risk": "Tests: new worker cases, waits, assertions",
+        "paths": [
+          "apps/tempo/test/worker/agent-library.test.ts",
+          "apps/tempo/test/worker/do-migrations.test.ts",
+          "apps/tempo/test/ui/agents-model.test.ts",
+          "apps/tempo/test/ui/components/events.test.tsx",
+          "packages/settings/test/migrations/settings.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: tabs 01, 02, 04, 08, task contract, implementation notes; web/Mac parity",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/08 Events and Agents.md",
+          "docs/tasks/04-AGENTS-AS-DATA.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "apps/mac/src/views/settings_form.rs",
+          "apps/mac/src/views/file_picker.rs",
+          "apps/mac/src/views/settings.rs",
+          "apps/mac/src/errors.rs",
+          "packages/protocol/src/errors.ts",
+          "packages/agents-starter/index.ts",
+          "packages/protocol/src/agent-library.ts"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && git rev-parse HEAD && git diff a55466dd4fa966f9916bea08b6c4462d26bf040a 2ff48c57add387786ffe3361209f790f9efeecd4 --stat -- docs packages/protocol/src packages/settings packages/tempod turbo.json spikes tests scripts | tail -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff a55466dd4fa966f9916bea08b6c4462d26bf040a 2ff48c57add387786ffe3361209f790f9efeecd4 -- docs packages/protocol/src packages/settings packages/tempod turbo.json scripts tests"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/root/.claude/projects/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/tool-results/br70970ws.txt"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/root/.claude/projects/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/tool-results/br70970ws.txt",
+        "offset": 554,
+        "limit": 760
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/protocol/package.json | head -30; grep -rn \"custom_agent\\|customAgent\\|CustomAgent\" --include=*.ts --include=*.tsx --include=*.rs apps packages crates tests scripts | grep -v generated.rs | grep -v \"/test/\" | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"onExcessProperty\" apps/tempo/src packages/settings/src packages/protocol/src | head -30; grep -rn \"settingsJson\\|settings_json\" apps/tempo/src/server/handlers/common.ts apps/tempo/src/db/d1.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,40p apps/tempo/src/server/handlers/common.ts; grep -n \"decodeLayer\\|KNOWN\\|unknown key\\|export const resolveSettings\" -n packages/settings/src/index.ts apps/tempo/src -r | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"agentVersion\\|agent_version\" apps/tempo/src/db/workspace-do.ts apps/tempo/src/do/workspace/*.ts | head -20; grep -n \"export const runMigrations\" -A30 apps/tempo/src/db/*.ts | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "which bun cargo; ls node_modules >/dev/null 2>&1 && echo deps; sed -n 330,340p apps/tempo/src/db/workspace-do.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "which bun cargo node; test -d node_modules && echo deps; sed -n 330,340p apps/tempo/src/db/workspace-do.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"typecheck\\|\\\"test\" apps/tempo/package.json packages/settings/package.json; grep -n \"incremental\\|tsBuildInfo\\|noEmit\" apps/tempo/tsconfig.json packages/settings/tsconfig.json tsconfig*.json 2>/dev/null; git status --short | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd apps/tempo && timeout 300 ./node_modules/.bin/tsc --checkers 2 -p tsconfig.json 2>&1 | tail -20; echo \"tempo exit $?\"; cd ../../packages/settings && timeout 200 ./node_modules/.bin/tsc -p tsconfig.json 2>&1 | tail; echo \"settings $?\"; cd ../protocol && timeout 200 ./node_modules/.bin/tsc -p tsconfig.json 2>&1 | tail; echo \"protocol $?\"",
+        "timeout": 600000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 400 bun run --cwd apps/tempo typecheck 2>&1 | tail -20",
+        "timeout": 450000
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "pub struct Session \\{",
+        "path": "crates/tempo-protocol/src/generated.rs",
+        "output_mode": "content",
+        "-A": 50
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"AGENT_INVALID\" packages/protocol/src/errors.ts apps/mac/src/errors.rs \"docs/02 Data and API.md\" docs/tasks/04-AGENTS-AS-DATA.md \"docs/08 Events and Agents.md\""
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn -i \"roles\\b\\|Roles tab\\|custom agent\\|customAgent\\|roles\\.enabled\\|max_chain_depth\" docs/0*.md | grep -v \"^docs/08\\|^docs/06\" | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"roles\\|Roles\\|custom_agent\" apps/mac/src | head; grep -rn \"roles-builtin\\|roles/\\|@tempo/settings\\\"\" apps/tempo/src packages --include=*.ts -l | head; ls packages"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 30,70p apps/mac/src/views/settings_form.rs; sed -n 10,40p apps/mac/src/views/file_picker.rs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"PROJECT_PAGES\" apps/mac/src | head; grep -n \"\\\"Roles\\\"\\|Roles\" apps/tempo/src/ui/components/settings/*.tsx apps/tempo/src/ui/components/dialogs/*.tsx | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 128,150p apps/tempo/src/do/workspace/queue.ts; sed -n 210,232p apps/tempo/src/do/workspace/runs.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"agent.models\\|empty model\\|model\\b.*default\" \"docs/08 Events and Agents.md\" \"docs/01 Runtime and Agents.md\" | head -20; grep -n \"model\" packages/agents-starter/src/*.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls packages/agents-starter; grep -rn \"model\\|baseAgent\" packages/agents-starter --include=*.ts | grep -v node_modules | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"model\\|baseAgent\\|handle\" packages/agents-starter/index.ts | head -20"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/packages/agents-starter/index.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"baseAgent\\|model:\" packages/protocol/src/agent-library.ts | head"
+      }
+    }
+  ]
+}

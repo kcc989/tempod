@@ -1,0 +1,180 @@
+{
+  "case": "C-bfb05a8",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "bfb05a8457a01e04a5a4671db947f7ca4c4f4085",
+  "diffBytes": 16681,
+  "diffCut": false,
+  "steps": 14,
+  "seconds": 118.3,
+  "usage": {
+    "prompt_tokens": 867954,
+    "completion_tokens": 9211,
+    "cost": 0.5395322
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The flaky deferred-turn reconnect test no longer depends on timing: it waits on a real point in the reconnect (the fake holds the /v1/connect response) instead of a fixed 100 ms delay. sendPrompt and the queue runner never wait on tempod being connected, so the gate cannot deadlock, and the assertions hold whenever the reconnect timer fires. The filtered Bun installs cover everything the daemon image, its tests, check:versions/build:tempod and docs-only lint/format import. The spec (06 Build Plan) and CI.md are updated in the same change. No blocking findings. Not exercised by PR CI and not run here: the filtered install commands themselves.",
+    "findings": [
+      {
+        "path": ".github/workflows/container-test.yml",
+        "line": 37,
+        "text": "Not blocking. The filtered installs are not exercised by this PR's CI: the PR changes code, so it takes the full install, and the image workflow runs only on pushes to main. I could not run them (the command to make a scratch copy needed approval). The only evidence that `--filter tempo` picks the root package by name and that `--filter @tempo/tempod` brings in @tempo/protocol, @tempo/settings, ulid and yaml is the author's local run in docs/CI_PLAYBOOK.md. To confirm: one successful image workflow run on main and one docs-only PR run.",
+        "blocking": false,
+        "evidence": {
+          "quote": "run: bun install --frozen-lockfile --filter tempo --filter @tempo/tempod",
+          "why": "This path runs only on main or by manual dispatch, so a filter mistake would show up only after merge. Each workflow file can be reverted on its own."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: the DO reconnect path versus the fake's held /v1/connect (no connect timeout, sendPrompt does not wait on tempod, the queue runner returns while the socket is closed)",
+        "paths": [
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/src/do/workspace/tempod-client.ts",
+          "apps/tempo/src/do/workspace/container.ts",
+          "apps/tempo/src/do/workspace/rpc.ts"
+        ]
+      },
+      {
+        "risk": "Tests: fixed sleep replaced by waiting on observable state, the gate is per fixture, cleanup releases on failure and a second release does nothing, assertions cannot pass without checking",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts", "apps/tempo/test/worker/fakes.ts"]
+      },
+      {
+        "risk": "Build environment: the filtered installs cover tempod's imports (protocol, settings, ulid, yaml, ACP SDK, effect), the root tooling for check:versions/build:tempod, the Dockerfile.test COPY plus install, the .dockerignore rules, and turbo build of tempod",
+        "paths": [
+          "container/Dockerfile.test",
+          "container/Dockerfile",
+          ".github/workflows/container-test.yml",
+          "scripts/test-tempod-container.ts",
+          "package.json",
+          "packages/tempod/package.json",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "container/check-versions.ts",
+          "container/pi/tempo-profile.ts",
+          ".dockerignore",
+          "turbo.json"
+        ]
+      },
+      {
+        "risk": "Failure paths and fail-closed docs-only classification: the full install is still used for code changes and unknown bases, docs-only lint/format need only root packages and the repo's own JS plugins",
+        "paths": [".github/workflows/ci.yml", "scripts/ci.ts", ".oxlintrc.json"]
+      },
+      {
+        "risk": "Spec and repo rules: the behavior change is documented in 06 Build Plan and CI.md in the same change, and the new playbook doc matches the workflow edits",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "docs/CI_PLAYBOOK.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Security: no secrets or credentials added to the workflows or images, and the proxy CA secret mount is unchanged",
+        "paths": [
+          "container/Dockerfile.test",
+          ".github/workflows/ci.yml",
+          ".github/workflows/container-test.yml"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat package.json && cat packages/tempod/package.json && sed -n 1,140p .github/workflows/ci.yml && cat .github/workflows/container-test.yml && cat container/Dockerfile.test",
+        "description": "Show head, manifests, workflows, and test Dockerfile"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat scripts/test-tempod-container.ts; cat packages/protocol/package.json packages/settings/package.json; grep -rhoE \"from \\\"[^\\\".][^\\\"]*\\\"\" packages/tempod packages/protocol/src packages/settings/src --include=*.ts | sort | uniq -c; grep -n \"docs-only\\|docsOnly\" scripts/ci.ts | head -30; cat container/check-versions.ts | head -40; ls .dockerignore container; cat .dockerignore 2>/dev/null",
+        "description": "Inspect container test script, deps, imports, ci script"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"\\.\\./\\.\\./\\|apps/\\|tests/\\|node_modules\" packages/tempod --include=*.ts | grep -v \"^packages/tempod/node_modules\" | head -30; grep -n \"bun install\\|COPY\" container/Dockerfile; grep -rn \"ulid\\|yaml\" packages/tempod --include=*.ts -l | head",
+        "description": "Check cross-workspace references in tempod and Dockerfile installs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "head -20 container/pi/tempo-profile.ts | grep import; grep -n \"^import\" packages/tempod/test/server.test.ts packages/tempod/test/fs.test.ts | grep -E \"ulid|yaml\"; ls container/pi; cat turbo.json | head -60",
+        "description": "Check profile imports and turbo config"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version; S=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad; mkdir -p $S/docs $S/img && git archive HEAD | tar -x -C $S/docs && git archive HEAD | tar -x -C $S/img && echo ok",
+        "description": "Export head tree into two scratch copies"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version && mkdir -p /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/docs /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/img && git archive HEAD | tar -x -C /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/docs && git archive HEAD | tar -x -C /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/img && echo ok",
+        "description": "Export head tree into two scratch copies"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 2755,2805p apps/tempo/test/worker/workspace-events.test.ts; sed -n 150,240p apps/tempo/test/worker/fakes.ts; grep -n \"closeTempod\\|function readyWorkspace\\|holdHealth\" apps/tempo/test/worker/*.ts | head",
+        "description": "Read the changed test and fake handler"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"/v1/connect\" apps/tempo/src | head; ",
+        "description": "Find DO connect call sites"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 360,420p apps/tempo/src/do/workspace/tempod-client.ts; grep -n \"async function tempodFetch\\|const tempodFetch\" -A25 apps/tempo/src/do/workspace/tempod-client.ts | head -40; grep -rn \"reconnect\" apps/tempo/src/do/workspace/*.ts | head -20",
+        "description": "Read connect and fetch helpers and reconnect scheduling"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 165,275p apps/tempo/src/do/workspace/container.ts; grep -rn \"tempod?.open\\|tempod\\.open\\|ensureTempod\\|connectedTempod\" apps/tempo/src/do/workspace/*.ts | head -20; grep -n \"const prompt = \" -A8 apps/tempo/test/worker/workspace-events.test.ts",
+        "description": "Read reconnect logic and queue runner gating"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"sendPrompt\" apps/tempo/src/do/workspace/*.ts | head; grep -n \"tempodFor(\" apps/tempo/src/do/workspace/*.ts | head -20",
+        "description": "Check whether sendPrompt can await a reconnect"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 654,800p apps/tempo/src/do/workspace/rpc.ts | grep -n \"await\\|tempod\\|kickQueue\\|runQueue\" ",
+        "description": "Scan sendPrompt for awaits on tempod"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls -a | grep -i \"oxlint\\|oxfmt\"; cat .oxlintrc.json 2>/dev/null | grep -n \"plugin\\|jsPlugins\" ; sed -n 1,40p scripts/ci.ts",
+        "description": "Inspect oxlint config and docs-only ci path"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"\\\"import/\" .oxlintrc.json; sed -n 55,70p .oxlintrc.json",
+        "description": "List import rules and js plugins in oxlint config"
+      }
+    }
+  ]
+}

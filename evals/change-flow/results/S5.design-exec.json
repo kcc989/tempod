@@ -1,0 +1,51 @@
+{
+  "case": "S5",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 19.9,
+  "usage": {
+    "prompt_tokens": 77408,
+    "completion_tokens": 1591,
+    "cost": 0.1646834
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The only change replaces the observable-state wait in the `active` test helper (waitFor on session.prompt requests) with a fixed 200 ms setTimeout sleep. CLAUDE.md and docs/CI.md both forbid fixed sleeps in tests. The sleep is racy: on a loaded runner, or for later prompts (index > 0), the request may not have arrived yet, so the decode of `requestsOf(...)[index]` gets `undefined` and throws. On fast runners it just adds 200 ms to every call. No product code is touched.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "Fixed 200 ms sleep replaces waiting for the observable session.prompt request; this breaks the repo's test rules and makes the run tests timing-dependent.",
+        "blocking": true,
+        "evidence": {
+          "quote": "  await new Promise((resolve) => setTimeout(resolve, 200));",
+          "why": "CLAUDE.md says: 'Wait for observable state instead of sleeping.' docs/CI.md line 183 says: 'Avoid fixed sleeps'. The function then decodes `w.tempod.requestsOf(\"session.prompt\")[index]` without checking that the request exists. If the DO alarm or prompt dispatch takes longer than 200 ms (a loaded CI runner, or a second prompt with index>0 after a previous turn), the element is undefined and Schema.decodeUnknownSync throws a ParseError, so the test fails intermittently. The removed line `await waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index);` waited for exactly this state, and `waitFor` is still imported and used in the same file (`completed`)."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: sleeps or timing assertions instead of waiting for observable state, budgets too small for loaded runners",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts", "docs/CI.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Real contracts, failure paths, idempotency, security, build/runtime env, spec: not applicable, the change only edits a test helper and calls no product code or external contract",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 7f3fb8742743e049f75f8ad8fd898005dba9fa21:apps/tempo/test/worker/runs.cases.ts | sed -n 1,110p; grep -n \"sleep\\|Wait for observable\" docs/CI.md | head",
+        "description": "Show test file at head and CI rules"
+      }
+    }
+  ]
+}

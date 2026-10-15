@@ -1,0 +1,84 @@
+{
+  "case": "R-459a617",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 59.9,
+  "usage": {
+    "prompt_tokens": 427979,
+    "completion_tokens": 4679,
+    "cost": 0.5750402
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Adds Codex device-code login. CredentialDO holds one attempt per owner in memory, start and poll calls run one at a time, and each request has a 15-second timeout. Cancelling, deleting the login or uploading auth.json invalidates the attempt, including a token exchange that is still running. Upstream bodies and tokens never appear in errors. The new types are defined only in packages/protocol, and the generated Rust, schemas and fixtures are updated. Server functions are registered and tested with vitest-pool-workers, including the cancellation race, a manual upload replacing an attempt, expiry, malformed responses and the auth check. The web Logins tab and the Mac Settings window both change, with tabs 01, 02, 04 and 07 updated. No new libraries. None of the findings blocks the merge. I did not run typecheck, lint or tests because this pass is read-only.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 224,
+        "text": "upload_codex clears the auth.json input before SetCodexAuth returns. If validation fails, the user loses what they pasted and has to paste it again. The web form keeps the text until the save succeeds. Clear it only on success.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 196,
+        "text": "cancel_codex drops the polling task and then calls CancelCodexLogin. If a poll that is already running has just saved the login on the server, the server keeps the new login but the window says it is not connected (codex_set is not refreshed). Re-fetch GetCredentialStatus after a cancel.",
+        "blocking": false
+      },
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 263,
+        "text": "The Mac Logins card shows only Set or Not set for Codex. 04 says each login shows set or not set and when it was last updated, and 07 says Logins is the same as on the web. Show updatedAt from GetCredentialStatus, or record the gap in IMPLEMENTATION_NOTES.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/lib/codex-login.ts",
+        "line": 10,
+        "text": "Device-login failures use CREDENTIAL_INVALID, which the 02 error table defines as 'the provider rejected the credential', with the banner text 'Your <agent> login stopped working'. The custom message is shown, so the user sees the right text, and 02 now lists this code for these functions. The code's meaning is still stretched. Consider noting this in IMPLEMENTATION_NOTES.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx",
+        "line": 210,
+        "text": "The client compares Date.now() with the server's expiresAt. If the browser clock is ahead of the server clock, the client marks the code expired too early and stops polling. The server already returns 'expired', so the client could rely on that.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; git log --oneline -2; grep -n \"forgetInvalid\" -r apps/tempo/src | head; grep -rn \"export.*\\b\\(capture\\|unwrap\\)\\b\" packages/protocol/src | head; grep -rn \"clear_credential_invalid\" apps/mac/src crates | head -3; grep -n \"NonWorkspace\" apps/tempo/src/server/*.ts | head -5; grep -n \"fn client\\|try_global\" apps/mac/src/app.rs | head; ls docs; grep -n -i \"codex\" docs/IMPLEMENTATION_NOTES.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; grep -rn -i \"upload\\|auth.json\" apps/tempo/src/ui --include=*.tsx | grep -iv \"LoginsTab\" | head; grep -rn -i \"new upload\\|auth.json\" apps/mac/src crates/tempo-client/src | grep -v settings.rs | head; grep -rn \"credential_invalid\\|credentialInvalid\\|CredentialBanner\" docs/04\\ UI.md | head -5; grep -rn -i \"codex\" \"docs/04 UI.md\" | head; grep -rn \"LoginsTab\\|settings.rs\\|mac\" apps/mac/tests 2>/dev/null | head -3; ls apps/mac"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; grep -rn -i \"upload\" apps/tempo/src/ui --include=*.tsx | grep -v LoginsTab | head; grep -rn -i \"upload\" apps/mac/src crates/tempo-client/src | grep -v settings.rs | head; grep -n -i \"codex\\|banner\" \"docs/04 UI.md\" | head -20; ls apps/mac"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; sed -n 1,60p apps/tempo/src/ui/lib/toast.ts; grep -n \"CREDENTIAL_INVALID\" -r packages/protocol/src docs | head; grep -n \"deleteCredential = \" -A15 apps/tempo/src/server/handlers/credentials.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; grep -rn \"CREDENTIAL_INVALID\" apps/tempo/src crates/tempo-client/src apps/mac/src | head; grep -n \"api.ts\\|registry\\|every fn\\|coverage\" -r apps/tempo/test/worker/*.test.ts | grep -i \"every\\|all fns\\|FnName\" | head"
+      }
+    }
+  ]
+}

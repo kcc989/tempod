@@ -1,0 +1,58 @@
+{
+  "case": "S5",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "7f3fb8742743e049f75f8ad8fd898005dba9fa21",
+  "diffBytes": 632,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 20.5,
+  "usage": {
+    "prompt_tokens": 111856,
+    "completion_tokens": 1530,
+    "cost": 0.16130480000000003
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change replaces a wait on a real condition (waitFor on session.prompt requests) with a fixed 200 ms setTimeout sleep. That breaks the CI rule in CLAUDE.md to wait for observable state instead of sleeping. It adds a failure that depends on timing: on a slow run the prompt request may not exist yet, and the schema decode throws. It is also not faster, because waitFor returns as soon as the request appears, while the sleep always costs at least 200 ms.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "This is a fixed sleep where the code used to wait on observable state. CLAUDE.md says: 'Wait for observable state instead of sleeping... Never add retries to hide flakes.' After 200 ms the code reads requestsOf(\"session.prompt\")[index] without checking that it exists. If the alarm tick takes longer than 200 ms (cold CI, concurrent workers), the value is undefined, Schema.decodeUnknownSync throws, and the test fails with a misleading decode error. Restore `await waitFor(() => w.tempod.requestsOf(\"session.prompt\").length > index);`. If the wait really is slow, speed up waitFor's polling instead.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 67,
+        "text": "The change doesn't meet its goal of a faster prompt wait. waitFor returns as soon as the condition holds, usually in well under 200 ms. The fixed sleep adds a minimum of 200 ms to every active() call, so the suite gets slower.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 66,
+        "text": "The comment 'The prompt is sent within one alarm tick' states a timing assumption the code never checks. A test helper should not rely on wall-clock timing like this.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "waitFor|setTimeout",
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S5/apps/tempo/test/worker/runs.cases.ts",
+        "offset": 60,
+        "limit": 25
+      }
+    }
+  ]
+}

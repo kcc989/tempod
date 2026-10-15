@@ -1,0 +1,174 @@
+{
+  "case": "C-8159759",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8159759138c800f51fd0e556f1eb9c836bc46a6c",
+  "diffBytes": 4545,
+  "diffCut": false,
+  "steps": 15,
+  "seconds": 90.4,
+  "usage": {
+    "prompt_tokens": 813401,
+    "completion_tokens": 7156,
+    "cost": 0.5636572
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Artifacts repo.log lookups in artifactHeadSha and branchTips now pass bare branch names instead of refs/heads/<branch>. This matches the binding's real contract in worker-runtime.d.ts (`opts.ref Branch, tag, or commit ID`) and the browse handler, which already passes bare refs. The test fakes no longer strip refs/heads/, so the tests now check the bare form, and the call-order assertion matches. The e2e regex change suits Node 24 (container base node:24-trixie-slim), where node --test prints spec-reporter summaries (`\u2139 fail 0`) even when piped; the new patterns match both TAP and spec output. Nothing blocking. One open risk: a tag with the same name as a branch, or a 40-hex branch name, could resolve to something other than the branch, because the binding's lookup order is not documented. I could not run the worker suite: bun x fetched vitest 5.0.4 instead of the pinned version, and the repo's own binary was not reachable.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 185,
+        "text": "A bare branch name passed as ref is resolved by the binding as a branch, tag or commit ID. If a tag has the same name as a branch, or a branch name is 40 hex characters (BRANCH_NAME allows both), log may return the tag's or that commit's hash instead of the branch tip. The binding does not document its lookup order. Plain git checks refs/tags before refs/heads. A live Artifacts test with a tag and a branch of the same name would confirm. Not blocking: the change follows the documented contract, and the old refs/heads/ form evidently did not resolve on the real binding (the e2e fix shows this).",
+        "blocking": false,
+        "evidence": {
+          "quote": "return (await repo.log({ ref: branch, limit: 1 }))[0]?.hash ?? null;",
+          "why": "The ref is not namespaced to refs/heads, so if names collide it may resolve to a tag or a commit ID depending on the binding's undocumented lookup order."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Artifacts binding log ref semantics vs test fakes)",
+        "paths": [
+          "apps/tempo/worker-runtime.d.ts",
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/server/handlers/repositories.ts",
+          "apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "apps/tempo/test/worker/native-workspace-pull-requests.cases.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths (unresolved ref -> empty array -> null/NOT_FOUND, SHA validation retained)",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts", "apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Security / input validation before binding calls (validateArtifactBranch, BRANCH_NAME)",
+        "paths": ["apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Idempotency and state (callers of artifactHeadSha unchanged)",
+        "paths": [
+          "apps/tempo/src/do/workspace/git.ts",
+          "apps/tempo/src/do/workspace/rpc.ts",
+          "apps/tempo/src/do/repository-ci.ts",
+          "apps/tempo/src/server/handlers/dotfiles.ts"
+        ]
+      },
+      {
+        "risk": "Build/runtime environment (Node version and node --test reporter output for e2e regex)",
+        "paths": ["container/versions.json", "tests/e2e/tests/forge-demo.spec.ts"]
+      },
+      {
+        "risk": "Tests (fakes now exact-match bare refs, assertions observable, no sleeps added)",
+        "paths": [
+          "apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "apps/tempo/test/worker/native-workspace-pull-requests.cases.ts",
+          "tests/e2e/tests/forge-demo.spec.ts"
+        ]
+      },
+      {
+        "risk": "Spec conformance (09 Git Forge ref rules, refs/heads exposure)",
+        "paths": ["docs/09 Git Forge.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && grep -rn \"log(\" apps/tempo/src/artifacts/*.ts | head -30; grep -rln \"interface.*Artifact\\|ArtifactRepo\" --include=*.d.ts . 2>/dev/null | grep -v node_modules/.cache | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n -i \"artifact\" apps/tempo/worker-runtime.d.ts | head -40; grep -rn -i \"ref.*branch\\|refs/heads\" docs/*.md docs/IMPLEMENTATION_NOTES.md 2>/dev/null | grep -i -E \"artifact|log|binding\" | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 11145,11180p apps/tempo/worker-runtime.d.ts; sed -n 30,60p \"docs/09 Git Forge.md\"; grep -rn -i \"refs/heads\\|log({\" docs/IMPLEMENTATION_NOTES.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"refs/heads\\|\\.log(\\|readFile({\" apps/tempo/src | grep -v test | head -30; sed -n 60,110p apps/tempo/src/artifacts/pull-requests.ts; sed -n 170,190p apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 55,100p apps/tempo/src/artifacts/repositories.ts; grep -n \"validateArtifactBranch\" -A15 apps/tempo/src/artifacts/*.ts | grep -v \"^--\" | head -40; sed -n 240,256p apps/tempo/src/server/handlers/repositories.ts; grep -rn \"artifactHeadSha\" apps/tempo/src | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"BRANCH_NAME =\" -A3 apps/tempo/src/artifacts/repositories.ts; ls apps/tempo/test/worker | grep -i pull; grep -rln \"native-pull-requests.cases\\|native-workspace-pull-requests.cases\" apps/tempo/test; cat apps/tempo/package.json | grep -n '\"test' "
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo && ls node_modules >/dev/null 2>&1 && timeout 400 npx vitest run --config vitest.worker.config.ts test/worker/forge 2>&1 | tail -25",
+        "timeout": 450000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 400 bun x vitest run --root /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo --config /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/vitest.worker.config.ts forge 2>&1 | tail -25",
+        "timeout": 450000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git status --short; grep -ln \"forge.cases\" apps/tempo/test/worker/*.test.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 500 bun x vitest run --root /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo --config /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/vitest.worker.config.ts platform 2>&1 | tail -25",
+        "timeout": 550000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/node_modules/.bin/ | grep -i vitest; ls /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/node_modules/.bin 2>/dev/null | grep vitest"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/.bin/vitest*",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "stat -c '%y %n' /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/node_modules /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-8159759/apps/tempo/node_modules; date"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat container/versions.json | head -30; sed -n 100,135p tests/e2e/tests/forge-demo.spec.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"REF\\b\" apps/tempo/src/server/handlers/dotfiles.ts | head; grep -rn \"refs/heads\" docs/IMPLEMENTATION_NOTES.md | head -5"
+      }
+    }
+  ]
+}

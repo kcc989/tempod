@@ -1,0 +1,63 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 5,
+  "seconds": 27.7,
+  "usage": {
+    "prompt_tokens": 204790,
+    "completion_tokens": 2185,
+    "cost": 0.1256148
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The fix is correct: when an issue tool's input struct has no fields (list_issue_labels once projectId is removed), tools/list now returns an explicit object schema instead of Effect's {\"not\":{\"type\":\"null\"}}. All other tools still use Effect's Draft-07 output. The new test decodes tools/list both without a run and in a review run, and fails if any tool's inputSchema.type is missing or is not \"object\", so it is a real regression test. The only problem is a misplaced doc comment, which is not blocking. Typecheck and tests were not run because the read-only sandbox needed approval for those commands.",
+    "findings": [
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 223,
+        "text": "toolInputSchema was inserted between handleMcpMessage's doc comment (\"Handles one JSON-RPC message; returns the response, or null for a notification.\") and the function it documents. That comment now sits above toolInputSchema, and handleMcpMessage has none. Move the helper above that comment.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -3 && sed -n 200,320p packages/tempod/src/tempo-mcp.ts && grep -n \"inputSchema\\|toJsonSchema\\|Schema.Struct({})\\|list_issue_labels\" -r packages/tempod/src packages/protocol/src | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,110p packages/protocol/src/issue-tools.ts; grep -n \"input:\" packages/protocol/src/issue-tools.ts | head; grep -n \"review\" packages/protocol/src/*.ts | grep -i outputkind | head -3; cd packages/tempod && timeout 200 npx tsc --noEmit -p . 2>&1 | tail -5"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,110p packages/protocol/src/issue-tools.ts; grep -n \"input:\\|interface\\|type IssueTool\" packages/protocol/src/issue-tools.ts | head -20; grep -rn \"OutputKind = \" packages/protocol/src | head -3"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && timeout 300 npx tsc --noEmit -p . 2>&1 | tail -5"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "projectInput =|const projectInput|function projectInput",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/protocol/src",
+        "output_mode": "content",
+        "-A": 6
+      }
+    }
+  ]
+}

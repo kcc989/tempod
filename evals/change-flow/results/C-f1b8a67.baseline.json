@@ -1,0 +1,119 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 11,
+  "seconds": 46.2,
+  "usage": {
+    "prompt_tokens": 413044,
+    "completion_tokens": 3544,
+    "cost": 0.27722620000000003
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change does what it says: protectedFileHashes treats a SandboxFileError with code ENOENT from Files.readFile as an absent file (null hash, the same as a 404), and any other readFile error still fails with RUN_ACCESS_VIOLATION. That matches the spec (08/02: a run fails only when protected login files change) and the existing 404 handling, so no spec change is needed. A worker test covers a run that completes when the Codex auth.json is missing. The issues.test.tsx change waits with a cheap text query for page 2 before the role query and leaves the assertions unchanged. Nothing blocking. Two minor notes: no test covers the non-ENOENT error path, and the test fakes the SDK error with a plain Error object, so it depends on how SandboxFileError.is detects the error. I could not check that because packages are not installed in this worktree.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "No test covers the new catch branch for a non-ENOENT readFile error (for example EACCES or a container RPC failure), which should still fail the run with RUN_ACCESS_VIOLATION. The project rules ask to keep failure and security coverage. Consider a runs.cases.ts case where readFile throws a different SandboxFileError code or a generic Error and the run ends failed with RUN_ACCESS_VIOLATION.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 290,
+        "text": "The test throws a plain Error with name/code assigned, not a real SandboxFileError. That only exercises the production branch if SandboxFileError.is() checks the shape of the error rather than using instanceof. I could not check the SDK because packages are not installed here. Throwing a real SandboxFileError instance from @cloudflare/sandbox would tie the test to the SDK's real error type.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/agents/protected-files.ts; grep -rn \"SandboxFileError\" --include=*.ts apps/tempo/src apps/tempo/test node_modules/@cloudflare/sandbox/dist/*.d.ts 2>/dev/null | head -20; grep -n \"vi.mock\\|@cloudflare/sandbox\" apps/tempo/test/worker/runs.cases.ts | head",
+        "description": "Read changed source and check SandboxFileError usage"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vi\\.mock|@cloudflare/sandbox",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/sandbox/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules apps/tempo/node_modules 2>&1 | head; grep -n \"sandbox\" apps/tempo/package.json",
+        "description": "Check installed modules and sandbox dependency"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "cloudflare/sandbox|SandboxFileError",
+        "glob": "**/{package.json,*.d.ts,vitest*.ts,*.md}",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "readFile|sandbox",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/worker",
+        "output_mode": "content",
+        "glob": "!*.cases.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError|ENOENT|readFile",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protected|auth\\.json",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/ui/components/issues.test.tsx",
+        "offset": 350,
+        "limit": 45
+      }
+    }
+  ]
+}

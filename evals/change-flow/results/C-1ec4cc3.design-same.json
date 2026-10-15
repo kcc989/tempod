@@ -1,0 +1,166 @@
+{
+  "case": "C-1ec4cc3",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+  "diffBytes": 2789,
+  "diffCut": false,
+  "steps": 12,
+  "seconds": 73.4,
+  "usage": {
+    "prompt_tokens": 552885,
+    "completion_tokens": 6771,
+    "cost": 0.4023614
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change fixes the tools/list input schema for tempo MCP tools that take no arguments. Effect renders a struct with no fields as {not:{type:\"null\"}} (node_modules/effect/src/internal/schema/toJsonSchemaDocument.ts:464-465). list_issue_labels is such a struct after projectInput removes projectId, so before this change it was listed without type \"object\". toolInputSchema now returns the same object literal the other no-argument tools use, and structs with fields go through the same Effect call as before. The new test lists tools outside a run and in a review run and fails on any tool whose schema lacks a string type of \"object\". Nothing blocking. Two minor points: the handleMcpMessage doc comment now sits on toolInputSchema, and the test checks only the review output kind. I could not run bun test, typecheck or lint here because each command needed approval, so this verdict rests on reading the code.",
+    "findings": [
+      {
+        "path": "packages/tempod/src/tempo-mcp.ts",
+        "line": 223,
+        "text": "The new toolInputSchema function was placed between handleMcpMessage and its doc comment, so 'Handles one JSON-RPC message' now sits on toolInputSchema. This is cosmetic only.",
+        "blocking": false,
+        "evidence": {
+          "quote": "/** Handles one JSON-RPC message; returns the response, or null for a notification. */\n/** MCP clients require `type: \"object\"`; Effect renders a struct with no fields as any non-null value. */",
+          "why": "The first comment describes handleMcpMessage but is now attached to toolInputSchema. Behavior does not change."
+        }
+      },
+      {
+        "path": "packages/tempod/test/tempo-mcp.test.ts",
+        "line": 79,
+        "text": "The test checks report_result only for the review output kind, not plan or note. Those code paths are unchanged, and their reports are structs with fields, which Effect renders with type \"object\". Adding those kinds to the loop would cover them.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: what Effect JSON Schema produces for a struct with no fields, and that the new parameter type is assignable",
+        "paths": [
+          "node_modules/effect/src/internal/schema/toJsonSchemaDocument.ts",
+          "node_modules/effect/src/Schema.ts",
+          "packages/protocol/src/issue-tools.ts",
+          "packages/protocol/src/api.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths: tools/call handling is unchanged, and only the schema shown in tools/list changes",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Idempotency and state: not applicable, because tools/list is a pure function",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Security: no secrets, ownership checks or container credentials are involved",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Build and runtime environment: no image, file-mode or tool-version changes",
+        "paths": ["packages/tempod/src/tempo-mcp.ts"]
+      },
+      {
+        "risk": "Tests: the decode fails on any schema without a string type; the static TOOLS list is never empty; no sleeps, globals or shared spies",
+        "paths": ["packages/tempod/test/tempo-mcp.test.ts"]
+      },
+      {
+        "risk": "Spec: the tempo MCP server's tools/list rules (report_result only in a run, list_agents and propose_agent_change only outside runs) still hold, and the spec says nothing about input-schema shape",
+        "paths": ["docs/01 Runtime and Agents.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,60p packages/tempod/src/tempo-mcp.ts && sed -n 200,330p packages/tempod/src/tempo-mcp.ts",
+        "description": "Show head SHA and the changed source file"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"ISSUE_TOOLS\\b\\|ISSUE_TOOL_NAMES\\|input: Schema\" packages/protocol/src | head -40; sed -n 1,40p packages/tempod/test/tempo-mcp.test.ts; grep -rn \"OutputKind = \\|RUN_REPORTS = \" packages/protocol/src",
+        "description": "Find issue tool definitions and test imports"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"inputSchema\\|type: \\\"object\\\"\\|MCP\" docs/*.md | head -30; ls docs",
+        "description": "Search spec docs for MCP tool schema rules"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,100p packages/protocol/src/issue-tools.ts; grep -n \"issue tool\\|inputSchema\\|tools/list\" \"docs/09 Git Forge.md\" | head",
+        "description": "Read issue tool schemas and spec mentions"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && cat > /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-1ec4cc3/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.ts <<'EOF'\nimport { Schema, JsonSchema } from \"effect\";\nimport { ISSUE_TOOLS, ISSUE_TOOL_NAMES } from \"@tempo/protocol\";\nfor (const n of ISSUE_TOOL_NAMES) { const s = ISSUE_TOOLS[n].input; console.log(n, Object.keys(s.fields).length, JSON.stringify(JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(s, { onExcessProperty: \"error\" })).schema).slice(0,120)); }\nEOF\ncp /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-1ec4cc3/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.ts /dev/stdin >/dev/null 2>&1; bun run /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-1ec4cc3/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.ts 2>&1 | head -20",
+        "description": "Probe the generated JSON schemas for each issue tool"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && bun -e 'import { Schema, JsonSchema } from \"effect\"; import { ISSUE_TOOLS, ISSUE_TOOL_NAMES } from \"@tempo/protocol\"; for (const n of ISSUE_TOOL_NAMES) { const s = ISSUE_TOOLS[n].input; console.log(n, Object.keys(s.fields).length, JSON.stringify(JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(s, { onExcessProperty: \"error\" })).schema).slice(0,100)); }'",
+        "description": "Print generated JSON schemas for issue tools"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/tempod && bun test test/tempo-mcp.test.ts -t \"input schema is an object\" 2>&1 | tail -15",
+        "description": "Run the new tools/list schema test"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "listRepositoryLabels:",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/packages/protocol/src",
+        "output_mode": "content",
+        "-A": 4
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git diff f29c2bc59fe3700079a53fead37c86759de11175 1ec4cc30b7bbf14339434b45e04f6a052c592c80 --stat && git log --oneline -3 1ec4cc30b7bbf14339434b45e04f6a052c592c80",
+        "description": "Confirm diff scope and recent commits"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"not.*null\\|propertySignatures.length === 0\\|anyOf.*object.*array\" node_modules/effect/src/SchemaRepresentation.ts node_modules/effect/src/JsonSchema.ts 2>/dev/null | head -15; ls node_modules/effect/src | grep -i -E \"json|represent\" | head",
+        "description": "Look up Effect's JSON Schema rendering of empty structs"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "propertySignatures\\.length === 0|fields\\.length === 0|\"not\": \\{ \"type\": \"null\"|not: \\{ type: \"null\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/node_modules/effect/src",
+        "output_mode": "content",
+        "-C": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export interface Struct<|Struct<Fields>\\b|Struct<Struct\\.Fields>|Struct<Schema\\.Struct\\.Fields>\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-1ec4cc3/node_modules/effect/src/Schema.ts",
+        "output_mode": "content",
+        "-A": 25,
+        "head_limit": 60
+      }
+    }
+  ]
+}

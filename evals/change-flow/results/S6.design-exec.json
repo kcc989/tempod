@@ -1,0 +1,74 @@
+{
+  "case": "S6",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "da9729f15a8dc00e65021597253cd5c3cb1c0d72",
+  "diffBytes": 611,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 26.8,
+  "usage": {
+    "prompt_tokens": 124057,
+    "completion_tokens": 2119,
+    "cost": 0.2218024
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The single change makes /opt/tempo/pi/tempo-profile.ts mode 0600. The COPY line has no --chown, so the file stays root:root. Every process in the image runs as `tempo` (uid 1000, `USER tempo`), so the file becomes unreadable to the Pi agent that has to load it with `-e /opt/tempo/pi/tempo-profile.ts`. Without the file, Pi fails to start, or starts without Tempo's tool_call guard and MCP server registration. That guard is what the spec says enforces tools.allow/deny and Pi read-only access. The image test that checks tempo can read the file (R_OK) would fail. The file holds no secrets: it is Tempo's own code and is also in the repository, so the tighter mode protects nothing. The image was not built in this run; the finding comes from reading the Dockerfile, the image test and the spec.",
+    "findings": [
+      {
+        "path": "container/Dockerfile",
+        "line": 36,
+        "text": "tempo-profile.ts becomes root-owned mode 0600, so the `tempo` user that runs pi cannot read the extension. Pi then fails to load it, or runs without the tool_call allow/deny guard and MCP server registration the spec requires.",
+        "blocking": true,
+        "evidence": {
+          "quote": "COPY --chmod=0600 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts",
+          "why": "COPY without --chown makes the file root:root, and 0600 gives read access only to root. The image later sets `USER tempo` and starts tempod and its children, including pi-acp and pi, as uid 1000. The later `chmod 0755 /opt/tempo /opt/tempo/pi` changes only the directories, not the file. The pi wrapper passes `-e /opt/tempo/pi/tempo-profile.ts` (docs/01 Runtime and Agents.md, line 353), so loading the file fails with EACCES. packages/tempod/test/image.test.ts asserts `expect(() => accessSync(\"/opt/tempo/pi/tempo-profile.ts\", constants.R_OK)).not.toThrow();` while running as uid 1000, so test:tempod:container would fail. The spec (docs/01, line 357) says this extension's tool_call guard is what enforces tools.allow/deny, and line 364 says it is used to deny write/edit for Pi read-only runs."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Build and runtime environment: the file's mode and owner, and which user reads it at runtime",
+        "paths": [
+          "container/Dockerfile",
+          "packages/tempod/src/acp/profile.ts",
+          "packages/tempod/test/image.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: how the Pi extension is installed and loaded, and its role in enforcing tool limits and read-only access",
+        "paths": ["docs/01 Runtime and Agents.md", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "Security: whether 0600 protects anything (no secrets in the file; it is public repository code)",
+        "paths": ["container/pi/tempo-profile.ts", "container/Dockerfile"]
+      },
+      {
+        "risk": "Tests: whether the image test checks that tempo can read the file (it does, with an R_OK assertion as uid 1000; gated on TEMPO_IMAGE_TEST=1, not run here)",
+        "paths": ["packages/tempod/test/image.test.ts"]
+      },
+      {
+        "risk": "Failure paths: a guard that fails closed versus a missing extension that leaves no enforcement",
+        "paths": ["docs/01 Runtime and Agents.md", "container/pi/tempo-profile.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git log --oneline -1 && cat -n container/Dockerfile && grep -rn \"tempo-profile\" --include=* -I . 2>/dev/null | grep -v node_modules | head -30",
+        "description": "Show Dockerfile and find profile references"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,45p packages/tempod/test/image.test.ts; grep -n \"opt/tempo\\|0644\\|read-only\\|root-owned\" \"docs/01 Runtime and Agents.md\" | head -20; git diff --stat f1b8a672ada10526e1035fd4f3b4a9d7500fe921 da9729f15a8dc00e65021597253cd5c3cb1c0d72",
+        "description": "Read image test and spec on file modes"
+      }
+    }
+  ]
+}

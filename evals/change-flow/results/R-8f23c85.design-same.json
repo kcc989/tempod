@@ -1,0 +1,341 @@
+{
+  "case": "R-8f23c85",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8f23c85befce80c0a1c94a727017b59ee1d24f03",
+  "diffBytes": 35884,
+  "diffCut": false,
+  "steps": 32,
+  "seconds": 188.1,
+  "usage": {
+    "prompt_tokens": 2028423,
+    "completion_tokens": 15903,
+    "cost": 1.0430712
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Reviewed the whole diff at 8f23c85. CI cache pruning: decides 'changed' from file times against a marker touched after restore; prunes only when every check passed and every run summary decodes, otherwise removes nothing; the save step depends on it. ci.ts runs each check in its own process group (SIGTERM at the deadline, SIGKILL when the check ends). deploy-worker now always builds with Docker, greps the image's tempod for the build id (fails closed) and pins the pushed digest; the CA secret is optional and the Dockerfile handles it absent. The config.ts change matches bun --env inlining of process.env.X; turbo.json already declares TEMPO_BUILD_ID. The forge demo test uses existing protocol RPCs and matches spec 10 and the server code (reopening a merged PR gives PR_NOT_MERGEABLE). Docs are updated in the same change. No blocking findings. I could not run typecheck, tests or a process-group probe (approval needed), so the Bun detached-group behavior and Effect 4 Schema.decodeUnknownOption are unverified.",
+    "findings": [
+      {
+        "path": "tests/e2e/playwright.config.ts",
+        "line": 13,
+        "text": "The default e2e config matches every spec, so `bun run test:e2e` gate runs now include forge-demo.spec.ts. Each run creates a permanent `tempo-demo-<tag>` repository, multiplied by E2E_REPEAT, with up to a 60-minute timeout. Probably intended, since the README lists it, but it adds deployment clutter and time to gate runs.",
+        "blocking": false,
+        "evidence": {
+          "quote": "testMatch: \"**/*.spec.ts\",",
+          "why": "The new test:demo script is not the only entry point; the main test script also picks up the demo."
+        }
+      },
+      {
+        "path": "scripts/deploy-worker.ts",
+        "line": 46,
+        "text": "Outside a git checkout the build id falls back to the package version, so the new tempod build-id grep passes even when tempod reports pkg.version (the fallback this change set out to catch).",
+        "blocking": false,
+        "evidence": {
+          "quote": "const buildId = sha ? `${version}+${sha}${git([\"status\", \"--porcelain\"]) ? \".dirty\" : \"\"}` : version;",
+          "why": "When there is no sha, buildId equals the version string, which a pkg.version fallback in tempod also contains."
+        }
+      },
+      {
+        "path": "scripts/ci.ts",
+        "line": 66,
+        "text": "Relies on Bun.spawn `detached: true` starting a new process group so that process.kill(-pid) reaches it. If Bun 1.4.2 does not call setsid, the kill throws ESRCH, the error is swallowed, and orphan cleanup comes back with no error shown. Not verified here; the CI log ('Cleaning up orphan processes' time) or a one-line pgid probe would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "const child = Bun.spawn(cmd, { stdin: \"inherit\", stdout: \"inherit\", stderr: \"inherit\", detached: true });",
+          "why": "killGroup's catch hides failure of the group kill."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Turbo cache layout and run summaries, actions/cache, bun --env inlining, Docker image, protocol RPCs for the demo)",
+        "paths": [
+          "scripts/ci-cache.ts",
+          "turbo.json",
+          ".github/workflows/ci.yml",
+          "packages/tempod/package.json",
+          "packages/tempod/src/config.ts",
+          "container/Dockerfile",
+          "scripts/deploy-worker.ts",
+          "packages/protocol/src/api.ts",
+          "tests/e2e/tests/lib/api.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths (prune fails closed on unreadable summaries or failed checks; deploy build-id check; swallowed kill errors)",
+        "paths": [
+          "scripts/ci-cache.ts",
+          "scripts/ci.ts",
+          "scripts/deploy-worker.ts",
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (cache save only when new entries exist; reruns of the deploy; PR reopen after merge)",
+        "paths": [
+          "scripts/ci-cache.ts",
+          ".github/workflows/ci.yml",
+          "apps/tempo/src/artifacts/pull-requests.ts"
+        ]
+      },
+      {
+        "risk": "Security (CA secret stays a BuildKit secret mount; no secrets in docker run or logs)",
+        "paths": ["scripts/deploy-worker.ts", "container/Dockerfile"]
+      },
+      {
+        "risk": "Build and runtime environment (grep present in the Debian base, tempod path, process groups in CI)",
+        "paths": ["container/Dockerfile", "scripts/ci.ts", "scripts/test.ts"]
+      },
+      {
+        "risk": "Tests (pure ci-cache unit tests run by scripts/test.ts; e2e demo waits on observable state with waitFor)",
+        "paths": [
+          "scripts/ci-cache.test.ts",
+          "scripts/test.ts",
+          "tests/e2e/tests/forge-demo.spec.ts",
+          "tests/e2e/tests/lib/flows.ts",
+          "tests/e2e/playwright.config.ts",
+          "tests/e2e/package.json"
+        ]
+      },
+      {
+        "risk": "Spec (10 Project CI ingestion, merge gate, revision 0; 09 merged PRs cannot reopen; CI.md and deployment docs updated)",
+        "paths": [
+          "docs/10 Project CI.md",
+          "docs/09 Git Forge.md",
+          "docs/CI.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "docs/deployment/CORE-TEST-DEPLOYMENT.md",
+          "CLAUDE.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85; git rev-parse HEAD; git status --short | head; cat turbo.json | head -40; ls node_modules/turbo* -d 2>/dev/null; cat node_modules/turbo/package.json 2>/dev/null | grep '\"version\"'; grep -n \"buildId\\|TEMPO_BUILD_ID\" scripts/deploy-worker.ts container/Dockerfile packages/tempod/package.json | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && git status --short"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "buildId|TEMPO_BUILD_ID|tempod",
+        "path": "container/Dockerfile",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/deploy-worker.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/container/Dockerfile"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"build\"|TEMPO_BUILD_ID|--env",
+        "path": "packages/tempod/package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat turbo.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules/.bin/ | grep -i turbo; ls node_modules | grep -i turbo"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/turbo*/package.json"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/ci.ts"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/.bun/turbo@*/node_modules/turbo/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\"turbo\"|\"packageManager\"|\"lint\"|\"format:check\"|\"typecheck\"",
+        "path": "package.json",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "find node_modules -maxdepth 4 -name package.json -path \"*turbo*\" -not -path \"*/node_modules/*/node_modules/*/node_modules/*\""
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "turbo|cache",
+        "path": "scripts/test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 8f23c85:.github/workflows/ci.yml"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "detached\\?",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/node_modules/bun-types",
+        "output_mode": "content",
+        "-B": 8
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version; bun -e 'const c = Bun.spawn([\"sh\",\"-c\",\"sleep 30 & echo $$ $(ps -o pgid= -p $$); wait\"], {stdout:\"pipe\", detached:true}); const r=await new Response(c.stdout).text(); console.log(c.pid, r)' & sleep 1; ps -eo pid,pgid,sid,comm | grep -E \"sleep|sh$\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const c = Bun.spawn([\"sh\",\"-c\",\"ps -o pid=,pgid=,sid= -p $$\"], {stdout:\"pipe\", detached:true}); console.log(\"pid\", c.pid, \"ps:\", await new Response(c.stdout).text(), Bun.version)'"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\b(createRepository|getRepository|updateCiPipeline|listCiRuns|getCiRun|getCiJobLog|getRepositoryPullRequest|listCheckRuns|mergePullRequest|updateRepositoryPullRequest|listRepositoryCommits|createPullRequest|commitAndPush)\\b\\s*[:=]",
+        "path": "packages/protocol/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/packages/protocol/src/api.ts",
+        "offset": 90,
+        "limit": 80
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls docs; grep -rn \"PR_NOT_MERGEABLE\\|revision\" docs/09* docs/10* | head -30"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/docs/10 Project CI.md",
+        "offset": 40,
+        "limit": 135
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "(?i)reopen|merged PR|merged pull|initializeEmpty",
+        "path": "docs/09 Git Forge.md",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "merged.*PR_NOT_MERGEABLE|PR_NOT_MERGEABLE.*merged",
+        "path": "apps/tempo/src",
+        "output_mode": "content",
+        "-i": true
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "cannot reopen|\"merged\"",
+        "path": "apps/tempo/src/server",
+        "output_mode": "content",
+        "-C": 3
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "PR_NOT_MERGEABLE",
+        "path": "apps/tempo/src",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/apps/tempo/src/artifacts/pull-requests.ts",
+        "offset": 225,
+        "limit": 30
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "export (const|async function|function|class) (requireChannels|rpc|rpcFails|rpcRetry|WorkspaceWatch|readySession|allowOption|answerPermissionsUntilEnd|cleanupTest|sh|nonce|waitFor|env|ENABLED|SKIP_REASON)\\b",
+        "path": "tests/e2e/tests/lib",
+        "output_mode": "content",
+        "-A": 2
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-8f23c85/scripts/test.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat packages/tempod/tsconfig.json tsconfig.base.json 2>/dev/null; git grep -n \"noPropertyAccessFromIndexSignature\\|dot-notation\" -- '*.json' '.oxlintrc*'; git grep -n \"process.env\\.[A-Z]\" packages/tempod/src | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "TEMPO_BUILD_ID=zz-probe-123 bun build --target=bun --env='TEMPO_BUILD_*' packages/tempod/src/config.ts --outfile /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-8f23c85/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/cfg.js"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat tests/e2e/package.json; cat tests/e2e/playwright.config.ts"
+      }
+    }
+  ]
+}

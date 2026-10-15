@@ -1,0 +1,135 @@
+{
+  "case": "S1",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "0b524cf545d50518420d361fd5cc80b095bd542c",
+  "diffBytes": 1374,
+  "diffCut": false,
+  "steps": 7,
+  "seconds": 80.2,
+  "usage": {
+    "prompt_tokens": 296608,
+    "completion_tokens": 6974,
+    "cost": 0.2766754
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change replaces the ENOENT-only rule in protectedFileHashes with `.catch(() => null)`, so every read error from the Sandbox Files API counts as an absent file. The guard now fails open: a protected file that was absent at run start and cannot be read at turn end (permission error, directory, symlink loop, transport failure) gives null both times, protectedFilesChanged finds no change, and the run continues. Before, these errors failed the run with RUN_ACCESS_VIOLATION ('could not be checked'). The spec (08 step 7.3, 'as today') is not updated, and no test covers the new behavior.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 20,
+        "text": "The protected login/config guard now fails open: every readFile error, not only ENOENT, counts as an absent file (hash null). Absent and unreadable look the same, so a turn-end read error on a file that was absent at run start, or that also failed to read at run start, looks like no change.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const response = await files.readFile(path).catch(() => null);",
+          "why": "Failing input: an owner without a Codex login, so /home/tempo/.codex/auth.json is absent and runGuard:<turnId> stores null. The agent, running as USER tempo, which owns /home/tempo (container/Dockerfile `chown -R tempo:tempo /workspace /home/tempo`, `USER tempo`), creates that path in a form whose read fails rather than returning 404 (mode 000 if the file service reads as tempo, a directory, a symlink loop), or the container file RPC fails. At turn end readFile rejects, the catch returns null, protectedFilesChanged compares `before[path] !== after[path]` as null vs null, and the run continues. At base this rejection threw TempoError RUN_ACCESS_VIOLATION ('Protected login or config files could not be checked.'), and runs.ts failed the run. A run-start read error that used to stop the run now stores null as the baseline. Guards must fail closed."
+        }
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 19,
+        "text": "The change alters the spec'd protected-file behavior without a spec or IMPLEMENTATION_NOTES change, against CLAUDE.md rule 16. 08 step 7.3 says to compare hashes 'as today', and runs.ts still has a 'could not be checked' branch that read errors no longer reach.",
+        "blocking": false,
+        "evidence": {
+          "quote": "// A file the SDK cannot read counts as absent, so a missing login never blocks a run.",
+          "why": "This is new policy: unreadable now means absent. The spec and docs/IMPLEMENTATION_NOTES.md are not updated in the same change."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/runs.cases.ts",
+        "line": 285,
+        "text": "No test covers the new error handling, and nothing checks that a non-ENOENT read error still fails the run. The existing missing-login test passes at both base and head, so it doesn't tell them apart. Not confirmed: whether SandboxFileError.is matches real SDK errors as well as the test fake (a plain Error with name/code). I couldn't read the vendored SDK because node_modules is outside the allowed paths. If the class check did not match real ENOENT errors, the right fix is to match on the error code, not to swallow every error.",
+        "blocking": false,
+        "evidence": {
+          "quote": "it(\"runs when a login file is missing, as for an owner without a Codex login\", async () => {",
+          "why": "This is the only readFile-error case. It throws ENOENT, which both versions treat as absent, so it doesn't exercise the behavior this change alters."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Sandbox SDK Files.readFile errors, SandboxFileError)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Failure paths / guards fail closed",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "apps/tempo/src/do/workspace/queue.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (runGuard kv baseline vs turn-end comparison)",
+        "paths": ["apps/tempo/src/do/workspace/runs.ts", "apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Security (credential tamper detection, container user ownership of /home/tempo)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts", "container/Dockerfile"]
+      },
+      {
+        "risk": "Tests",
+        "paths": ["apps/tempo/test/worker/runs.cases.ts"]
+      },
+      {
+        "risk": "Spec",
+        "paths": [
+          "docs/08 Events and Agents.md",
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "CLAUDE.md"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 0b524cf545d50518420d361fd5cc80b095bd542c:apps/tempo/src/agents/protected-files.ts && grep -rn \"protectedFileHashes\\|RUN_ACCESS_VIOLATION\" apps/tempo/src docs | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 435,460p apps/tempo/src/do/workspace/runs.ts; sed -n 235,250p \"docs/08 Events and Agents.md\"; grep -rln \"protected-files\\|protectedFile\" apps/tempo/test apps/tempo/src 2>/dev/null; d=$(find node_modules apps/tempo/node_modules -maxdepth 3 -path \"*@cloudflare/sandbox\" 2>/dev/null | head -1); echo $d; grep -rn \"class SandboxFileError\\|ENOENT\\|readFile(\" $d/dist/*.d.ts 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 435,460p apps/tempo/src/do/workspace/runs.ts; sed -n 235,250p \"docs/08 Events and Agents.md\"; grep -rln \"protected-files\\|protectedFile\" apps/tempo; find node_modules apps/tempo/node_modules -maxdepth 3 -path \"*@cloudflare/sandbox\""
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 340,360p apps/tempo/src/do/workspace/runs.ts; sed -n 435,460p apps/tempo/src/do/workspace/runs.ts; sed -n 235,250p \"docs/08 Events and Agents.md\"; grep -rln \"protected-files\\|protectedFile\" apps/tempo --exclude-dir=node_modules"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError|ENOENT|EACCES",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S1",
+        "glob": "!**/node_modules/**",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 260,360p apps/tempo/test/worker/runs.cases.ts; grep -n \"protected\\|could not be checked\" apps/tempo/test/worker/*.ts | head -20; grep -rn \"protected\\|SandboxFileError\" docs/IMPLEMENTATION_NOTES.md docs/0*.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls container; grep -n \"USER\\|useradd\\|chown\\|chmod\" container/Dockerfile* 2>/dev/null | head -20; git show f1b8a672ada10526e1035fd4f3b4a9d7500fe921:apps/tempo/src/agents/protected-files.ts | sed -n 14,32p"
+      }
+    }
+  ]
+}

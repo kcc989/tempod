@@ -1,0 +1,48 @@
+{
+  "case": "S8",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5cfee5c1382d36bcd4953cb4cd89eb17981829c8",
+  "diffBytes": 1018,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 21.8,
+  "usage": {
+    "prompt_tokens": 120447,
+    "completion_tokens": 1603,
+    "cost": 0.20562799999999998
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change swaps the owner-only requireProject for requireReadableProject in withOwnedRepository, the helper that every issue, comment and label handler uses. Public projects then pass the check for any viewer, for writes (create, update, delete) as well as reads. Spec 11 P3 says issues stay owner-only for every project, and none of the issue functions are in the visitor list, so the change breaks the spec and weakens the authorization guard.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 27,
+        "text": "requireReadableProject lets a project through when row.visibility === 'public', even if the viewer is not the owner. withOwnedRepository is the only access check for every issue, comment and label handler, writes included: createRepositoryIssue, updateRepositoryIssue, deleteRepositoryIssue, create/update/deleteRepositoryIssueComment and create/update/deleteRepositoryLabel. docs/11 Public Profile.md P3 says 'Issues, pull requests, checks, conversations and workspaces stay owner-only for every project', and docs/04 UI.md tells the owner that issues stay private when a project is made public. The helper no longer checks ownership, so issue data on any public project is open to anyone the auth layer lets through. Revert to requireProject(ctx.env, ctx.user.id, projectId). If public issue access is wanted, change the spec first (CLAUDE.md rules 1 and 16) and keep an owner check on the write handlers.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 21,
+        "text": "The helper is still called withOwnedRepository, but it no longer checks ownership, so the name now misleads anyone who reads it.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat -n apps/tempo/src/server/handlers/issues.ts && grep -n \"requireReadableProject\\|requireProject\" -A25 apps/tempo/src/server/handlers/common.ts | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn -i \"public\" docs/*.md | grep -i -E \"issue|label|read-only|owner\" | head -20; grep -rln \"requireReadableProject\" apps/tempo/src apps/tempo/test 2>/dev/null | head"
+      }
+    }
+  ]
+}

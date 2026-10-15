@@ -1,0 +1,299 @@
+{
+  "case": "C-f1b8a67",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "f1b8a672ada10526e1035fd4f3b4a9d7500fe921",
+  "diffBytes": 3765,
+  "diffCut": false,
+  "steps": 32,
+  "seconds": 159.4,
+  "usage": {
+    "prompt_tokens": 1510255,
+    "completion_tokens": 11130,
+    "cost": 0.8985619999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "A missing protected file is now recorded as absent, so a run no longer fails to start when the owner has no Codex login. This matches the real @cloudflare/sandbox 1.0.0 contract: readFile throws SandboxFileError code ENOENT for a missing file and never returns a 404 response. Every other error still fails closed with RUN_ACCESS_VIOLATION. The new worker test's fake passes the real SandboxFileError.is checks, and the run tests (12) and issues component tests (5) pass. Typecheck and oxlint are clean on the changed files. No blocking findings.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 30,
+        "text": "Dead check: the real SDK's readFile only ever returns new Response(stream) with status 200 and throws SandboxFileError for a missing file. `response.status === 404` can never be true and could be removed. Harmless.",
+        "blocking": false,
+        "evidence": {
+          "quote": "if (response === null || response.status === 404) {",
+          "why": "In @cloudflare/sandbox 1.0.0 dist/index.mjs, readFile returns `new Response(responseBody(...))` (status 200) or throws fileErrorFromErrno, so the 404 branch never runs."
+        }
+      },
+      {
+        "path": "apps/tempo/src/agents/protected-files.ts",
+        "line": 23,
+        "text": "A read failure other than ENOENT in the check before a turn (beforeTurn) was reported as AGENT_START_FAILED (raw error mapped in queue.ts). It is now reported as RUN_ACCESS_VIOLATION, which 02/08 describe as 'The agent changed protected login files.' This matches the existing check after a turn in runs.ts and still fails closed, so it is not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "throw new TempoError(\n        \"RUN_ACCESS_VIOLATION\",",
+          "why": "queue.ts passes a TempoError through with its own code (`e instanceof TempoError ? e : new TempoError(\"AGENT_START_FAILED\", ...)`), so the turn's failure code changes from AGENT_START_FAILED to RUN_ACCESS_VIOLATION."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: Sandbox SDK Files.readFile and SandboxFileError.is (installed @cloudflare/sandbox 1.0.0 dist source); the test fake has the fields that `is` checks (code matches /^E[A-Z0-9]+$/, operation readFile, path, detail)",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/test/worker/runs.cases.ts",
+          "/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs"
+        ]
+      },
+      {
+        "risk": "Failure paths and fail-closed guard: only ENOENT counts as absent, other errors throw; a file created or deleted during the run changes its hash and fails the run; how the callers in beforeTurn and after the turn handle errors",
+        "paths": [
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "apps/tempo/src/do/workspace/queue.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state: the guard hash is stored in KV per turn and compared after the turn; the change leaves this unchanged",
+        "paths": ["apps/tempo/src/do/workspace/runs.ts"]
+      },
+      {
+        "risk": "Security: no file contents or secrets in errors or logs; the error messages are fixed text",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      },
+      {
+        "risk": "Spec: protected-file changes fail the run with RUN_ACCESS_VIOLATION (01, 02, 08); a missing file as null is consistent with this and needs no spec change",
+        "paths": ["docs/01 Runtime and Agents.md", "docs/02 Data and API.md", "docs/08 Events and Agents.md"]
+      },
+      {
+        "risk": "Tests: the spy is reset by afterEach vi.restoreAllMocks; the new case asserts observable run completion and would fail without the fix; the UI test waits for observable DOM state, not a sleep; both suites run and pass; typecheck and lint pass",
+        "paths": [
+          "apps/tempo/test/worker/runs.cases.ts",
+          "apps/tempo/test/worker/workspace-rpc.test.ts",
+          "apps/tempo/test/ui/components/issues.test.tsx"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: not applicable (no image, file-mode or tool-version changes)",
+        "paths": ["apps/tempo/src/agents/protected-files.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67; git rev-parse HEAD; cat apps/tempo/src/agents/protected-files.ts; ls node_modules/@cloudflare/sandbox 2>/dev/null || find . -path '*node_modules/@cloudflare/sandbox/package.json' -maxdepth 6 | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "SandboxFileError",
+        "output_mode": "files_with_matches"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/agents/protected-files.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/sandbox/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules/@cloudflare/ apps/tempo/node_modules/@cloudflare/ 2>&1 | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules/@cloudflare/"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls -la node_modules"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/home/user/tempod/node_modules/@cloudflare/sandbox/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "readFile|ENOENT|SandboxFileError|404",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd apps/tempo && bun -e 'console.log(require.resolve(\"@cloudflare/sandbox/package.json\"))'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const fs=require(\"fs\");const p=\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/\";console.log(fs.readFileSync(p+\"package.json\",\"utf8\"));console.log(fs.readdirSync(p+\"dist\"))'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const fs=require(\"fs\");const p=\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/\";const s=fs.readFileSync(p+\"index.mjs\",\"utf8\");const lines=s.split(\"\\n\");lines.forEach((l,i)=>{if(/SandboxFileError|readFile|ENOENT|static is|404/.test(l))console.log(i+1+\": \"+l)})'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const fs=require(\"fs\");const p=\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/\";const s=fs.readFileSync(p+\"index.mjs\",\"utf8\").split(\"\\n\");console.log(s.slice(100,175).join(\"\\n\"));console.log(\"-----\");console.log(s.slice(960,1050).join(\"\\n\"));console.log(\"-----\");console.log(s.slice(1255,1280).join(\"\\n\"))'"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protectedFileHashes|protectedFilesChanged|runGuard:",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo",
+        "output_mode": "content",
+        "-C": 6
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/do/workspace/runs.ts",
+        "offset": 310,
+        "limit": 50
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "protected|Protected|RUN_ACCESS_VIOLATION",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/docs",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"protected\" \"../../docs/01 Runtime and Agents.md\" | cut -c1-1500"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "beforeTurn\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src",
+        "output_mode": "content",
+        "-C": 15
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/src/do/workspace/queue.ts",
+        "offset": 617,
+        "limit": 60
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"readFile\\|vi.mock\\|beforeEach\\|afterEach\\|restoreAllMocks\\|resetAllMocks\\|concurrent\\|sequential\\|describe(\" test/worker/runs.cases.ts | head -40; grep -rn \"restoreMocks\\|mockReset\\|clearMocks\" vitest*.ts test/worker/*.config* 2>/dev/null; ls test/worker | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat > /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.mjs <<'EOF'\nimport { SandboxFileError } from \"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\";\nconst path=\"/home/tempo/.codex/auth.json\";\nconst fake = Object.assign(new Error(`readFile '${path}': No such file or directory (os error 2)`), { name:\"SandboxFileError\", code:\"ENOENT\", operation:\"readFile\", path, detail:\"No such file or directory (os error 2)\"});\nconsole.log(\"fake is:\", SandboxFileError.is(fake));\nconsole.log(\"wrong code:\", SandboxFileError.is(Object.assign(new Error(\"x\"),{name:\"SandboxFileError\",code:\"NOPE\",operation:\"readFile\",path,detail:\"\"})));\nEOF\nbun /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.mjs; bun -e 'const s=require(\"fs\").readFileSync(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\",\"utf8\").split(\"\\n\");s.forEach((l,i)=>{if(/function (isFileErrorCode|fileErrorFromErrno)/.test(l))console.log(s.slice(i,i+10).join(\"\\n\"))})'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat > /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.mjs <<'EOF'\nimport { SandboxFileError } from \"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\";\nimport fs from \"node:fs\";\nconst path = \"/home/tempo/.codex/auth.json\";\nconst fake = Object.assign(new Error(\"readFile x: No such file or directory (os error 2)\"), { name: \"SandboxFileError\", code: \"ENOENT\", operation: \"readFile\", path, detail: \"No such file or directory (os error 2)\" });\nconsole.log(\"fake is:\", SandboxFileError.is(fake));\nconst s = fs.readFileSync(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\", \"utf8\").split(\"\\n\");\ns.forEach((l, i) => { if (/function (isFileErrorCode|fileErrorFromErrno)/.test(l)) console.log(s.slice(i, i + 10).join(\"\\n\")); });\nEOF\nbun /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-f1b8a67/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/probe.mjs"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist 2>/dev/null; bun -e 'const m = await import(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\"); const e = new Error(\"readFile x: No such file\"); e.name = \"SandboxFileError\"; e.code = \"ENOENT\"; e.operation = \"readFile\"; e.path = \"/home/tempo/.codex/auth.json\"; e.detail = \"No such file or directory (os error 2)\"; console.log(\"is:\", m.SandboxFileError.is(e)); const s = require(\"fs\").readFileSync(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\", \"utf8\").split(\"\\n\"); s.forEach((l, i) => /function (isFileErrorCode|fileErrorFromErrno)/.test(l) && console.log(s.slice(i, i + 10).join(\"\\n\")))'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const m = await import(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\"); const e = new Error(\"readFile x: No such file\"); e.name = \"SandboxFileError\"; e.code = \"ENOENT\"; e.operation = \"readFile\"; e.path = \"/home/tempo/.codex/auth.json\"; e.detail = \"No such file or directory (os error 2)\"; console.log(\"is:\", m.SandboxFileError.is(e)); const s = require(\"fs\").readFileSync(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\", \"utf8\").split(\"\\n\"); s.forEach((l, i) => /function (isFileErrorCode|fileErrorFromErrno)/.test(l) && console.log(s.slice(i, i + 10).join(\"\\n\")))'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun -e 'const s = require(\"fs\").readFileSync(\"/home/user/tempod/node_modules/.bun/@cloudflare+sandbox@1.0.0/node_modules/@cloudflare/sandbox/dist/index.mjs\", \"utf8\").split(\"\\n\"); s.forEach((l, i) => /(isFileErrorCode|function fileErrorFromErrno|function hasOwn)/.test(l) && console.log((i+1) + \": \" + s.slice(i, i + 6).join(\"\\n\")))'"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"test' package.json; grep -rn \"runs.cases\" test/worker/*.test.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 500 bunx vitest run --config vitest.worker.config.ts test/worker/workspace-rpc.test.ts -t \"workspace runs\" 2>&1 | tail -40",
+        "timeout": 560000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 300 bunx vitest run --config vitest.components.config.ts test/ui/components/issues.test.tsx 2>&1 | tail -20",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-f1b8a67/apps/tempo/test/ui/components/issues.test.tsx",
+        "offset": 340,
+        "limit": 60
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"typecheck\\|\"lint' package.json; timeout 300 bun run typecheck 2>&1 | tail -5",
+        "timeout": 320000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"lint' ../../package.json; timeout 200 bunx oxlint src/agents/protected-files.ts test/worker/runs.cases.ts test/ui/components/issues.test.tsx 2>&1 | tail -5",
+        "timeout": 220000
+      }
+    }
+  ]
+}

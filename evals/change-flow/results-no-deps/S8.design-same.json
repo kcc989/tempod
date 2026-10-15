@@ -1,0 +1,88 @@
+{
+  "case": "S8",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5cfee5c1382d36bcd4953cb4cd89eb17981829c8",
+  "diffBytes": 1018,
+  "diffCut": false,
+  "steps": 3,
+  "seconds": 32.4,
+  "usage": {
+    "prompt_tokens": 172120,
+    "completion_tokens": 2720,
+    "cost": 0.2589724
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change replaces the owner-only check requireProject(ctx.env, ctx.user.id, projectId) with requireReadableProject, which also accepts any project whose visibility is \"public\". All issue, comment and label handlers go through withOwnedRepository, so any signed-in non-owner can now read, create, update and delete issues, comments and labels on another user's public Artifacts project. This contradicts docs/11 P3 (issues stay owner-only for every project) and docs/09 (functions require an owned Artifacts project). No spec change goes with it, and no test refuses visitors as tab 11 requires.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 27,
+        "text": "Issue, comment and label handlers now authorize non-owners on public projects, including mutations (create/update/delete issues, comments, labels). Spec requires owner-only access for every project.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const project = await requireReadableProject(ctx.env, ctx.user, projectId);",
+          "why": "requireReadableProject in common.ts only throws when `!row || (row.userId !== viewer?.id && row.visibility !== \"public\")`, so for a public project owned by user A, signed-in user B passes and reaches createArtifactIssue/updateArtifactIssue/deleteArtifactIssue/deleteArtifactLabel etc. docs/11 Public Profile.md P3: \"Issues, pull requests, checks, conversations and workspaces stay owner-only for every project.\" docs/09 Git Forge.md: \"All issue, comment and label functions use the existing owner authentication and require an owned Artifacts project.\" The previous requireProject filtered on eq(schema.projects.userId, userId)."
+        }
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 19,
+        "text": "Behavior changes without a spec update in docs/09, docs/11 or IMPLEMENTATION_NOTES (CLAUDE.md rule 16). The tab 11 required test 'visitors refused for issues \u2026 of a public project' is not present, so nothing catches this regression.",
+        "blocking": false,
+        "evidence": {
+          "quote": "import { requireReadableProject } from \"./common.ts\";",
+          "why": "The only file changed is issues.ts. No docs or tests change, and a search of apps/tempo test files found no public-visibility issue test."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Security: ownership and visibility checks on issue/comment/label handlers",
+        "paths": ["apps/tempo/src/server/handlers/issues.ts", "apps/tempo/src/server/handlers/common.ts"]
+      },
+      {
+        "risk": "Spec conformance for issue access on public projects",
+        "paths": ["docs/11 Public Profile.md", "docs/09 Git Forge.md", "docs/04 UI.md"]
+      },
+      {
+        "risk": "Failure paths: error masking in withOwnedRepository is unchanged (TempoError rethrown, others become INTERNAL)",
+        "paths": ["apps/tempo/src/server/handlers/issues.ts"]
+      },
+      {
+        "risk": "Tests: whether coverage exists for visitor refusal on public-project issues",
+        "paths": ["apps/tempo"]
+      },
+      {
+        "risk": "Real contracts, idempotency, build environment: not affected; the change only swaps the authorization helper",
+        "paths": ["apps/tempo/src/server/handlers/issues.ts", "apps/tempo/src/server/handlers/common.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && cat apps/tempo/src/server/handlers/issues.ts && grep -n \"requireReadableProject\\|requireProject\\|canWrite\\|visibility\" -A25 apps/tempo/src/server/handlers/common.ts | head -120"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls docs; grep -rn -i \"issue\" docs/*.md | grep -i -E \"public|owner|visib|read|write|author\" | head -40; grep -rn \"requireReadableProject\" apps/tempo/src | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "visibility.*public|public.*Issue|Issue.*public",
+        "path": "apps/tempo",
+        "glob": "**/*.test.ts",
+        "output_mode": "content",
+        "head_limit": 20
+      }
+    }
+  ]
+}

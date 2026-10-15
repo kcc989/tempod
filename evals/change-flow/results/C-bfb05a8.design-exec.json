@@ -1,0 +1,219 @@
+{
+  "case": "C-bfb05a8",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "bfb05a8457a01e04a5a4671db947f7ca4c4f4085",
+  "diffBytes": 16681,
+  "diffCut": false,
+  "steps": 21,
+  "seconds": 131.9,
+  "usage": {
+    "prompt_tokens": 1123051,
+    "completion_tokens": 10179,
+    "cost": 0.8550962000000001
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Install filters and the deterministic reconnect test are consistent with the code and spec at bfb05a8. The filtered set covers every import and script used by docs-only lint/format, check:versions, build:tempod and the tempod tests. The test now waits on observable reconnect entry instead of a 100 ms sleep. Spec tab 06 and CI.md are updated in the same change. Writes were refused in this environment, so neither the filtered install nor the Worker test was executed; one non-blocking note covers that.",
+    "findings": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "line": 49,
+        "text": "Not verified by execution: whether Bun 1.4.2 treats `--filter tempo` as the root package (name \"tempo\") and installs its devDependencies (oxlint, oxfmt, @oxlint/plugins, effect, turbo). Writes were refused here, so no filtered install was run. The playbook reports a local run (215 packages, then lint and format passed). If the root were left out, docs-only CI and the image workflow would fail visibly, not pass. To confirm: in a fresh copy run `bun install --frozen-lockfile --filter tempo`, then `bun run ci --docs-only`.",
+        "blocking": false,
+        "evidence": {
+          "quote": "bun install --frozen-lockfile --filter tempo",
+          "why": "Correctness depends on how Bun's --filter handles the root package. It was not executed in this run. A wrong result would make CI fail, not pass silently."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: Bun workspace filter install set vs. imports and scripts used by tempod tests, build:tempod, check:versions and the docs-only oxlint/anti-slop plugin",
+        "paths": [
+          ".github/workflows/ci.yml",
+          ".github/workflows/container-test.yml",
+          "container/Dockerfile.test",
+          "package.json",
+          "packages/tempod/package.json",
+          "packages/protocol/package.json",
+          "packages/settings/package.json",
+          "scripts/test-tempod-container.ts",
+          "container/check-versions.ts",
+          "turbo.json",
+          ".oxlintrc.json",
+          "tools/oxlint/anti-slop/effect/index.ts",
+          "packages/tempod"
+        ]
+      },
+      {
+        "risk": "Failure paths: docs-only classification fails closed (unknown base runs the full suite with every workspace); playwright_version is only read on the code path, and every step that uses it is skipped for docs-only",
+        "paths": ["scripts/ci-changes.ts", "scripts/ci.ts", ".github/workflows/ci.yml"]
+      },
+      {
+        "risk": "Tests: removing the sleep, waiting on observable state, gate cleanup on failure, reconnect path through /v1/connect shared by the timer and op steps",
+        "paths": [
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "apps/tempo/src/do/workspace/container.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency/state: connectTempod reuses one in-flight attempt, so the gate holds both the timer and step reconnects; kickQueue runs after hello",
+        "paths": ["apps/tempo/src/do/workspace/container.ts"]
+      },
+      {
+        "risk": "Build/runtime environment: Dockerfile.test user and owner unchanged (tempo, --chown); only the install filter changed; the image build and size check still run",
+        "paths": ["container/Dockerfile.test", "scripts/test-tempod-container.ts"]
+      },
+      {
+        "risk": "Security: no secrets, credentials or ownership logic touched",
+        "paths": [
+          ".github/workflows/ci.yml",
+          ".github/workflows/container-test.yml",
+          "container/Dockerfile.test"
+        ]
+      },
+      {
+        "risk": "Spec: build-plan tab and CI docs updated in the same change to describe the filtered installs",
+        "paths": ["docs/06 Build Plan.md", "docs/CI.md", "docs/CI_PLAYBOOK.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,140p .github/workflows/ci.yml && cat .github/workflows/container-test.yml && cat package.json && cat packages/tempod/package.json && cat container/Dockerfile.test && ls container"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat scripts/test-tempod-container.ts; cat packages/protocol/package.json packages/settings/package.json; grep -n \"docs-only\\|docsOnly\" -n scripts/ci.ts | head -30; grep -n \"bun install\\|COPY\\|RUN bun\" container/Dockerfile | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version; S=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad; rm -rf $S/f1 $S/f2; mkdir -p $S/f1 $S/f2; git archive HEAD | tar -x -C $S/f1; git archive HEAD | tar -x -C $S/f2; cd $S/f1 && (bun install --frozen-lockfile --filter tempo --filter @tempo/tempod 2>&1 | tail -5); cd $S/f2 && (bun install --frozen-lockfile --filter tempo 2>&1 | tail -5)",
+        "timeout": 400000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version; cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8 && rm -rf /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f1 /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f2 && mkdir -p /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f1 /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f2 && git archive HEAD | tar -x -C /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f1 && git archive HEAD | tar -x -C /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f2 && echo ok"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "mkdir -p /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-C-bfb05a8/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/f1"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun --version"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "bun install --help 2>&1 | grep -i -A2 filter"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,260p apps/tempo/test/worker/fakes.ts; grep -rn \"holdHealth\\|holdConnect\" apps/tempo/test | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 2740,2810p apps/tempo/test/worker/workspace-events.test.ts; grep -rn \"v1/connect\\|reconnect\" apps/tempo/src/do/workspace/*.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 165,270p apps/tempo/src/do/workspace/container.ts; grep -rn \"tempod?.open\\|\\.open)\" apps/tempo/src/do/workspace/queue*.ts apps/tempo/src/do/workspace/*.ts | head -20; grep -n \"const prompt =\\|async function prompt\\|function closeTempod\\|const closeTempod\" -A12 apps/tempo/test/worker/*.ts | head -50"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules 2>&1 | head -3; ls apps/tempo/node_modules 2>&1 | head -3; cat scripts/ci-changes.ts | head -80"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/.bin/vitest"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/scripts/ci-changes.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/scripts/ci.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git ls-files | grep -iE \"oxlint|oxfmt|anti-slop\" | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat .oxlintrc.json | head -40; grep -rhn \"^import\" tools/oxlint/anti-slop | sort -u | head -20"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "from \"(@[^\"]+|[a-z][^\".][^\"]*)\"",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/packages/tempod",
+        "output_mode": "content",
+        "-o": true,
+        "head_limit": 400
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "node_modules|apps/|tests/e2e|\\.bin/",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/packages/tempod",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"tempod\\|\\\"build\\\"\" -A6 turbo.json | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"import\\|node_modules\\|package.json\" container/check-versions.ts container/versions.ts | head -30"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8/container/check-versions.ts"
+      }
+    }
+  ]
+}

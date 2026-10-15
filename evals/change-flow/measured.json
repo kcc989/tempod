@@ -1,0 +1,19 @@
+{
+  "conflict_rate_raw": 0.6912280701754386,
+  "conflict_rate": 0.5929824561403508,
+  "conflict_rate_note": "conflict_rate counts pairs with a conflict outside docs, lockfiles and generated protocol files",
+  "conflict_by_distance": {
+    "1": 0.3559322033898305,
+    "2": 0.5344827586206896,
+    "3": 0.631578947368421,
+    "4": 0.6964285714285714,
+    "5": 0.7636363636363637
+  },
+  "pairs": 285,
+  "tier_mix": {
+    "low": 0.05,
+    "medium": 0.45,
+    "high": 0.5
+  },
+  "commits": 60
+}

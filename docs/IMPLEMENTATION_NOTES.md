@@ -503,3 +503,16 @@ Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and 
 ## Deploy pins the workspace image (2026-10-14)
 
 A deploy updated the Worker but new workspaces kept the previous image: tempod reported `0.1.0`, so native repos could not bootstrap (`CLONE_FAILED`). `scripts/deploy-worker.ts` now always builds and pushes the image and pins its digest; `TEMPO_BUILD_CA` only adds the CA secret. The deploy fails if the image's tempod does not contain the deploy's build id. tempod read `process.env["TEMPO_BUILD_ID"]`, which `bun build --env` does not inline, so every image reported the `package.json` version; it now reads `process.env.TEMPO_BUILD_ID`. `--prepare` still writes the Dockerfile-based config without building.
+
+## Change flow for many agents (proposed, 2026-10-15)
+
+The owner asked for a change flow with explainer and verifier agents for many cloud agents, spec first. Tabs 08 (Verification), 09 (merge event, Change metrics), 10 (Risk tiers, merge gate inputs), 04 and 07 (Guide per head SHA) hold the proposal. Nothing is implemented. The evidence, the replay harness and the simulation are in `evals/change-flow/`.
+
+| Item | Status | Why |
+| --- | --- | --- |
+| V8: `max_runs` per head SHA for gate attachments | Needs owner decision | It changes A10. |
+| V9: copy new starters into existing libraries | Needs owner decision | It extends A3. |
+| Cross-family verifier on Workers AI | Replay only | The replay used a Workers AI model through a tool loop because no second agent login is available here. In Tempo, a verifier runs through an ACP base agent (`codex`, or `opencode`/`pi` with a non-Anthropic model). |
+| Merge-candidate queue | Out of scope | Tab 10 keeps stage 6 out. The simulation shows conflicts and the two CI slots limit throughput at 100 agents. |
+| Gate I, S20, S23 | Open | No agent logins or hosted sign-in exist in this environment. Gate V depends on Gate I. |
+| Transcripts on the owner's computer | Not read | This session has no connection to the owner's computer. The taxonomy uses Git history, PR text and these notes. |

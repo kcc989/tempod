@@ -1,0 +1,235 @@
+{
+  "case": "R-2ff48c5",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2ff48c57add387786ffe3361209f790f9efeecd4",
+  "diffBytes": 991538,
+  "diffCut": true,
+  "steps": 16,
+  "seconds": 139.3,
+  "usage": {
+    "prompt_tokens": 2805431,
+    "completion_tokens": 10435,
+    "cost": 1.1393708000000002
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Read-only review found no blocking defects. The change removes the role and Artifacts-backed custom-agent paths, renames the session columns through DO migration 0012_session_agents (which keeps frozen profiles and SHAs), adds flat Session agent fields, and freezes model selection for new library sessions and runs, matching updated tabs 01, 02 and 08 and IMPLEMENTATION_NOTES. Web and Mac change together. Not run: bun run typecheck, lint and test, because the worktree has no node_modules; CI must confirm. One non-blocking edge case: legacy queued runs with no agent_version.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/do/workspace/runs.ts",
+        "line": 223,
+        "text": "Not blocking. The queued-run check always uses the frozen model rule, but the later ensureSessionLive call uses it only when session.agentVersion is not null. A legacy run carried over by 0010 has agent_version NULL. If it is still queued, uses OpenCode or Pi, has an empty saved model and the project sets agent.models.<agent>, it fails with RUN_NO_AGENT at this check, even though ensureSessionLive would have used the project model. Confirm by running the queued-runs check on a migrated legacy run row with a null agent_version.",
+        "blocking": false,
+        "evidence": {
+          "quote": "sessionModel(agent, { model: definition.model }, this.core.settings(), true);",
+          "why": "frozen=true here does not match the frozen flag (session.agentVersion !== null) that queue.ts ensureSessionLive uses for the same run's session when the row is legacy and has no version."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts: removed Artifacts binding and isomorphic-git, DO SQLite migration, package export subpaths",
+        "paths": [
+          "apps/tempo/wrangler.jsonc",
+          "scripts/deploy-worker.ts",
+          "apps/tempo/src/env.ts",
+          "apps/tempo/src/db/do-migrations.ts",
+          "packages/settings/package.json",
+          "packages/protocol/src/migrations/legacy-agents.ts",
+          "packages/settings/src/migrations/roles.ts",
+          "apps/tempo/src/agents/library.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths and idempotency: migrateAgents marker and role import, protected-file guard errors, migration ordering and column renames",
+        "paths": [
+          "apps/tempo/src/agents/library.ts",
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/do/workspace/runs.ts",
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/db/do-migrations.ts",
+          "apps/tempo/test/worker/do-migrations.test.ts"
+        ]
+      },
+      {
+        "risk": "State and model semantics: createSession and init configJson, frozen sessionModel, session wire fields",
+        "paths": [
+          "apps/tempo/src/do/workspace/rpc.ts",
+          "apps/tempo/src/do/workspace/index.ts",
+          "apps/tempo/src/do/workspace/core.ts",
+          "apps/tempo/src/do/workspace/queue.ts",
+          "apps/tempo/src/server/handlers/workspaces.ts",
+          "apps/tempo/src/db/workspace-do.ts",
+          "packages/protocol/src/types.ts"
+        ]
+      },
+      {
+        "risk": "Old stored settings with a roles key after the Settings schema change (TypeScript and Rust decoding)",
+        "paths": [
+          "packages/protocol/src/settings.ts",
+          "packages/settings/src/index.ts",
+          "apps/tempo/src/db/json.ts",
+          "apps/tempo/src/server/handlers/common.ts",
+          "crates/tempo-protocol/src/generated.rs",
+          "packages/settings/test/migrations/settings.test.ts"
+        ]
+      },
+      {
+        "risk": "Security: allowed file roots in tempod, protected login and config files, ownership via activeAgent and getOwnedWorkspace",
+        "paths": [
+          "packages/tempod/src/acp/session.ts",
+          "packages/tempod/test/acp.test.ts",
+          "apps/tempo/src/agents/protected-files.ts",
+          "apps/tempo/src/server/handlers/workspaces.ts"
+        ]
+      },
+      {
+        "risk": "Build and runtime environment: turbo inputs, vitest optimizer config, lockfile; checked that packages/agents-starter exists and roles-builtin is removed",
+        "paths": [
+          "turbo.json",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "bun.lock",
+          "apps/tempo/package.json"
+        ]
+      },
+      {
+        "risk": "Tests: removed custom-agent tests replaced by library-session and migration assertions; checked for sleeps and zero-assertion paths",
+        "paths": [
+          "apps/tempo/test/worker/agent-library.test.ts",
+          "apps/tempo/test/worker/do-migrations.test.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/test/ui/agents-model.test.ts",
+          "apps/tempo/test/ui/components/events.test.tsx",
+          "packages/settings/test/migrations/roles.test.ts"
+        ]
+      },
+      {
+        "risk": "Spec: tabs 01, 02, 04 and 08, IMPLEMENTATION_NOTES and CI.md updated in the same change; Web and Mac parity",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/08 Events and Agents.md",
+          "docs/IMPLEMENTATION_NOTES.md",
+          "docs/CI.md",
+          "apps/mac/src/views/dialogs.rs",
+          "apps/mac/src/views/settings.rs",
+          "apps/mac/src/views/events.rs",
+          "apps/mac/src/views/agents_model.rs"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && B=a55466dd4fa966f9916bea08b6c4462d26bf040a; H=2ff48c57add387786ffe3361209f790f9efeecd4; git diff $B $H -- packages/protocol/src packages/settings packages/tempod turbo.json scripts spikes tests docs/IMPLEMENTATION_NOTES.md \"docs/01 Runtime and Agents.md\" \"docs/02 Data and API.md\" \"docs/08 Events and Agents.md\" docs/CI.md"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && git diff a55466dd4fa966f9916bea08b6c4462d26bf040a 2ff48c57add387786ffe3361209f790f9efeecd4 -- packages/protocol/src packages/settings packages/tempod turbo.json scripts spikes tests docs/IMPLEMENTATION_NOTES.md \"docs/01 Runtime and Agents.md\" \"docs/02 Data and API.md\" \"docs/08 Events and Agents.md\" docs/CI.md \"docs/04 UI.md\""
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/root/.claude/projects/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/tool-results/bpp7ziimq.txt"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/root/.claude/projects/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-2ff48c5/497f63ef-6d15-53de-9436-a2b3aee2739e/tool-results/bpp7ziimq.txt",
+        "offset": 911,
+        "limit": 300
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n '\"./' packages/protocol/package.json; ls packages/protocol/src/migrations"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"SettingsLayer\\|Settings)\" apps/tempo/src --include=*.ts | grep -v \"^.*import\" | head -40; grep -rn \"onExcessProperty\" apps/tempo/src packages/settings/src packages/protocol/src | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"deny_unknown_fields\" crates/tempo-protocol/src/generated.rs | head; grep -n \"pub struct Session \\|pub struct Settings \\|pub struct SettingsLayer\" -A3 crates/tempo-protocol/src/generated.rs | head -20; sed -n 1,80p apps/tempo/src/db/do-migrations.ts | grep -n \"when\" ; grep -n \"when\" apps/tempo/src/db/migrate*.ts apps/tempo/src/db/*.ts | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"agentVersion\\|agent_version\" apps/tempo/src/db/workspace-do.ts apps/tempo/src/db/do-migrations.ts | head; grep -n \"model\" apps/tempo/src/do/workspace/index.ts | sed -n 1,20p; grep -n \"export const sessionModel\" -A20 apps/tempo/src/do/workspace/queue.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rni \"customAgent\\|custom_agent\\|roles-builtin\\|listRoles\\|ROLE_ACCESS\\|\\.roles\\b\" --include=*.ts --include=*.tsx --include=*.rs --include=*.json apps packages crates tests scripts 2>/dev/null | grep -v node_modules | grep -v \"generated.rs\" | grep -v \"/fixtures/\" | head -30; ls packages/roles-builtin 2>&1"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls node_modules 2>/dev/null | head -3; ls packages/agents-starter; sed -n 120,215p apps/tempo/src/agents/library.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo/src/agents/library.ts",
+        "offset": 120,
+        "limit": 100
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/.bin/tsc"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,30p apps/tempo/src/agents/library.ts; grep -c \"TempoError\\|workspaces\\b\" apps/tempo/src/agents/library.ts; grep -n \"TempoError\" apps/tempo/src/do/workspace/lifecycle.ts | head -3; grep -n \"agentVersion\" crates/tempo-protocol/src/generated.rs | head"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "custom_agent|CREATE (TRIGGER|VIEW)|sessions_new",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo/src/db/do-migrations.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "ALTER TABLE sessions",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo/src/db/do-migrations.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2ff48c5/apps/tempo/src/do/workspace/runs.ts",
+        "offset": 195,
+        "limit": 40
+      }
+    }
+  ]
+}

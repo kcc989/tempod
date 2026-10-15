@@ -1,0 +1,295 @@
+{
+  "version": 1,
+  "notes": "head is the commit the reviewer sees; base is its parent unless given. seed cases apply seeds/<id>.patch on top of head. Defect text is for the judge only and never reaches the reviewer. author is the model family that wrote the change (Claude-Session trailers, or a codex/ head branch).",
+  "cases": [
+    {
+      "id": "R-459a617",
+      "kind": "fix",
+      "fixPrs": [28],
+      "head": "459a617",
+      "author": "codex",
+      "defects": [
+        {
+          "id": "F1",
+          "paths": ["apps/tempo/src", "apps/mac/src/views/settings_form.rs"],
+          "text": "Codex device sign-in is started from the Worker (server side) against OpenAI's device-authorization endpoints; in production it fails before a code is shown, and the Mac UI replaces the real sign-in error with a generic expired-login message."
+        }
+      ]
+    },
+    {
+      "id": "R-de82a91",
+      "kind": "fix",
+      "fixPrs": [45],
+      "head": "de82a91",
+      "author": "codex",
+      "defects": [
+        {
+          "id": "F2",
+          "paths": ["apps/tempo/test/worker/workspace-events.test.ts"],
+          "text": "Making the queue-runner cases concurrent leaves the 'turn deferred while the tempod socket is down' case racy: the fake tempod can reconnect before the deferred state is asserted, so the test is nondeterministic."
+        }
+      ]
+    },
+    {
+      "id": "R-68910d4",
+      "kind": "fix",
+      "fixPrs": [53],
+      "head": "68910d4",
+      "author": "claude",
+      "defects": [
+        {
+          "id": "F3",
+          "paths": ["apps/tempo/src"],
+          "text": "The terminal WebSocket server side never sets binaryType = 'arraybuffer'; in workerd binary keyboard frames arrive as Blob objects, which are passed to the PTY stdin as bytes, so typed input never reaches the shell."
+        }
+      ]
+    },
+    {
+      "id": "R-41372df",
+      "kind": "fix",
+      "fixPrs": [60, 61, 62, 63],
+      "head": "41372df",
+      "author": "claude",
+      "defects": [
+        {
+          "id": "F5",
+          "paths": ["apps/tempo/src/artifacts/pull-requests.ts", "apps/tempo/src/artifacts/repositories.ts"],
+          "text": "Branch tips are read with repo.log({ ref: 'refs/heads/<branch>' }); the real Artifacts binding resolves only branch names, tags or commit IDs and returns no commits for full ref names, so every native PR create/merge/CI head check sees the branch as missing. The test fakes strip refs/heads/ and hide this."
+        },
+        {
+          "id": "F7",
+          "paths": ["container/Dockerfile"],
+          "text": "COPY --chmod=0644 creates /opt/tempo and /opt/tempo/pi with mode 0644 (no execute bit), so the non-root tempo user cannot traverse the directories and cannot load the Pi profile."
+        },
+        {
+          "id": "F10",
+          "paths": ["packages/tempod/src/tempo-mcp.ts"],
+          "text": "list_issue_labels has an empty input struct; Effect renders it as {\"not\":{\"type\":\"null\"}} instead of an object schema, and Claude Code rejects the whole MCP tools/list (inputSchema.type must be object), so Claude sessions lose all tempo tools."
+        },
+        {
+          "id": "F12",
+          "paths": ["apps/tempo/test/ui/components/issues.test.tsx"],
+          "text": "The issue comments pagination test runs findByRole over a 50-comment page with a 1 s budget; on a loaded runner it times out (nondeterministic test)."
+        }
+      ]
+    },
+    {
+      "id": "R-8f23c85",
+      "kind": "fix",
+      "fixPrs": [60],
+      "head": "8f23c85",
+      "author": "claude",
+      "defects": [
+        {
+          "id": "F6",
+          "paths": ["tests/e2e/tests/forge-demo.spec.ts"],
+          "text": "The forge demo e2e test matches '# fail 0' and '# pass N', which is TAP output; Node 24's default spec reporter prints 'ℹ fail 0', so the assertion fails on the real image."
+        }
+      ]
+    },
+    {
+      "id": "R-eaf0b28",
+      "kind": "fix",
+      "fixPrs": [61],
+      "head": "eaf0b28",
+      "author": "codex",
+      "defects": [
+        {
+          "id": "F8",
+          "paths": ["apps/tempo/test/worker/ops.test.ts"],
+          "text": "The 'runs one op at a time, in creation order' case is now concurrent but still uses sleep(300) in the fake commit handler and asserts state during that window and a >=250 ms timing; under load the ordering assertions race."
+        }
+      ]
+    },
+    {
+      "id": "R-2bbfc39",
+      "kind": "fix",
+      "fixPrs": [61],
+      "head": "2bbfc39",
+      "author": "claude",
+      "defects": [
+        {
+          "id": "F9",
+          "paths": ["apps/tempo/test/worker/conversations.cases.ts"],
+          "text": "The failed-unlink test uses vi.spyOn(env.DATA, 'put').mockRejectedValueOnce(...) on a shared binding while other cases run concurrently, so the one rejection can be consumed by an unrelated put (nondeterministic test)."
+        }
+      ]
+    },
+    {
+      "id": "R-2ff48c5",
+      "kind": "fix",
+      "fixPrs": [63],
+      "head": "2ff48c5",
+      "author": "codex",
+      "defects": [
+        {
+          "id": "F11",
+          "paths": ["apps/tempo/src/agents/protected-files.ts"],
+          "text": "The protected-file guard calls Files.readFile and treats status 404 as absent, but the Sandbox SDK throws SandboxFileError ENOENT for a missing file, so for an owner without a Codex login every run fails to start (AGENT_START_FAILED)."
+        }
+      ]
+    },
+    {
+      "id": "S1",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S1-protected-files-fail-open",
+      "author": "claude",
+      "message": "Treat unreadable login files as absent\n\nA login the owner never set up must not block a run.",
+      "defects": [
+        {
+          "id": "S1",
+          "paths": ["apps/tempo/src/agents/protected-files.ts"],
+          "text": "Any readFile failure (not only ENOENT) now counts as an absent file, so an unreadable or tampered protected login file no longer fails the run with RUN_ACCESS_VIOLATION: the guard fails open."
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S2-merge-gate-skipped",
+      "author": "claude",
+      "message": "Let skipped jobs satisfy the merge gate\n\nA job skipped by needs should not hold a merge.",
+      "defects": [
+        {
+          "id": "S2",
+          "paths": ["apps/tempo/src/do/repository-ci.ts"],
+          "text": "The merge gate accepts a required job with conclusion 'skipped'; a required job is skipped when one of its needs failed, so a PR whose lint failed can merge. Tab 10 requires every required job to be 'success'."
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S3-token-in-log",
+      "author": "claude",
+      "message": "Log Artifacts token issue for debugging expired clones",
+      "defects": [
+        {
+          "id": "S3",
+          "paths": ["apps/tempo/src/artifacts/repositories.ts"],
+          "text": "The repository token plaintext is interpolated into the log message string. log() redacts only fields whose names look secret, not the message, so the token reaches the Worker log. Rule 9: never put a secret in logs."
+        }
+      ]
+    },
+    {
+      "id": "S4",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S4-merge-retry-not-idempotent",
+      "author": "claude",
+      "message": "Simplify native merge preparation",
+      "defects": [
+        {
+          "id": "S4",
+          "paths": ["apps/tempo/src/artifacts/pull-requests.ts"],
+          "text": "prepareArtifactMerge no longer returns the recorded merge for an already merged PR; a retry after a lost acknowledgement now fails with PR_NOT_MERGEABLE instead of reconciling the pushed result (tab 09 merge retry rule, rule 5 idempotent steps)."
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S5-test-sleep",
+      "author": "claude",
+      "message": "Speed up the run fixture's prompt wait",
+      "defects": [
+        {
+          "id": "S5",
+          "paths": ["apps/tempo/test/worker/runs.cases.ts"],
+          "text": "The run test helper replaces waitFor on the observable session.prompt request with a fixed 200 ms sleep; tests become nondeterministic under load (repo rule: wait for observable state instead of sleeping)."
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S6-profile-0600",
+      "author": "claude",
+      "message": "Tighten Pi profile permissions in the image",
+      "defects": [
+        {
+          "id": "S6",
+          "paths": ["container/Dockerfile"],
+          "text": "The Pi profile becomes root-owned mode 0600, so the non-root tempo user that runs Pi cannot read it."
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S7-issue-page-offset",
+      "author": "claude",
+      "message": "Advance issue tool pagination past the last returned item",
+      "defects": [
+        {
+          "id": "S7",
+          "paths": ["apps/tempo/src/agents/issues.ts"],
+          "text": "nextOffset adds 1 to offset + returned count, so following nextOffset skips one issue or comment per page."
+        }
+      ]
+    },
+    {
+      "id": "S8",
+      "kind": "seed",
+      "head": "f1b8a67",
+      "patch": "S8-issues-public-write",
+      "author": "claude",
+      "message": "Reuse public project lookup in issue handlers",
+      "defects": [
+        {
+          "id": "S8",
+          "paths": ["apps/tempo/src/server/handlers/issues.ts"],
+          "text": "Issue handlers now accept any public project, including create, update and delete, so any signed-in visitor can change or delete issues of another owner's public project (tab 11 visitors may only read)."
+        }
+      ]
+    },
+    {
+      "id": "C-8159759",
+      "kind": "clean",
+      "head": "8159759",
+      "author": "claude",
+      "defects": []
+    },
+    {
+      "id": "C-f29c2bc",
+      "kind": "clean",
+      "head": "f29c2bc",
+      "author": "codex",
+      "defects": []
+    },
+    {
+      "id": "C-1ec4cc3",
+      "kind": "clean",
+      "head": "1ec4cc3",
+      "author": "claude",
+      "defects": []
+    },
+    {
+      "id": "C-f1b8a67",
+      "kind": "clean",
+      "head": "f1b8a67",
+      "author": "claude",
+      "defects": []
+    },
+    {
+      "id": "C-ee1e5f7",
+      "kind": "clean",
+      "head": "ee1e5f7",
+      "author": "claude",
+      "defects": []
+    },
+    {
+      "id": "C-bfb05a8",
+      "kind": "clean",
+      "head": "bfb05a8",
+      "author": "codex",
+      "defects": []
+    }
+  ]
+}

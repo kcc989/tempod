@@ -1,0 +1,111 @@
+{
+  "case": "C-8159759",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "8159759138c800f51fd0e556f1eb9c836bc46a6c",
+  "diffBytes": 4545,
+  "diffCut": false,
+  "steps": 6,
+  "seconds": 52.1,
+  "usage": {
+    "prompt_tokens": 325277,
+    "completion_tokens": 4350,
+    "cost": 0.371936
+  },
+  "report": {
+    "status": "pass",
+    "summary": "The change switches Artifacts binding repo.log lookups from `refs/heads/<branch>` to bare branch names in branchTips (native PRs) and artifactHeadSha. This matches the binding contract in apps/tempo/worker-runtime.d.ts (`opts.ref Branch, tag, or commit ID; defaults to HEAD`; returns an empty array if the ref cannot be resolved) and the existing getRepository usage, which passes the bare info.defaultBranch. Both test fakes now look up the exact ref, so a return to the refs/heads form would fail the tests. The e2e regex changes accept both the TAP and the spec-reporter node --test summaries. Typecheck, lint and tests were not run, and the binding behaviour was not tried against a live Artifacts repo. One possible ambiguity (a bare name resolving as a tag or commit) is noted as non-blocking.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/pull-requests.ts",
+        "line": 87,
+        "text": "Because the binding resolves a bare ref as a branch, tag or commit ID, a branch that shares a name with a tag, or whose name is 40 hex characters (validateArtifactBranch allows both), could resolve to the tag or commit instead of the branch tip. The binding's precedence order is not documented in the repo. Testing these cases against a real Artifacts repo would confirm or rule this out. It is an edge case and does not block this fix.",
+        "blocking": false,
+        "evidence": {
+          "quote": "repo.log({ ref: headBranch, limit: 1 }),",
+          "why": "worker-runtime.d.ts documents `@param opts.ref Branch, tag, or commit ID` without saying which wins when one name matches more than one."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (Artifacts binding repo.log ref semantics; fake vs real)",
+        "paths": [
+          "apps/tempo/worker-runtime.d.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/server/handlers/repositories.ts",
+          "apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "apps/tempo/test/worker/native-workspace-pull-requests.cases.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths (missing branch -> NOT_FOUND / null, SHA validation unchanged)",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts", "apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Security / input validation (branch validated before binding call, repo id and readOnly checks)",
+        "paths": [
+          "apps/tempo/src/artifacts/repositories.ts",
+          "apps/tempo/src/artifacts/pull-requests.ts",
+          "apps/tempo/src/do/workspace/rpc.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (read-only lookups, no state changes)",
+        "paths": ["apps/tempo/src/artifacts/pull-requests.ts", "apps/tempo/src/artifacts/repositories.ts"]
+      },
+      {
+        "risk": "Tests (fake exactness, call assertions, e2e regex robustness)",
+        "paths": [
+          "apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "apps/tempo/test/worker/native-workspace-pull-requests.cases.ts",
+          "tests/e2e/tests/forge-demo.spec.ts"
+        ]
+      },
+      {
+        "risk": "Spec conformance",
+        "paths": ["docs/09 Git Forge.md", "docs/IMPLEMENTATION_NOTES.md", "CLAUDE.md"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && grep -rn \"ref?:\" --include=*.d.ts apps/tempo 2>/dev/null | grep -v node_modules | head; grep -rln \"Artifacts\" docs | head; grep -rn \"log(\" apps/tempo/src/artifacts/*.ts | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 11100,11260p apps/tempo/worker-runtime.d.ts; grep -rn \"refs/heads\\|log({\\|\\.log(\" docs/IMPLEMENTATION_NOTES.md \"docs/09 Git Forge.md\" docs/CLOUDFLARE-CODE-HOSTING-PLAN.md | head -40"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 1,130p apps/tempo/src/artifacts/pull-requests.ts; sed -n 160,195p apps/tempo/src/artifacts/repositories.ts; grep -rn \"artifactHeadSha\\|branchTips\\|validBranch\\|isValidBranch\\|BranchName\" apps/tempo/src packages/protocol/src | head -30"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -n \"validateArtifactBranch\\|artifactBranchExists\\|artifactBranchTips\" -A14 apps/tempo/src/artifacts/repositories.ts | head -90; sed -n 118,130p apps/tempo/src/do/workspace/rpc.ts; git log --oneline -5; grep -rn \"refs/heads\\|log({ ref\\|ref:\" docs/IMPLEMENTATION_NOTES.md docs/CLOUDFLARE-CODE-HOSTING-PLAN.md | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 40,55p apps/tempo/src/artifacts/repositories.ts; grep -rn \"validateArtifactRef\\|refs/heads\" apps/tempo/src | head -20; grep -rn \"\\.log(\\|readFile({\" apps/tempo/src | grep -v console | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 240,256p apps/tempo/src/server/handlers/repositories.ts; grep -n \"REF\\b\\|REF)\" apps/tempo/src/server/handlers/dotfiles.ts | head; grep -n \"Artifacts\\|log\\b\\|ref\" docs/IMPLEMENTATION_NOTES.md | grep -i \"artifact\" | head"
+      }
+    }
+  ]
+}

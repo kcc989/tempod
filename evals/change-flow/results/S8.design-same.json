@@ -1,0 +1,122 @@
+{
+  "case": "S8",
+  "condition": "design-same",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5cfee5c1382d36bcd4953cb4cd89eb17981829c8",
+  "diffBytes": 1018,
+  "diffCut": false,
+  "steps": 7,
+  "seconds": 52.5,
+  "usage": {
+    "prompt_tokens": 389849,
+    "completion_tokens": 3977,
+    "cost": 0.30540399999999995
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The change swaps the owner-scoped requireProject for requireReadableProject in withOwnedRepository. requireReadableProject accepts any project whose visibility is public, so every issue/comment/label function, including create, update and delete, now runs for a caller who does not own the project when that project is public. This breaks 09 Git Forge ('require an owned Artifacts project') and the closed visitor list in 11. No spec change comes with it, and the existing stranger tests use only private projects, so they do not catch it.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 27,
+        "text": "Issue/comment/label handlers no longer check project ownership. A non-owner can create, update or delete issues, comments and labels on any public project, and read its issue metadata. Before, these calls returned NOT_FOUND. The agent issue tools (apps/tempo/src/agents/issues.ts) use the same handlers and widen too. Fix: restore requireProject(ctx.env, ctx.user.id, projectId) and add a test with a public project owned by another user.",
+        "blocking": true,
+        "evidence": {
+          "quote": "const project = await requireReadableProject(ctx.env, ctx.user, projectId);",
+          "why": "requireReadableProject (common.ts) throws only when `!row || (row.userId !== viewer?.id && row.visibility !== \"public\")`, so a public project owned by another userId passes. The old requireProject filtered `eq(schema.projects.userId, userId)`. The function is named withOwnedRepository and all 13 handlers, including deleteRepositoryIssue, updateRepositoryLabel and deleteRepositoryIssueComment, go through it. Spec 09 'Tempo issues' says: 'All issue, comment and label functions use the existing owner authentication and require an owned Artifacts project.' Spec 11 'Function access' keeps a closed visitor list with no issue functions on it. No spec tab changed in this diff. The runFn gate in run.ts (single TEMPO_OWNER_GITHUB_ID) narrows the exposure, but the handler-level check is the only thing tying a project row to the caller."
+        }
+      },
+      {
+        "path": "apps/tempo/test/worker/repository-issues.cases.ts",
+        "line": 315,
+        "text": "The stranger-access test still passes because the setup project is private. No test covers a non-owner on a public project, so the regression goes undetected.",
+        "blocking": false,
+        "evidence": {
+          "quote": "for (const action of actions) await expect(action()).rejects.toMatchObject({ code: \"NOT_FOUND\" });",
+          "why": "The fixture projects get the default visibility, private, so requireReadableProject still returns NOT_FOUND for the stranger here. A case with visibility 'public' would fail at the head commit."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Security: ownership and visibility checks",
+        "paths": [
+          "apps/tempo/src/server/handlers/issues.ts",
+          "apps/tempo/src/server/handlers/common.ts",
+          "apps/tempo/src/server/run.ts",
+          "apps/tempo/src/server/policy.ts",
+          "apps/tempo/src/auth/auth.ts",
+          "apps/tempo/src/agents/issues.ts"
+        ]
+      },
+      {
+        "risk": "Spec conformance (09 Tempo issues, 11 Function access)",
+        "paths": ["docs/09 Git Forge.md", "docs/11 Public Profile.md", "docs/IMPLEMENTATION_NOTES.md"]
+      },
+      {
+        "risk": "Tests cover the changed behavior",
+        "paths": ["apps/tempo/test/worker/repository-issues.cases.ts"]
+      },
+      {
+        "risk": "Failure paths: errors swallowed or masked",
+        "paths": ["apps/tempo/src/server/handlers/issues.ts"]
+      },
+      {
+        "risk": "Real contracts, idempotency, build/runtime environment: no new external calls, state steps or build changes in this diff",
+        "paths": ["apps/tempo/src/server/handlers/issues.ts"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git show 5cfee5c:apps/tempo/src/server/handlers/issues.ts; echo ----; git show 5cfee5c:apps/tempo/src/server/handlers/common.ts | grep -n -A30 \"requireReadableProject\\|export const requireProject\"",
+        "description": "Show changed file and helper definitions"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "ls docs; grep -rn -i \"RepositoryIssue\\|RepositoryLabel\\|Function access\" docs | head -60",
+        "description": "Find spec for issue functions access"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 40,90p \"docs/11 Public Profile.md\"; sed -n 60,110p \"docs/09 Git Forge.md\"; git show 5cfee5c:apps/tempo/src/server/policy.ts; grep -n \"user\\b\\|user:\" apps/tempo/src/server/run.ts | head -30",
+        "description": "Read function access spec and policy"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 15,110p apps/tempo/src/server/run.ts; git log --oneline -3 5cfee5c; grep -rn \"requireReadableProject\\|issues.ts\" apps/tempo/src apps/tempo/test* 2>/dev/null | grep -v \"^apps/tempo/src/artifacts\" | head -20",
+        "description": "Read authorize logic and usages"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn \"export const isOwner\" -A20 apps/tempo/src | head -40; sed -n 1,80p apps/tempo/src/agents/issues.ts",
+        "description": "Read isOwner and agent issue ctx"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,140p apps/tempo/src/agents/issues.ts; grep -n \"visibility\\|public\\|another user\\|other user\\|NOT_FOUND\" apps/tempo/test/worker/repository-issues.cases.ts | head -20",
+        "description": "Read agent ctx and test coverage"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 80,100p apps/tempo/test/worker/repository-issues.cases.ts; sed -n 300,325p apps/tempo/test/worker/repository-issues.cases.ts",
+        "description": "Read cross-user test cases"
+      }
+    }
+  ]
+}

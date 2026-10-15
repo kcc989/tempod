@@ -1,0 +1,378 @@
+{
+  "case": "C-8159759",
+  "condition": "design",
+  "model": "workers-ai:@cf/moonshotai/kimi-k2.7-code",
+  "head": "8159759138c800f51fd0e556f1eb9c836bc46a6c",
+  "diffBytes": 4545,
+  "diffCut": false,
+  "steps": 48,
+  "seconds": 187.8,
+  "usage": {
+    "prompt_tokens": 438022,
+    "completion_tokens": 2245,
+    "cost": 0.0,
+    "neurons": 29116.51850128174
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Reviewed the change. The code change in `pull-requests.ts` and `repositories.ts` removes the hardcoded `refs/heads/` prefix to align with the real Artifacts binding contract \u2014 the binding resolves branch names, not full ref names. Comments and tests are updated consistently. The e2e test regex change only makes the assertion more robust to formatter output. No blocking issues found.",
+    "checked": [
+      {
+        "risk": "Real contracts for Artifacts binding SDK",
+        "paths": [
+          "/workspace/apps/tempo/worker-runtime.d.ts",
+          "/workspace/apps/tempo/src/artifacts/pull-requests.ts",
+          "/workspace/apps/tempo/src/artifacts/repositories.ts"
+        ]
+      },
+      {
+        "risk": "Failure paths and idempotency",
+        "paths": [
+          "/workspace/apps/tempo/src/artifacts/pull-requests.ts",
+          "/workspace/apps/tempo/src/artifacts/repositories.ts",
+          "/workspace/apps/tempo/src/server/handlers/repositories.ts"
+        ]
+      },
+      {
+        "risk": "Spec compliance",
+        "paths": [
+          "/workspace/docs/09 Git Forge.md",
+          "/workspace/apps/tempo/src/artifacts/pull-requests.ts",
+          "/workspace/apps/tempo/src/artifacts/repositories.ts"
+        ]
+      },
+      {
+        "risk": "Tests",
+        "paths": [
+          "/workspace/apps/tempo/test/worker/native-pull-requests.cases.ts",
+          "/workspace/apps/tempo/test/worker/native-workspace-pull-requests.cases.ts",
+          "/workspace/tests/e2e/tests/forge-demo.spec.ts"
+        ]
+      }
+    ],
+    "findings": []
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git log --oneline -3"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -type f -name \"CLAUDE.md\" -o -name \"AGENTS.md\" 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -type d -name \"docs\" 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "find",
+      "args": {
+        "path": "/workspace",
+        "name": "CLAUDE.md"
+      }
+    },
+    {
+      "tool": "find",
+      "args": {
+        "path": "/workspace",
+        "name": "AGENTS.md"
+      }
+    },
+    {
+      "tool": "find",
+      "args": {
+        "path": "/workspace",
+        "name": "docs",
+        "type": "directory"
+      }
+    },
+    {
+      "tool": "find",
+      "args": {
+        "path": "/workspace",
+        "name": "*.md",
+        "maxdepth": 2
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -type f \\( -name \"CLAUDE.md\" -o -name \"AGENTS.md\" \\) 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace -type d -name \"docs\" 2>/dev/null | head -20"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la /workspace"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/AGENTS.md"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "ls -la /workspace/docs"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/docs/09 Git Forge.md"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/pull-requests.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -rn \"ArtifactsRepo\" /workspace/apps/tempo --include=\"*.d.ts\" --include=\"*.ts\" | head -40"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -rn \"worker-runtime.d.ts\" /workspace/apps/tempo | head -10"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "find /workspace/apps/tempo -name \"worker-runtime.d.ts\" -o -name \"*.d.ts\" | xargs grep -l \"ArtifactsRepo\" 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -r \"ArtifactsRepo\" /workspace/apps/tempo/worker-runtime.d.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/worker-runtime.d.ts",
+        "start": 1,
+        "end": 260
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"interface ArtifactsRepo \" /workspace/apps/tempo/worker-runtime.d.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/worker-runtime.d.ts",
+        "start": 11060,
+        "end": 11160
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/worker-runtime.d.ts",
+        "start": 11160,
+        "end": 11230
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/native-pull-requests.cases.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/native-pull-requests.cases.ts",
+        "start": 493,
+        "end": 700
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/native-workspace-pull-requests.cases.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/artifacts-fake.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/tests/e2e/tests/forge-demo.spec.ts"
+      }
+    },
+    {
+      "tool": "git",
+      "args": {
+        "command": "diff 8f23c85befce80c0a1c94a727017b59ee1d24f03 8159759138c800f51fd0e556f1eb9c836bc46a6c -- apps/tempo/src/artifacts/pull-requests.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 8f23c85befce80c0a1c94a727017b59ee1d24f03 8159759138c800f51fd0e556f1eb9c836bc46a6c -- apps/tempo/src/artifacts/pull-requests.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git diff 8f23c85befce80c0a1c94a727017b59ee1d24f03 8159759138c800f51fd0e556f1eb9c836bc46a6c -- apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "git grep -n \"repo.log\" /workspace/apps/tempo/src /workspace/apps/ci-controller/src 2>/dev/null"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -rn \"repo.log\" /workspace/apps/tempo/src /workspace/apps/ci-controller/src 2>/dev/null"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/pull-requests.ts",
+        "start": 50,
+        "end": 120
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -rn \"repo.log\" /workspace/apps/tempo/src/"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/server/handlers/repositories.ts",
+        "start": 230,
+        "end": 260
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"validateArtifactRef\" /workspace/packages/native/src/*"
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -rn \"validateArtifactRef\" /workspace/apps/tempo /workspace/packages"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts",
+        "start": 55,
+        "end": 85
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts",
+        "start": 320,
+        "end": 350
+      }
+    },
+    {
+      "tool": "shell",
+      "args": {
+        "command": "grep -n \"artifactBranchTips\" /workspace/apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts",
+        "start": 275,
+        "end": 305
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts",
+        "start": 304,
+        "end": 330
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/native-workspace-pull-requests.cases.ts",
+        "start": 50,
+        "end": 110
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/test/worker/native-workspace-pull-requests.cases.ts",
+        "start": 1,
+        "end": 50
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/pull-requests.ts",
+        "start": 1,
+        "end": 130
+      }
+    },
+    {
+      "tool": "read_file",
+      "args": {
+        "path": "/workspace/apps/tempo/src/artifacts/repositories.ts",
+        "start": 130,
+        "end": 205
+      }
+    },
+    {
+      "tool": "report_result",
+      "args": "(report)"
+    }
+  ]
+}

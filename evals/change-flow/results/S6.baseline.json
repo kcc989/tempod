@@ -1,0 +1,43 @@
+{
+  "case": "S6",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "da9729f15a8dc00e65021597253cd5c3cb1c0d72",
+  "diffBytes": 611,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 19.4,
+  "usage": {
+    "prompt_tokens": 76570,
+    "completion_tokens": 1361,
+    "cost": 0.06788359999999999
+  },
+  "report": {
+    "status": "fail",
+    "summary": "Changing the Pi extension to mode 0600 without --chown leaves /opt/tempo/pi/tempo-profile.ts owned by root and unreadable by the `tempo` user that runs pi. Pi then can't load the Tempo extension, so no per-session MCP servers get registered and the tool_call guard that enforces tools.allow/tools.deny never runs. That loosens the limits instead of tightening them, and it breaks image.test.ts, which checks R_OK on this file.",
+    "findings": [
+      {
+        "path": "container/Dockerfile",
+        "line": 36,
+        "text": "`COPY --chmod=0600` with no `--chown` leaves the file root-owned and readable only by root. The image runs as `USER tempo`, and pi loads the file with `-e /opt/tempo/pi/tempo-profile.ts` (spec 01, Pi profile), so loading fails. Without the extension, the profile's MCP servers aren't registered and the `tool_call` guard that enforces tools.allow/tools.deny for codemode's nested MCP calls is gone. Spec 01 calls this guard what enforces the limits. Keep 0644 (root-owned, read-only for everyone), or use `--chown=root:tempo --chmod=0640` placed after the groupmod that creates the `tempo` group, and update spec 01 if behavior changes.",
+        "blocking": true
+      },
+      {
+        "path": "packages/tempod/test/image.test.ts",
+        "line": 30,
+        "text": "This test checks that `tempo` can read /opt/tempo/pi/tempo-profile.ts (R_OK). With mode 0600 and root ownership it fails in test:tempod:container. The change doesn't update the test because the behavior is a regression.",
+        "blocking": true
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/S6; sed -n 20,80p container/Dockerfile; grep -rn \"tempo-profile\" --include=* -r . 2>/dev/null | grep -v node_modules | head -30",
+        "description": "Show Dockerfile and references to the profile"
+      }
+    }
+  ]
+}

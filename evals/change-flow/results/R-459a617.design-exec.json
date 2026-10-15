@@ -1,0 +1,210 @@
+{
+  "case": "R-459a617",
+  "condition": "design-exec",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "459a617ce0f23c6c42e4724c7942e7811f06d844",
+  "diffBytes": 74227,
+  "diffCut": false,
+  "steps": 15,
+  "seconds": 137.9,
+  "usage": {
+    "prompt_tokens": 1202663,
+    "completion_tokens": 9514,
+    "cost": 0.9422321999999999
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Codex device-code login (CredentialDO start/poll/cancel, codex-login lib, server fns and registry, web LoginsTab, Mac settings, protocol types, spec tabs 01/02/04/07) is consistent with the spec, fails closed, never shows upstream secrets, and cancel, removal or a manual upload during an in-flight exchange cannot save a login. Worker tests (8) and UI component tests (3) pass. No blocking findings. Not verified: the Mac Rust code was not compiled because cargo check needed approval; it only uses GPUI Kit calls that already appear in compiling Mac views. Separately, tsc for apps/tempo fails only in two test files this change does not touch (unit.test.ts, workspace-events.test.ts).",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/settings.rs",
+        "line": 303,
+        "text": "Mac settings code was not compiled in this run (cargo check needed approval). The calls it uses (Input::new(..).id(..).aria_label(..), Disableable, Button::primary().label(), cx.open_url, AppState::try_global/client, clear_credential_invalid) all exist in other compiling Mac views and crates. Running cargo check for apps/mac would confirm it.",
+        "blocking": false,
+        "evidence": {
+          "quote": "Input::new(&self.auth_json)",
+          "why": "Not compiled here. sign_in.rs uses the same Input::new(&self.url).id(..).aria_label(..) chain, so a compile failure is unlikely but not ruled out."
+        }
+      },
+      {
+        "path": "apps/tempo/src/do/credential.ts",
+        "line": 59,
+        "text": "The login attempt is held only in memory, so evicting the CredentialDO between polls returns 'expired' and the owner must reconnect. Spec tab 01 documents this ('Eviction expires the attempt and the owner reconnects'). A design trade-off, not a defect.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/unit.test.ts",
+        "line": 10,
+        "text": "tsc -p apps/tempo/tsconfig.json reports errors only in test/worker/unit.test.ts (missing newPreviewToken export, JsonData types) and test/worker/workspace-events.test.ts (missing 'browser' field). Neither file is in this change; this looks like an out-of-date protocol build, not something this change introduced.",
+        "blocking": false
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Real contracts (OpenAI device-code endpoints, DO RPC Result transport, generated Rust protocol, GPUI Kit APIs)",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "packages/protocol/src/errors.ts",
+          "apps/tempo/src/server/handlers/credentials.ts",
+          "crates/tempo-protocol/src/generated.rs",
+          "apps/mac/src/app.rs",
+          "apps/mac/src/views/sign_in.rs",
+          "apps/mac/src/views/settings.rs",
+          "docs/01 Runtime and Agents.md"
+        ]
+      },
+      {
+        "risk": "Failure paths (upstream errors, transport errors, malformed JWT, cancelled start)",
+        "paths": [
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/test/worker/codex-login.test.ts"
+        ]
+      },
+      {
+        "risk": "Idempotency and state (serialized start/poll, re-check after exchange and after encryption, repeat poll after connected, cancel/delete/replace clear the attempt)",
+        "paths": ["apps/tempo/src/do/credential.ts", "apps/tempo/src/server/handlers/credentials.ts"]
+      },
+      {
+        "risk": "Security (per-user CredentialDO, no tokens/device IDs in output or logs, encrypted storage, sign-in required)",
+        "paths": [
+          "apps/tempo/src/do/credential.ts",
+          "apps/tempo/src/lib/codex-login.ts",
+          "apps/tempo/src/server/registry.ts",
+          "apps/tempo/test/worker/codex-login.test.ts"
+        ]
+      },
+      {
+        "risk": "Tests (timers, shared mocks reset, assertions meaningful) - ran worker and component tests",
+        "paths": [
+          "apps/tempo/test/worker/codex-login.test.ts",
+          "apps/tempo/test/ui/components/codex-login.test.tsx",
+          "apps/tempo/test/ui/components/setup.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/package.json"
+        ]
+      },
+      {
+        "risk": "Spec alignment (tabs 01, 02, 04, 07; web and Mac changed together)",
+        "paths": [
+          "docs/01 Runtime and Agents.md",
+          "docs/02 Data and API.md",
+          "docs/04 UI.md",
+          "docs/07 Mac Client.md",
+          "packages/protocol/src/api.ts",
+          "apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx",
+          "apps/mac/src/views/settings.rs"
+        ]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; git rev-parse HEAD; sed -n 1,80p apps/tempo/src/server/handlers/credentials.ts | grep -n \"deleteSecret\\|replaceCodexAuth\\|forget\" ; grep -rn \"export const capture\\|export function capture\\|export const unwrap\\|export function unwrap\" packages/protocol/src; grep -n \"forgetInvalid\" apps/tempo/src/ui/components/dialogs/settings/LoginsTab.tsx | head; grep -rn \"fn clear_credential_invalid\\|fn try_global\\|pub fn client\\|fn aria_label\" apps/mac/src crates 2>/dev/null | head; grep -rln \"deviceauth\" --include=* . 2>/dev/null | grep -v node_modules | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; sed -n 95,125p packages/protocol/src/errors.ts; grep -n \"deleteCredential\" -A15 apps/tempo/src/server/handlers/credentials.ts | head -30; sed -n 40,60p apps/mac/src/app.rs; grep -n \"workspaces\" apps/mac/src/app.rs | head -5; grep -rn \"aria_label\" ~/.cargo/git ~/.cargo/registry 2>/dev/null | grep -i \"input\" | head -3; which cargo bun"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617; sed -n 95,125p packages/protocol/src/errors.ts; grep -n \"deleteCredential\" -A15 apps/tempo/src/server/handlers/credentials.ts | head -30; sed -n 40,60p apps/mac/src/app.rs; grep -n \"workspaces\" apps/mac/src/app.rs | head -5; which cargo bun"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo; cat package.json | grep -A15 '\"scripts\"'; ls node_modules >/dev/null 2>&1 && echo has_nm; ls ../../node_modules | head -3"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo && timeout 500 bunx vitest run test/worker/codex-login.test.ts 2>&1 | tail -30",
+        "timeout": 560000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo && timeout 300 bunx vitest run -c vitest.components.config.ts test/ui/components/codex-login.test.tsx 2>&1 | tail -30; timeout 300 bunx tsc -p tsconfig.json 2>&1 | tail -15",
+        "timeout": 560000
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617 && CARGO_TARGET_DIR=/tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-459a617/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/target timeout 550 cargo check --offline -p tempo-mac 2>&1 | tail -25",
+        "timeout": 580000
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "fn aria_label|gpui_kit|gpui-kit",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac",
+        "glob": "{Cargo.toml,src/**/*.rs}",
+        "output_mode": "content",
+        "head_limit": 15
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Input::new\\(.*\\)|\\.aria_label\\(|InputState::new|placeholder\\(|disabled\\(|cx\\.open_url|tempo_protocol::\\{self as p",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/src",
+        "output_mode": "content",
+        "head_limit": 25
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "timeout 550 cargo check --offline --manifest-path /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/Cargo.toml --target-dir /tmp/claude-0/-tmp-claude-0--home-user-tempod-497f63ef-6d15-53de-9436-a2b3aee2739e-scratchpad-wt-R-459a617/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/target",
+        "timeout": 580000
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "Input::new\\(|use gpui_kit::component::Disableable|ButtonVariants",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/src",
+        "output_mode": "content",
+        "-A": 3
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/vitest.components.config.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/tempo/test/ui/components/setup.ts"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "\\.label\\(|client\\.call::<api::|\\.primary\\(\\)",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-459a617/apps/mac/src/views/sign_in.rs",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

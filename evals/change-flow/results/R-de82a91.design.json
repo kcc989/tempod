@@ -1,0 +1,267 @@
+{
+  "case": "R-de82a91",
+  "condition": "design",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "de82a91d26288b4a13ed049ad627394d87d92717",
+  "diffBytes": 42558,
+  "diffCut": false,
+  "steps": 24,
+  "seconds": 136.9,
+  "usage": {
+    "prompt_tokens": 1447699,
+    "completion_tokens": 11297,
+    "cost": 0.7611680000000002
+  },
+  "report": {
+    "status": "blocked",
+    "summary": "Static review found no blocking defect: concurrent worker cases use independent fixtures, assertions come from the test context, and the project split and docs/CI.md are consistent. I could not run the suite (no node_modules; read-only agent), and the repo has no vendored source or docs for @cloudflare/vitest-pool-workers 0.23.0. So I could not confirm that the pool supports describe.concurrent with Durable Object storage, or a cloudflareTest plugin inside a Vitest 4.1.11 project. No CI timing evidence was visible either. Running bun run test in apps/tempo, or checking this commit's CI timing summary, would settle it.",
+    "findings": [
+      {
+        "path": "apps/tempo/test/worker/workspace-events.test.ts",
+        "line": 2364,
+        "text": "Cases that sleep and then assert that nothing happened (settle() followed by a 'still queued' or 'only one prompt' check) become weaker when four cases run at once. Under load the DO may not have acted yet, so the case can pass even if the bug exists. The pattern was already there; concurrency makes it worse. Not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "      await settle();\n      expect(ctx.tempod.requestsOf(\"session.prompt\")).toHaveLength(1);",
+          "why": "Passing depends on the DO acting within 300 ms. With maxConcurrency 4 a slow DO lets this negative check pass without proving anything."
+        }
+      },
+      {
+        "path": "apps/tempo/vitest.ui.config.ts",
+        "line": 11,
+        "text": "Per-project maxWorkers may not be honored inside test.projects in Vitest 4, where worker limits may be root-level only. If so, the 'two workers per project' claim in docs/CI.md does not hold. A CI timing run or the Vitest 4.1 docs would confirm. Not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "    maxWorkers: 2,",
+          "why": "Set inside a project config; whether Vitest 4 applies it per project could not be checked without the installed package."
+        }
+      },
+      {
+        "path": "apps/tempo/test/ui/components/artifacts.test.tsx",
+        "line": 82,
+        "text": "Lookups changed from getByRole to getByAltText and to getByLabelText with a role selector. The test still checks the accessible name, the role and the image URL. My guess is the change was needed for the vmThreads pool, but I did not confirm it. Not blocking.",
+        "blocking": false,
+        "evidence": {
+          "quote": "    const card = screen.getByLabelText(\"Artifact: Login screen\", { selector: '[role=\"button\"]' });",
+          "why": "Equivalent coverage; noted only because the reason for the change could not be verified by running it."
+        }
+      }
+    ],
+    "checked": [
+      {
+        "risk": "Tests: shared state and globals under concurrent cases (fixture uniqueness, seed counters, D1 unique indexes, setup file)",
+        "paths": [
+          "apps/tempo/test/worker/workspace-events.test.ts",
+          "apps/tempo/test/worker/fakes.ts",
+          "apps/tempo/test/worker/setup.ts",
+          "apps/tempo/src/db/migrations/0000_init.sql"
+        ]
+      },
+      {
+        "risk": "Tests: test-context expect used everywhere; no leftover module-level expect (no Vitest globals in tsconfig types)",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts", "apps/tempo/tsconfig.json"]
+      },
+      {
+        "risk": "Tests: sleeps and timing assertions made weaker by concurrency",
+        "paths": ["apps/tempo/test/worker/workspace-events.test.ts"]
+      },
+      {
+        "risk": "Build and runtime environment: Vitest project split, pools, includes, turbo cache inputs, other callers of the old configs",
+        "paths": [
+          "apps/tempo/vitest.config.ts",
+          "apps/tempo/vitest.worker.config.ts",
+          "apps/tempo/vitest.ui.config.ts",
+          "apps/tempo/vitest.components.config.ts",
+          "apps/tempo/package.json",
+          "turbo.json",
+          "scripts"
+        ]
+      },
+      {
+        "risk": "Real contracts: @cloudflare/vitest-pool-workers 0.23.0 support for concurrent cases and for cloudflareTest inside projects (blocked: no node_modules or vendored docs)",
+        "paths": ["apps/tempo/vitest.worker.config.ts", "apps/tempo/package.json"]
+      },
+      {
+        "risk": "Spec and repo rules: docs/CI.md updated with the change; CLAUDE.md CI budget and test rules",
+        "paths": ["docs/CI.md", "CLAUDE.md"]
+      },
+      {
+        "risk": "Component test rewrite keeps its assertions",
+        "paths": ["apps/tempo/test/ui/components/artifacts.test.tsx"]
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "git rev-parse HEAD && sed -n 1,160p apps/tempo/test/worker/workspace-events.test.ts && grep -n \"expect\\b\\|^describe\\|^  it\\|vi\\.\\|globalThis\\|let \\|fetchMock\" apps/tempo/test/worker/workspace-events.test.ts | grep -v \"expect(\" | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo && cat test/worker/setup.ts; wc -l test/worker/fakes.ts; grep -n \"^export\\|^const\\|^let\\|globalThis\\|new Map\\|beforeEach\\|afterEach\\|internals\\|vi\\.\" test/worker/fakes.ts | head -80"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 236,476p test/worker/fakes.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn -i \"unique\\|slug\" src/db/migrations/*.sql | head -30; grep -rn \"slug\" src/do/workspace/*.ts | grep -iv \"^.*//\" | head -20"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 60,100p src/do/workspace/model-catalog.ts; grep -rn \"getByName(\\\"\" src | head; grep -rn \"idFromName(\\\"\\|getByName('\" src | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "f=test/worker/workspace-events.test.ts; grep -n \"settle(\\|env\\.[A-Z_]* =\\|Date.now\\|globalThis\\|vi\\b\\|fetchMock\\|outbound\" $f | head -50; sed -n 686,712p $f"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "settle\\(|env\\.[A-Z_]+ =|Date\\.now|globalThis|\\bvi\\.|fetchMock|SELF|toBeLessThan",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 686,
+        "limit": 30
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91 && grep -rn \"vitest\\.\\(ui\\|components\\|worker\\)\\.config\\|vitest.config\" --include=*.json --include=*.ts --include=*.mjs --include=*.js --include=*.yml --include=*.md . 2>/dev/null | grep -v node_modules | grep -v \"^./docs/0\" | head -30; grep -n '\"vitest\"\\|vitest-pool-workers\\|happy-dom' apps/tempo/package.json"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat turbo.json | head -120; ls apps/tempo/node_modules/@cloudflare/vitest-pool-workers 2>/dev/null | head; ls node_modules/@cloudflare/vitest-pool-workers 2>/dev/null | head"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/turbo.json"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "node_modules/@cloudflare/vitest-pool-workers/dist/pool/*.d.*ts"
+      }
+    },
+    {
+      "tool": "Glob",
+      "args": {
+        "pattern": "**/node_modules/@cloudflare/vitest-pool-workers/package.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "concurrent|isolatedStorage",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91",
+        "output_mode": "content",
+        "glob": "!**/node_modules/**"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "sed -n 294p CORE-RESULTS.md | cut -c1-1500; git log --oneline -3; git diff --stat b9c98977b5301b3fd6c63b3fb137583d366109d8 de82a91d26288b4a13ed049ad627394d87d92717 -- CORE-RESULTS.md"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 2352,
+        "limit": 52
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "offset": 2272,
+        "limit": 20
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/tsconfig.json; awk '/^describe/{d=1} /^}\\);/{d=0} !d && /expect/ {print NR\": \"$0}' apps/tempo/test/worker/workspace-events.test.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/tsconfig.json"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "^(const|function|async function) .*|^  const \\w+ = (async )?\\(",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content"
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "expect",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/worker/workspace-events.test.ts",
+        "output_mode": "content",
+        "offset": 0,
+        "head_limit": 0,
+        "glob": "*.ts",
+        "-n": true,
+        "multiline": false,
+        "-i": false,
+        "-B": 0
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/vitest.components.config.ts"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/apps/tempo/test/ui/components/artifacts.test.tsx",
+        "offset": 55,
+        "limit": 35
+      }
+    },
+    {
+      "tool": "Grep",
+      "args": {
+        "pattern": "vitest|@tempo/tempo#test|tempo.*test",
+        "path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-de82a91/scripts",
+        "output_mode": "content"
+      }
+    }
+  ]
+}

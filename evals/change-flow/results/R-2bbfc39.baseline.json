@@ -1,0 +1,84 @@
+{
+  "case": "R-2bbfc39",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "2bbfc397e1a0f846508352ba6febeef79d8208dd",
+  "diffBytes": 2818562,
+  "diffCut": true,
+  "steps": 8,
+  "seconds": 65.0,
+  "usage": {
+    "prompt_tokens": 1332239,
+    "completion_tokens": 4554,
+    "cost": 0.4546282
+  },
+  "report": {
+    "status": "pass",
+    "summary": "Reviewed the dotfiles and Shell settings feature (D1 table, Git writer, getDotfiles/updateDotfiles, dotfiles.apply step and tempod apply, dotfiles egress credential), the Mac terminal tabs and tool panel rework, the header and WCAG changes, and the startup progress row. The diff was cut at 256 KiB, partway through the web chat UI files. Typecheck, lint and tests were not run. The step order and limits match 03 and 01. The dotfiles credential only reaches read requests to the owner's own dotfiles repository, and only TempoOutbound adds it. No secret reaches a container or log. tempod checks paths, copies only plain files and never follows symlinks. The Mac header keeping only the Sleeping pill matches the 07 change. Tests exist for the new server functions, step and tempod request. No blocking issues; two minor notes.",
+    "findings": [
+      {
+        "path": "apps/mac/src/views/tools.rs",
+        "line": 281,
+        "text": "open_terminal selects ToolTab::Terminal(n) even when RemoteTerminal::open returns None, for example when opening the client channel fails. The tab then shows an empty pane with no error text and no way to retry.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/dotfiles.ts",
+        "line": 160,
+        "text": "When a row exists, updateDotfiles pushes with row.headSha as the old value and does not adopt a newer remote tip first. After a lost D1 write, every save fails with DOTFILES_CHANGED until the user presses Reload. This is intended and documented, but it could adopt the tip silently, as getDotfiles does.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n \"ArtifactsRepoInfo\" -r apps/tempo/src | head; grep -rn \"dotfiles.apply\" docs/*.md | head -20; git log --oneline -1"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -rln \"dotfiles\" --include=*.test.ts --include=*.rs --include=*.go . 2>/dev/null | grep -v node_modules | head -20; grep -rn \"getDotfilesToken\\|dotfiles-bearer\" apps/tempo/test* apps/tempo/src 2>/dev/null | grep -i test | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; ls packages/tempod/src | head -50; grep -rln \"dotfiles\" packages/tempod/src"
+      }
+    },
+    {
+      "tool": "Read",
+      "args": {
+        "file_path": "/tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39/packages/tempod/src/dotfiles.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n \"pill_text\\|state-pill\\|\\\"Running\\\"\" apps/mac/src/views/workspace.rs apps/mac/src/views/indicators.rs | head -20; grep -n \"Running\" \"docs/07\"*.md | head -10"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n \"instance.*hover\\|hover.*instance\\|state pill\\|header state\" docs/04*.md docs/07*.md | head; sed -n 130,175p apps/mac/src/views/indicators.rs; grep -n \"state_pill\\|indicators::\" apps/mac/src/views/workspace.rs | head"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; ls apps/tempo/test/worker/ | head -40; grep -n \"redirect\" apps/tempo/src/artifacts/repositories.ts | head; sed -n 305,335p apps/tempo/src/artifacts/repositories.ts"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/R-2bbfc39; grep -n \"isInitialPrompt\" -A4 apps/tempo/src/ui/components/chat/transcript-model.ts | head; grep -n \"export const reorderedQueue\" -A25 -r apps/tempo/src/ui | head -35"
+      }
+    }
+  ]
+}

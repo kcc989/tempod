@@ -1,0 +1,50 @@
+{
+  "case": "C-bfb05a8",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "bfb05a8457a01e04a5a4671db947f7ca4c4f4085",
+  "diffBytes": 16681,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 25.3,
+  "usage": {
+    "prompt_tokens": 133212,
+    "completion_tokens": 1999,
+    "cost": 0.23351840000000001
+  },
+  "report": {
+    "status": "pass",
+    "summary": "No blocking problems. The reconnect test no longer relies on a fixed 100 ms sleep. The fake daemon now holds the real /v1/connect reconnect until the test has seen that the turn is still queued and no prompt was sent; then the test lets it through and checks that the turn runs. The hold is set only after the first connect has finished, so it catches only the reconnect, and cleanup releases it if the test fails. The DO's connect call (tempodFetch) has no timeout, so holding it cannot cause a failure of its own. Production timing and test concurrency are unchanged. The filtered installs are correct: the root package is named `tempo` and includes turbo, oxlint, oxfmt and @oxlint/plugins, which build:tempod, check:versions and docs-only lint/format need. `@tempo/tempod` depends on @tempo/protocol, @tempo/settings, effect and the ACP SDK. The docs-only branch skips the Playwright version read, and every step that uses it is already skipped on docs-only runs. Code PRs still install every workspace. 06 Build Plan and CI.md were updated to match, as CLAUDE.md requires.",
+    "findings": [
+      {
+        "path": "docs/CI.md",
+        "line": 157,
+        "text": "The note on hosted run 38469401920 (the reconnect flake) sits directly under '## Rules for future changes', before rule 1. It is a record of a past incident, not a rule, which makes the section harder to read. Move it to a history or evidence section, or into CI_PLAYBOOK.md.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/test/worker/fakes.ts",
+        "line": 45,
+        "text": "holdConnect() has no comment, while the matching holdHealth() has a short doc comment. Add a one-line doc for consistency, such as 'Blocks the /v1/connect response until the test releases it.'",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8; git log --oneline -3; grep -n '\"name\"' package.json packages/tempod/package.json; grep -n 'changes\\|docs_only' .github/workflows/ci.yml | head -30; grep -rn '\"dependencies\"' -A8 packages/tempod/package.json; grep -n 'build:tempod\\|check:versions' package.json; grep -rn 'v1/connect' apps/tempo/src | head; ls docs",
+        "description": "Inspect package names, workflow, connect code"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cd /tmp/claude-0/-home-user-tempod/497f63ef-6d15-53de-9436-a2b3aee2739e/scratchpad/wt/C-bfb05a8; grep -n 'function tempodFetch' -A25 apps/tempo/src/do/workspace/tempod-client.ts | grep -in 'timeout\\|signal\\|abort'; grep -n 'turbo\\|oxlint\\|oxfmt' package.json; grep -n '^import' scripts/ci.ts scripts/ci-changes.ts 2>/dev/null; grep -n 'requestsOf' apps/tempo/test/worker/fakes.ts | head -3",
+        "description": "Check timeouts and root tooling deps"
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "case": "S8",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "5cfee5c1382d36bcd4953cb4cd89eb17981829c8",
+  "diffBytes": 1018,
+  "diffCut": false,
+  "steps": 2,
+  "seconds": 24.6,
+  "usage": {
+    "prompt_tokens": 121601,
+    "completion_tokens": 1800,
+    "cost": 0.1146076
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff swaps requireProject (owner-only) for requireReadableProject (owner or public) in withOwnedRepository, the helper that guards every issue, comment and label handler. Any caller can now create, update and delete issues, comments and labels on any public project, and read its issues. Tab 11 says visitors can only read, only the owner can change anything, and the visitor function list (which has no issue functions) is closed. It also requires a test that visitors are refused for issues of a public project. The spec was not changed, so this must not merge.",
+    "findings": [
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 27,
+        "text": "withOwnedRepository now uses requireReadableProject, which lets through any project with visibility 'public'. Every write handler goes through this helper: createRepositoryIssue, updateRepositoryIssue, deleteRepositoryIssue, create/update/deleteRepositoryIssueComment and create/update/deleteRepositoryLabel. So a non-owner can change or delete issues and labels on any public project. This breaks tab 11: visitors can only read, only the owner can change anything, and P7 excludes comments by visitors. Keep requireProject(ctx.env, ctx.user.id, projectId) here.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 27,
+        "text": "The read handlers (listRepositoryIssues, getRepositoryIssue, listRepositoryIssueComments, listRepositoryLabels) are now open to visitors on public projects too. Tab 11 says the visitor function list is closed (getProfile, listProfileProjects, getPublicProject, getRepository, getRepositoryFile, listRepositoryCommits, listBranches), and its required tests include 'visitors refused for issues\u2026 of a public project'. Opening issue reads to visitors needs a spec change in the same PR (CLAUDE.md rules 1 and 16), and none was made.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "line": 21,
+        "text": "The helper is still called withOwnedRepository, but it no longer requires ownership, so the name now misleads.",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/server/handlers/issues.ts",
+        "text": "There is no test for the change in access. CLAUDE.md rule 14 requires one for every server function, and tab 11 requires a test that visitors are refused for issues of a public project. That test should fail with this diff.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/server/handlers/issues.ts && grep -n \"requireReadableProject\\|requireProject\\|requireWritable\\|export const\" -A25 apps/tempo/src/server/handlers/common.ts | head -120"
+      }
+    },
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "grep -rn -i \"RepositoryIssue\\|RepositoryLabel\" docs/ | head -30; grep -rn -i \"visitor\" docs/11* | head -20"
+      }
+    }
+  ]
+}

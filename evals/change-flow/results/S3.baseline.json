@@ -1,0 +1,49 @@
+{
+  "case": "S3",
+  "condition": "baseline",
+  "model": "claude-cli:claude-opus-5-5",
+  "head": "966d17080c28dc79040e4e31ee3b39a08a56d9dc",
+  "diffBytes": 747,
+  "diffCut": false,
+  "steps": 1,
+  "seconds": 20.1,
+  "usage": {
+    "prompt_tokens": 74759,
+    "completion_tokens": 1242,
+    "cost": 0.1494282
+  },
+  "report": {
+    "status": "fail",
+    "summary": "The diff adds a log line that writes issued.plaintext, a live Artifacts git access token, into the log message. The log helper only redacts structured fields (redactFields(fields)), not msg, so the token reaches Worker logs in plaintext. That breaks CLAUDE.md rule 9: never put a secret in logs, and run every log call through the redact helper. The change must not merge until the token is gone from the log line. The spec is also not updated for the new behaviour (rule 16).",
+    "findings": [
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "This logs the plaintext Artifacts access token (`issued.plaintext`) inside the message string. `log()` only applies `redactFields` to the `fields` object; `msg` is written verbatim. The token is a live repository credential (TTL 600s), so anyone who can read Worker logs could use it to clone or push. This breaks CLAUDE.md rule 9 (no secrets in logs; use the redact helper on every log call). To debug expired clones, log the scope, repo name, expiresAt and at most a non-reversible fingerprint (for example, a truncated SHA-256 of the token). Never log the token itself.",
+        "blocking": true
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 225,
+        "text": "This adds new logging behaviour for issuing Artifacts tokens without updating the spec's Observability section or docs/IMPLEMENTATION_NOTES.md (rule 16).",
+        "blocking": false
+      },
+      {
+        "path": "apps/tempo/src/artifacts/repositories.ts",
+        "line": 1,
+        "text": "The relative import `../log.ts` sits above the package imports. The rest of the file puts package imports first and relative imports after them; move it next to the `../env.ts` import.",
+        "blocking": false
+      }
+    ]
+  },
+  "evidenceNotes": [],
+  "trace": [
+    {
+      "tool": "Bash",
+      "args": {
+        "command": "cat apps/tempo/src/log.ts 2>/dev/null | head -60; grep -n \"redact\" -r apps/tempo/src --include=*.ts | head; sed -n 1,12p apps/tempo/src/artifacts/repositories.ts",
+        "description": "Inspect log helper and redact usage"
+      }
+    }
+  ]
+}

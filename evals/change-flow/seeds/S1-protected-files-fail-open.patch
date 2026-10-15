@@ -1,0 +1,29 @@
+diff --git a/apps/tempo/src/agents/protected-files.ts b/apps/tempo/src/agents/protected-files.ts
+index 5e864a5..9b912ab 100644
+--- a/apps/tempo/src/agents/protected-files.ts
++++ b/apps/tempo/src/agents/protected-files.ts
+@@ -1,4 +1,4 @@
+-import { Files, SandboxFileError } from "@cloudflare/sandbox";
++import { Files } from "@cloudflare/sandbox";
+ import { TempoError } from "@tempo/protocol";
+ import { sha256Hex } from "../lib/crypto.ts";
+ import type { WorkspaceCore } from "../do/workspace/core.ts";
+@@ -16,16 +16,8 @@ export const protectedFileHashes = async (core: WorkspaceCore): Promise<Record<s
+   const hashes: Record<string, string | null> = {};
+ 
+   for (const path of PROTECTED_AGENT_FILES) {
+-    // A login the owner never set up (for example Codex) has no file; the SDK reports ENOENT.
+-    const response = await files.readFile(path).catch((cause: unknown) => {
+-      if (SandboxFileError.is(cause) && cause.code === "ENOENT") return null;
+-
+-      throw new TempoError(
+-        "RUN_ACCESS_VIOLATION",
+-        undefined,
+-        "Protected login or config files could not be checked.",
+-      );
+-    });
++    // A file the SDK cannot read counts as absent, so a missing login never blocks a run.
++    const response = await files.readFile(path).catch(() => null);
+ 
+     if (response === null || response.status === 404) {
+       hashes[path] = null;

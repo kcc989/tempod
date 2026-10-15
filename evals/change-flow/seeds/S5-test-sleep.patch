@@ -1,0 +1,14 @@
+diff --git a/apps/tempo/test/worker/runs.cases.ts b/apps/tempo/test/worker/runs.cases.ts
+index 5e22592..71041ff 100644
+--- a/apps/tempo/test/worker/runs.cases.ts
++++ b/apps/tempo/test/worker/runs.cases.ts
+@@ -63,7 +63,8 @@ const setup = async (patch: Partial<Definition> = {}) => {
+ type Fixture = Awaited<ReturnType<typeof setup>>;
+ 
+ const active = async (w: Fixture, index = 0) => {
+-  await waitFor(() => w.tempod.requestsOf("session.prompt").length > index);
++  // The prompt is sent within one alarm tick.
++  await new Promise((resolve) => setTimeout(resolve, 200));
+ 
+   return Schema.decodeUnknownSync(
+     Schema.Struct({
