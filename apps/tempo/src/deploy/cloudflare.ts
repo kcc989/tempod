@@ -125,3 +125,61 @@ export const deleteToken = async (
     return false;
   }
 };
+
+const DeploymentVersion = Schema.Struct({ version_id: Schema.String, percentage: Schema.Number });
+
+const WorkerDeployment = Schema.Struct({
+  id: Schema.String,
+  created_on: Schema.String,
+  versions: Schema.Array(DeploymentVersion),
+});
+
+export type WorkerDeployment = typeof WorkerDeployment.Type;
+
+export interface TrafficSplit {
+  readonly versionId: string;
+  readonly percentage: number;
+}
+
+const script = (accountId: string, name: string) =>
+  `/accounts/${accountId}/workers/scripts/${encodeURIComponent(name)}`;
+
+/** The Worker's deployments, newest first. The first one is live (13, L-ADR-4). */
+export const listWorkerDeployments = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+): Promise<ReadonlyArray<WorkerDeployment>> =>
+  Schema.decodeUnknownSync(Schema.Struct({ deployments: Schema.Array(WorkerDeployment) }))(
+    await call(api, token, { method: "GET", path: `${script(accountId, name)}/deployments` }),
+  ).deployments;
+
+/**
+ * Moves traffic: one version at 100% (a rollback or a full step), or two versions that add up
+ * to 100 (a gradual step). Cloudflare refuses any other split.
+ */
+export const createWorkerDeployment = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+  input: { split: ReadonlyArray<TrafficSplit>; message: string },
+): Promise<WorkerDeployment> => {
+  const total = input.split.reduce((sum, s) => sum + s.percentage, 0);
+
+  if (input.split.length < 1 || input.split.length > 2 || total !== 100)
+    throw new Error("A deployment needs one or two versions that add up to 100%.");
+
+  return Schema.decodeUnknownSync(WorkerDeployment)(
+    await call(api, token, {
+      method: "POST",
+      path: `${script(accountId, name)}/deployments`,
+      body: {
+        strategy: "percentage",
+        versions: input.split.map((s) => ({ version_id: s.versionId, percentage: s.percentage })),
+        annotations: { "workers/message": input.message.slice(0, 1000) },
+      },
+    }),
+  );
+};

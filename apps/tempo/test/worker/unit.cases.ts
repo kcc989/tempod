@@ -29,6 +29,12 @@ import {
 } from "../../src/egress/rules.ts";
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
 import { JEV_MODEL, jevClient, judgeCloudflareCall, judgeIntent } from "../../src/judge/jev.ts";
+import {
+  CloudflareError,
+  createWorkerDeployment,
+  listWorkerDeployments,
+  type CloudflareApi,
+} from "../../src/deploy/cloudflare.ts";
 import { checksStateOf, prStateOf } from "../../src/github/provider.ts";
 import { appJwt, pkcs1ToPkcs8 } from "../../src/github/app.ts";
 import {
@@ -1977,5 +1983,104 @@ describe("Jev judge (13, L-ADR-9)", () => {
     );
 
     expect(aligned.high).toBe(false);
+  });
+});
+
+describe("Worker deployments client (13, L-ADR-4)", () => {
+  const ACCOUNT = "0123456789abcdef0123456789abcdef";
+
+  const LIVE = {
+    id: "dep-2",
+    created_on: "2026-10-15T03:10:17Z",
+    versions: [{ version_id: "v-new", percentage: 100 }],
+  };
+
+  const api = (respond: (req: Request) => Response) => {
+    const seen: Array<{ method: string; path: string; auth: string | null; body: unknown }> = [];
+
+    const client: CloudflareApi = {
+      fetch: async (req) => {
+        seen.push({
+          method: req.method,
+          path: new URL(req.url).pathname,
+          auth: req.headers.get("authorization"),
+          body: req.method === "GET" ? null : await req.clone().json(),
+        });
+
+        return respond(req);
+      },
+    };
+
+    return { client, seen };
+  };
+
+  it("lists a Worker's deployments with the minted token", async () => {
+    const { client, seen } = api(() => Response.json({ success: true, result: { deployments: [LIVE] } }));
+
+    expect(await listWorkerDeployments(client, "minted", ACCOUNT, "todo-web")).toEqual([LIVE]);
+
+    expect(seen).toEqual([
+      {
+        method: "GET",
+        path: `/client/v4/accounts/${ACCOUNT}/workers/scripts/todo-web/deployments`,
+        auth: "Bearer minted",
+        body: null,
+      },
+    ]);
+  });
+
+  it("sends a gradual step as a two-version percentage split", async () => {
+    const created = {
+      id: "dep-3",
+      created_on: "2026-10-15T04:00:00Z",
+      versions: [
+        { version_id: "v-next", percentage: 10 },
+        { version_id: "v-new", percentage: 90 },
+      ],
+    };
+
+    const { client, seen } = api(() => Response.json({ success: true, result: created }));
+
+    const split = [
+      { versionId: "v-next", percentage: 10 },
+      { versionId: "v-new", percentage: 90 },
+    ];
+
+    expect(
+      await createWorkerDeployment(client, "minted", ACCOUNT, "todo-web", {
+        split,
+        message: "tempo-deploy-7",
+      }),
+    ).toEqual(created);
+
+    expect(seen[0]!.body).toEqual({
+      strategy: "percentage",
+      versions: [
+        { version_id: "v-next", percentage: 10 },
+        { version_id: "v-new", percentage: 90 },
+      ],
+      annotations: { "workers/message": "tempo-deploy-7" },
+    });
+  });
+
+  it("refuses a split that is not 100% before calling Cloudflare, and surfaces Cloudflare errors", async () => {
+    const { client, seen } = api(() => Response.json({ success: false, errors: [] }, { status: 400 }));
+
+    const bad = [
+      { versionId: "a", percentage: 10 },
+      { versionId: "b", percentage: 80 },
+    ];
+
+    await expect(
+      createWorkerDeployment(client, "t", ACCOUNT, "w", { split: bad, message: "m" }),
+    ).rejects.toThrow("add up to 100%");
+
+    expect(seen).toHaveLength(0);
+
+    const rollback = [{ versionId: "v-old", percentage: 100 }];
+
+    await expect(
+      createWorkerDeployment(client, "t", ACCOUNT, "w", { split: rollback, message: "rollback" }),
+    ).rejects.toBeInstanceOf(CloudflareError);
   });
 });
