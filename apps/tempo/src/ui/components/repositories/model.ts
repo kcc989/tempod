@@ -1,5 +1,5 @@
-import { Schema } from "effect";
-import type { CiJob, CiRun, FnInput } from "@tempo/protocol";
+import { Match, Schema } from "effect";
+import type { CiJob, CiRun, FnInput, RepositoryPullRequest } from "@tempo/protocol";
 
 export const RepositoryTab = Schema.Literals(["code", "commits", "pulls", "issues", "checks"]);
 
@@ -66,6 +66,27 @@ export function repositoryCommitsInput(
 }
 
 export const parentPath = (path: string): string => path.split("/").slice(0, -1).join("/");
+
+/** 09, Web and Mac: refs to read a PR guide from, in order; the next is tried on NOT_FOUND. */
+export function pullRequestGuideRefs(
+  pull: Pick<RepositoryPullRequest, "state" | "headBranch" | "headSha">,
+): string[] {
+  const refs = Match.value(pull.state).pipe(
+    Match.when("merged", () => [pull.headSha, pull.headBranch]),
+    Match.when("closed", () => [pull.headBranch, pull.headSha]),
+    Match.orElse(() => [pull.headBranch]),
+  );
+
+  return [...new Set(refs.flatMap((ref) => (ref ? [ref] : [])))];
+}
+
+export const repositoryFileSearch = (project: string, ref: string, file: string): RepositorySearch => ({
+  project,
+  tab: "code",
+  ref,
+  path: parentPath(file),
+  file,
+});
 
 export const shortSha = (sha: string): string => sha.slice(0, 7);
 

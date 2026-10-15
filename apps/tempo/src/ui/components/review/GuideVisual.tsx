@@ -1,5 +1,6 @@
+import type { UseQueryResult } from "@tanstack/react-query";
 import { Match } from "effect";
-import type { GuideVisual as Visual } from "@tempo/protocol";
+import type { FnOutput, GuideVisual as Visual } from "@tempo/protocol";
 import { useState } from "react";
 import { MessageMarkdown } from "~/ui/components/chat/Markdown";
 import { Button } from "~/ui/components/ui/button";
@@ -15,6 +16,22 @@ export const ARTIFACT_CSP =
 export const isolatedArtifact = (html: string): string =>
   `<!doctype html><meta http-equiv="Content-Security-Policy" content="${ARTIFACT_CSP}"><meta name="referrer" content="no-referrer">${html}`;
 
+export type GuideSource =
+  | { readonly kind: "workspace"; readonly workspaceId: string; readonly live: boolean }
+  | {
+      readonly kind: "repository";
+      readonly projectId: string;
+      readonly ref: string;
+      readonly openFile: (path: string) => void;
+    };
+
+export const guideMarkdownId = (source: GuideSource): string =>
+  source.kind === "workspace" ? source.workspaceId : "";
+
+type ArtifactVisual = Extract<Visual, { path: string }>;
+
+type ArtifactFile = UseQueryResult<FnOutput<"readFile"> | FnOutput<"getRepositoryFile">, Error>;
+
 const imageMime = (path: string): string | null => {
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
 
@@ -24,15 +41,9 @@ const imageMime = (path: string): string | null => {
   );
 };
 
-export function GuideVisual({
-  workspaceId,
-  visual,
-  live,
-}: {
-  workspaceId: string;
-  visual: Visual;
-  live: boolean;
-}) {
+export function GuideVisual({ source, visual }: { source: GuideSource; visual: Visual }) {
+  const workspaceId = guideMarkdownId(source);
+
   return (
     <section aria-label={visual.title} className="overflow-hidden rounded-md border">
       <h4 className="border-b bg-muted/30 px-3 py-2 text-sm font-medium">{visual.title}</h4>
@@ -40,8 +51,14 @@ export function GuideVisual({
         Match.when({ kind: "comparison" }, (visual) => (
           <Comparison workspaceId={workspaceId} before={visual.before} after={visual.after} />
         )),
-        Match.when({ kind: "flow" }, (visual) => <Flow workspaceId={workspaceId} visual={visual} />),
-        Match.orElse((visual) => <Artifact workspaceId={workspaceId} visual={visual} live={live} />),
+        Match.when({ kind: "flow" }, (visual) => <Flow source={source} visual={visual} />),
+        Match.orElse((visual) =>
+          source.kind === "workspace" ? (
+            <WorkspaceArtifact workspaceId={source.workspaceId} visual={visual} live={source.live} />
+          ) : (
+            <RepositoryArtifact projectId={source.projectId} refName={source.ref} visual={visual} />
+          ),
+        ),
       )}
     </section>
   );
@@ -99,7 +116,8 @@ export function Comparison({
   );
 }
 
-function Flow({ workspaceId, visual }: { workspaceId: string; visual: Extract<Visual, { kind: "flow" }> }) {
+function Flow({ source, visual }: { source: GuideSource; visual: Extract<Visual, { kind: "flow" }> }) {
+  const workspaceId = guideMarkdownId(source);
   const [selected, setSelected] = useState(visual.nodes[0]!.id);
   const node = visual.nodes.find((n) => n.id === selected) ?? visual.nodes[0]!;
 
@@ -136,9 +154,11 @@ function Flow({ workspaceId, visual }: { workspaceId: string; visual: Extract<Vi
             size="sm"
             variant="link"
             className="mt-2 px-0"
-            onClick={() => openDiff(workspaceId, node.path!)}
+            onClick={() =>
+              source.kind === "workspace" ? openDiff(workspaceId, node.path!) : source.openFile(node.path!)
+            }
           >
-            Open diff: {node.path}
+            {source.kind === "workspace" ? "Open diff" : "Open file"}: {node.path}
           </Button>
         )}
       </div>
@@ -146,13 +166,13 @@ function Flow({ workspaceId, visual }: { workspaceId: string; visual: Extract<Vi
   );
 }
 
-function Artifact({
+function WorkspaceArtifact({
   workspaceId,
   visual,
   live,
 }: {
   workspaceId: string;
-  visual: Extract<Visual, { path: string }>;
+  visual: ArtifactVisual;
   live: boolean;
 }) {
   const [opened, setOpened] = useState(false);
@@ -166,12 +186,68 @@ function Artifact({
     },
   );
 
+  return (
+    <Artifact
+      workspaceId={workspaceId}
+      visual={visual}
+      live={live}
+      file={file}
+      opened={opened}
+      onOpen={() => setOpened(true)}
+    />
+  );
+}
+
+function RepositoryArtifact({
+  projectId,
+  refName,
+  visual,
+}: {
+  projectId: string;
+  refName: string;
+  visual: ArtifactVisual;
+}) {
+  const [opened, setOpened] = useState(false);
+
+  const file = useCallQuery(
+    "getRepositoryFile",
+    { projectId, ref: refName, path: visual.path },
+    { enabled: opened, retry: false },
+  );
+
+  return (
+    <Artifact
+      workspaceId=""
+      visual={visual}
+      live
+      file={file}
+      opened={opened}
+      onOpen={() => setOpened(true)}
+    />
+  );
+}
+
+function Artifact({
+  workspaceId,
+  visual,
+  live,
+  file,
+  opened,
+  onOpen,
+}: {
+  workspaceId: string;
+  visual: ArtifactVisual;
+  live: boolean;
+  file: ArtifactFile;
+  opened: boolean;
+  onOpen: () => void;
+}) {
   const mime = imageMime(visual.path);
   let body;
 
   if (!opened) {
     body = (
-      <Button size="sm" variant="outline" disabled={!live} onClick={() => setOpened(true)}>
+      <Button size="sm" variant="outline" disabled={!live} onClick={onOpen}>
         Open artifact
       </Button>
     );

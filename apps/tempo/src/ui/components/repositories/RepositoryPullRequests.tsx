@@ -26,6 +26,7 @@ import { getHubStore } from "~/ui/stores/hub-store";
 import { setPhonePane } from "~/ui/state/workspace-ui";
 import type { RepositoryHubProps } from "./RepositoryHub";
 import { ciState, isSubmitShortcut, shortSha } from "./model";
+import { PullRequestGuide } from "./PullRequestGuide";
 
 type Props = RepositoryHubProps & { project: Project; canWrite?: boolean };
 
@@ -400,6 +401,7 @@ function PullRequestDetail({
           Merged{p.mergeSha ? ` as ${p.mergeSha.slice(0, 7)}` : ""}.
         </p>
       )}
+      <PullRequestGuide project={project} pull={p} onNavigate={onNavigate} />
     </div>
   );
 }

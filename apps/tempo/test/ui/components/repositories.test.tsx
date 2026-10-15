@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { PR_GUIDE_PATH, TempoError } from "@tempo/protocol";
 import type {
   FnOutput,
   Project,
@@ -81,6 +82,26 @@ let file: FnOutput<"getRepositoryFile"> = { content: "Hello repo", encoding: "ut
 
 let repositoryFailure = false;
 
+let stored = new Map<string, string>();
+
+const guide = {
+  version: 1,
+  title: "Cache reads",
+  summary: "Avoid repeated database reads.",
+  before: "Always fetch.",
+  after: "Cache repeated reads.",
+  chapters: [
+    {
+      id: "lookup",
+      title: "Read from cache",
+      description: "Try the cache first.",
+      files: ["src/cache.ts"],
+      visuals: [{ kind: "markdown", title: "Cache notes", path: "docs/cache.md" }],
+    },
+    { id: "fallback", title: "Handle misses", description: "Fetch only on a miss.", files: [], visuals: [] },
+  ],
+};
+
 const show = (child: ReactNode) => render(child, { wrapper: environment.Provider });
 
 beforeEach(() => {
@@ -93,6 +114,7 @@ beforeEach(() => {
   commits = [];
   file = { content: "Hello repo", encoding: "utf8", size: 10 };
   repositoryFailure = false;
+  stored = new Map();
   request.mockImplementation(async (name, input) => {
     switch (name) {
       case "listProjects":
@@ -101,8 +123,17 @@ beforeEach(() => {
         if (repositoryFailure) throw new Error("Temporary failure");
 
         return currentRepository;
-      case "getRepositoryFile":
+      case "getRepositoryFile": {
+        const { ref, path } = requestInput("getRepositoryFile", input);
+        const content = stored.get(`${ref}:${path}`);
+
+        if (content !== undefined) return { content, encoding: "utf8", size: content.length };
+
+        if (path === PR_GUIDE_PATH) throw new TempoError("NOT_FOUND", "Missing");
+
         return file;
+      }
+
       case "listBranches":
         return [{ name: "main" }, { name: "feature" }];
       case "listRepositoryCommits":
@@ -364,5 +395,70 @@ describe("repository workflows", () => {
       draft: false,
     });
     expect(request).not.toHaveBeenCalledWith("createWorkspace", expect.anything());
+  });
+
+  it("shows a native PR's guide from its head branch and opens chapter files in Code", async () => {
+    const navigate = vi.fn();
+
+    stored = new Map([
+      [`feature:${PR_GUIDE_PATH}`, JSON.stringify(guide)],
+      ["feature:docs/cache.md", "Keys expire **hourly**."],
+    ]);
+    show(<RepositoryHub search={{ project: "p1", tab: "pulls", pull: 1 }} onNavigate={navigate} />);
+    const chapters = await screen.findByRole("navigation", { name: "Guide chapters" });
+
+    expect(chapters.textContent).toContain("Read from cache");
+    expect(chapters.textContent).toContain("Handle misses");
+    fireEvent.click(screen.getByRole("button", { name: "src/cache.ts" }));
+    expect(navigate).toHaveBeenCalledWith({
+      project: "p1",
+      tab: "code",
+      ref: "feature",
+      path: "src",
+      file: "src/cache.ts",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open artifact" }));
+    await screen.findByText("hourly");
+    expect(request).toHaveBeenCalledWith("getRepositoryFile", {
+      projectId: "p1",
+      ref: "feature",
+      path: "docs/cache.md",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("heading", { name: "Handle misses" })).toBeTruthy();
+  });
+
+  it("shows a quiet state when the PR head has no guide", async () => {
+    show(<RepositoryHub search={{ project: "p1", tab: "pulls", pull: 1 }} onNavigate={vi.fn()} />);
+    await screen.findByText("No guide for this pull request.");
+    expect(request).toHaveBeenCalledWith("getRepositoryFile", {
+      projectId: "p1",
+      ref: "feature",
+      path: PR_GUIDE_PATH,
+    });
+    expect(screen.queryByRole("navigation", { name: "Guide chapters" })).toBeNull();
+  });
+
+  it("reports an invalid guide without breaking the PR detail", async () => {
+    stored = new Map([[`feature:${PR_GUIDE_PATH}`, JSON.stringify({ ...guide, chapters: [] })]]);
+    show(<RepositoryHub search={{ project: "p1", tab: "pulls", pull: 1 }} onNavigate={vi.fn()} />);
+    expect((await screen.findByText("This pull request’s guide is not valid.")).getAttribute("role")).toBe(
+      "alert",
+    );
+    expect(screen.getByRole("button", { name: "Close pull request" })).toBeTruthy();
+  });
+
+  it("reads a merged PR's guide from its recorded head commit", async () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+
+    currentPull = { ...pull, state: "merged", headSha: sha };
+    stored = new Map([[`${sha}:${PR_GUIDE_PATH}`, JSON.stringify(guide)]]);
+    show(<RepositoryHub search={{ project: "p1", tab: "pulls", pull: 1 }} onNavigate={vi.fn()} />);
+    await screen.findByRole("navigation", { name: "Guide chapters" });
+    expect(request).not.toHaveBeenCalledWith("getRepositoryFile", {
+      projectId: "p1",
+      ref: "feature",
+      path: PR_GUIDE_PATH,
+    });
   });
 });
