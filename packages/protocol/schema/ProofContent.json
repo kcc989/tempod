@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProofContent",
+  "type": "object",
+  "properties": {
+    "proofId": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string"
+          },
+          "viewport": {
+            "type": "string",
+            "enum": ["desktop", "phone"]
+          },
+          "theme": {
+            "type": "string",
+            "enum": ["light", "dark"]
+          },
+          "artifactId": {
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "enum": ["Infinity", "-Infinity", "NaN"]
+              }
+            ]
+          },
+          "recordingArtifactId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["route", "viewport", "theme", "artifactId", "version", "recordingArtifactId"],
+        "additionalProperties": true
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "passed", "failed"]
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "enum": ["Infinity", "-Infinity", "NaN"]
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["name", "runId", "status", "exitCode"],
+        "additionalProperties": true
+      }
+    },
+    "resolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "checklistId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": ["checklistId", "note"],
+        "additionalProperties": true
+      }
+    },
+    "missingRoutes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "missingChecklist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["checking", "complete", "incomplete"]
+    }
+  },
+  "required": [
+    "proofId",
+    "summary",
+    "screens",
+    "checks",
+    "resolved",
+    "missingRoutes",
+    "missingChecklist",
+    "status"
+  ],
+  "additionalProperties": true
+}

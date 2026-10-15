@@ -1,4 +1,5 @@
 import { proposeIntent } from "./intent.ts";
+import { submitProof } from "./proof.ts";
 import { deployTool } from "../../agents/deploys.ts";
 import { issueTool } from "../../agents/issues.ts";
 import { DeployToolName, IssueToolName, unwrap } from "@tempo/protocol";
@@ -233,6 +234,12 @@ export class TempodClient {
 
     if (request.op === "get_project_profile")
       return unwrap(await this.core.env.APP_DEPLOY.getByName(this.core.ws().projectId).getProfile());
+
+    if (request.op === "submit_proof") {
+      if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+      return submitProof(this.core, session, request.params);
+    }
 
     if (request.op === "propose_intent") {
       if (session.runId) throw new TempoError("RUN_NOT_RUNNING");

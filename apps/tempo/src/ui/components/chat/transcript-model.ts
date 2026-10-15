@@ -9,6 +9,7 @@ import {
   type Item,
   type ItemOf,
   type PermissionOption,
+  type ProofContent,
   type Turn,
 } from "@tempo/protocol";
 import type { DiffLine } from "~/ui/lib/diff";
@@ -499,5 +500,26 @@ export const intentStatusText = (intent: Pick<IntentContent, "status" | "decided
       return "Intent corrected";
     default:
       return intent.decidedBy === "judge" ? "Intent confirmed by Tempo (low risk)" : "Intent confirmed";
+  }
+};
+
+const PROOF_STATUS = new Map<ProofContent["status"], string>([
+  ["checking", "Proof: Tempo is running the checks"],
+  ["complete", "Proof complete"],
+  ["incomplete", "Proof incomplete"],
+]);
+
+export const proofStatusText = (status: ProofContent["status"]): string => PROOF_STATUS.get(status) ?? status;
+
+export const proofCheckText = (check: ProofContent["checks"][number]): string => {
+  switch (check.status) {
+    case "running":
+      return `${check.name}: running`;
+    case "passed":
+      return `${check.name}: passed`;
+    default:
+      return check.exitCode === null
+        ? `${check.name}: did not start`
+        : `${check.name}: failed (exit ${check.exitCode})`;
   }
 };

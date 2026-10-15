@@ -125,6 +125,16 @@ const ITEM_DEFAULTS = {
     reasons: [],
     enforced: false,
   },
+  proof: {
+    proofId: "",
+    summary: "",
+    screens: [],
+    checks: [],
+    resolved: [],
+    missingRoutes: [],
+    missingChecklist: [],
+    status: "checking",
+  },
   artifact: {
     artifactId: "",
     version: 1,

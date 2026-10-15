@@ -1061,6 +1061,38 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "addChecklistItem": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "AddChecklistItemIn.json"
+        },
+        "output": {
+          "$ref": "ChecklistItem.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "reopenChecklistItem": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ReopenChecklistItemIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "correctIntent": {
       "type": "object",
       "properties": {
@@ -2730,6 +2762,8 @@
     "listRuns",
     "resolveAgentProposal",
     "confirmIntent",
+    "addChecklistItem",
+    "reopenChecklistItem",
     "correctIntent",
     "sendRunToChat",
     "listLifecycleEvents",

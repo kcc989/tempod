@@ -1,4 +1,5 @@
 import { confirmIntent, correctIntent } from "./intent.ts";
+import { addChecklistItem, reopenChecklistItem } from "./proof.ts";
 import { resolveAgentProposal } from "../../agents/proposals.ts";
 import { Schema } from "effect";
 import { promptSlug } from "@tempo/cities";
@@ -383,6 +384,17 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       notArchived(core);
       rt.ensureAwake();
       correctIntent(core, intentId, text);
+
+      return {};
+    },
+    addChecklistItem: async ({ itemId }) => {
+      notArchived(core);
+
+      return addChecklistItem(core, itemId);
+    },
+    reopenChecklistItem: async ({ checklistId }) => {
+      notArchived(core);
+      reopenChecklistItem(core, checklistId);
 
       return {};
     },

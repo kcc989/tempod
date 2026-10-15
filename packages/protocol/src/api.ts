@@ -42,6 +42,7 @@ import {
   Deployment,
   ProductionError,
   ProjectProfile,
+  ChecklistItem,
   DeploySettings,
   CiRun,
   CiRunDetail,
@@ -285,6 +286,8 @@ export const API = {
   listRuns: fn("GET", Schema.Struct({ ...W, changeId: opt(S) }), Schema.Array(Run)),
   resolveAgentProposal: fn("POST", Schema.Struct({ ...W, proposalId: S, apply: B }), Empty),
   confirmIntent: fn("POST", Schema.Struct({ ...W, intentId: S }), Empty),
+  addChecklistItem: fn("POST", Schema.Struct({ ...W, itemId: S }), ChecklistItem),
+  reopenChecklistItem: fn("POST", Schema.Struct({ ...W, checklistId: S }), Empty),
   correctIntent: fn(
     "POST",
     Schema.Struct({ ...W, intentId: S, text: S.check(Schema.isMinLength(1), Schema.isMaxLength(4000)) }),

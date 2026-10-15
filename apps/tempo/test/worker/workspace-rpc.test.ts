@@ -2995,6 +2995,10 @@ describe("intent", async () => {
   await import("./intent.cases.ts");
 });
 
+describe("proof", async () => {
+  await import("./proof.cases.ts");
+});
+
 describe("protocol-additions", async () => {
   await import("./protocol-additions.cases.ts");
 });

@@ -449,6 +449,14 @@ export const SHARED_SAMPLES = {
       payload: { intentId: uid(1012), by: "judge", reasons: [] },
     },
     { ...LIFE_EVENT, type: "loop.intent.corrected", payload: { intentId: uid(1012) } },
+    {
+      ...LIFE_EVENT,
+      type: "loop.proof.submitted",
+      source: "agent",
+      payload: { proofId: uid(1013), complete: true },
+    },
+    { ...LIFE_EVENT, type: "loop.checklist.added", payload: { checklistId: uid(1016) } },
+    { ...LIFE_EVENT, type: "loop.checklist.reopened", payload: { checklistId: uid(1016) } },
   ],
   LifecycleChangeCreatedPayload: [LIFE_EVENT.payload],
   LifecycleTurnEndedPayload: [
@@ -707,6 +715,38 @@ export const SHARED_SAMPLES = {
     },
   ],
   DeployRolloutWorker: deployment.rollout?.workers ?? [],
+  ChecklistItem: [
+    {
+      id: uid(1016),
+      text: "Use the theme's input style for the date picker.",
+      status: "resolved",
+      sourceItemId: uid(1001),
+      resolvedBy: uid(1013),
+      createdAt: at(1),
+    },
+    {
+      id: uid(1017),
+      text: "Align the due date with the title.",
+      status: "open",
+      sourceItemId: null,
+      resolvedBy: null,
+      createdAt: at(2),
+    },
+  ],
+  ProofContent: [
+    {
+      proofId: uid(1013),
+      summary: "Todos have a due date.",
+      screens: [],
+      checks: [{ name: "typecheck", runId: uid(1015), status: "running", exitCode: null }],
+      resolved: [],
+      missingRoutes: ["/todos"],
+      missingChecklist: [uid(1017)],
+      status: "checking",
+    },
+  ],
+  LifecycleProofPayload: [{ proofId: uid(1013), complete: false }],
+  LifecycleChecklistPayload: [{ checklistId: uid(1016) }],
   ProjectProfile: [
     {
       projectId: PROJECT_ID,
@@ -1036,6 +1076,8 @@ export const INPUT_SAMPLES = {
   updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
   resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
   confirmIntent: [{ workspaceId: W1, intentId: uid(1012) }],
+  addChecklistItem: [{ workspaceId: W1, itemId: uid(1001) }],
+  reopenChecklistItem: [{ workspaceId: W1, checklistId: uid(1016) }],
   correctIntent: [
     { workspaceId: W1, intentId: uid(1012), text: "Keep the due date optional and skip time zones." },
   ],

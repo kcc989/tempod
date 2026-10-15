@@ -32,6 +32,16 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("confirmIntent", input);
   }
 
+  addChecklistItem(input: MethodInput<"addChecklistItem">): Promise<Result<FnOutput<"addChecklistItem">>> {
+    return this.rpc("addChecklistItem", input);
+  }
+
+  reopenChecklistItem(
+    input: MethodInput<"reopenChecklistItem">,
+  ): Promise<Result<FnOutput<"reopenChecklistItem">>> {
+    return this.rpc("reopenChecklistItem", input);
+  }
+
   correctIntent(input: MethodInput<"correctIntent">): Promise<Result<FnOutput<"correctIntent">>> {
     return this.rpc("correctIntent", input);
   }

@@ -293,6 +293,48 @@ export const handleMcpMessage = async (
                   },
                 },
                 {
+                  name: "submit_proof",
+                  description:
+                    "Submit proof that the preview works: a summary of at most 5 lines, one screen per changed route (images you published with publish_artifact in this chat), and a note for each open design checklist item. Tempo runs the project's checks itself. Then end your turn.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      summary: { type: "string", minLength: 1 },
+                      screens: {
+                        type: "array",
+                        maxItems: 20,
+                        items: {
+                          type: "object",
+                          properties: {
+                            route: { type: "string", minLength: 1 },
+                            viewport: { type: "string", enum: ["desktop", "phone"] },
+                            theme: { type: "string", enum: ["light", "dark"] },
+                            image: { type: "string", minLength: 1 },
+                            recording: { type: "string" },
+                          },
+                          required: ["route", "viewport", "theme", "image"],
+                          additionalProperties: false,
+                        },
+                      },
+                      checklist: {
+                        type: "array",
+                        maxItems: 50,
+                        items: {
+                          type: "object",
+                          properties: {
+                            itemId: { type: "string" },
+                            note: { type: "string", maxLength: 500 },
+                          },
+                          required: ["itemId", "note"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                    required: ["summary", "screens", "checklist"],
+                    additionalProperties: false,
+                  },
+                },
+                {
                   name: "list_agents",
                   description:
                     "List the owner's active agent library and this project's attachments and hooks.",
@@ -432,11 +474,11 @@ export const handleMcpMessage = async (
           );
         }
 
-        if (!runId && params["name"] === "propose_intent") {
+        if (!runId && (params["name"] === "propose_intent" || params["name"] === "submit_proof")) {
           const res = await call("/agent-tools", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ op: "propose_intent", sessionId: sessionId ?? "", params: args }),
+            body: JSON.stringify({ op: params["name"], sessionId: sessionId ?? "", params: args }),
           });
 
           const body = Schema.decodeUnknownSync(
@@ -446,7 +488,9 @@ export const handleMcpMessage = async (
             }),
           )(await res.json());
 
-          return reply(text(res.ok ? (body.result ?? "") : (body.error ?? "Intent rejected."), !res.ok));
+          return reply(
+            text(res.ok ? (body.result ?? "") : (body.error ?? "Tempo rejected the call."), !res.ok),
+          );
         }
 
         if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {

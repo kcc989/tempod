@@ -16,6 +16,7 @@
     "artifact",
     "run",
     "agent_proposal",
-    "intent"
+    "intent",
+    "proof"
   ]
 }

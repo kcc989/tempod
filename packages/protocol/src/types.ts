@@ -31,6 +31,7 @@ import {
   DeployTool,
   DeployTrigger,
   IntentStatus,
+  ChecklistStatus,
   IssueState,
   NoticeLevel,
   OpKind,
@@ -423,6 +424,18 @@ export const ChangesSummary = Schema.Struct({
 
 export type ChangesSummary = typeof ChangesSummary.Type;
 
+/** 13, L-ADR-2: the design checklist. */
+export const ChecklistItem = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  status: ChecklistStatus,
+  sourceItemId: N(Schema.String),
+  resolvedBy: N(Schema.String),
+  createdAt: Ms,
+});
+
+export type ChecklistItem = typeof ChecklistItem.Type;
+
 export const WorkspaceDetail = Schema.Struct({
   ...WorkspaceSummary.fields,
   errorCode: N(Schema.String),
@@ -449,6 +462,7 @@ export const WorkspaceDetail = Schema.Struct({
   environmentId: Schema.optional(N(Schema.String)),
   agentProposals: Schema.optionalKey(Schema.Array(AgentProposalRecord)),
   environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
+  checklist: Schema.optionalKey(Schema.Array(ChecklistItem)),
 });
 
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
@@ -609,10 +623,41 @@ export const IntentContent = Schema.Struct({
 
 export type IntentContent = typeof IntentContent.Type;
 
+/** 13, L-ADR-2: one proof, updated in place while its checks run. */
+export const ProofScreen = Schema.Struct({
+  route: Schema.String,
+  viewport: Schema.Literals(["desktop", "phone"]),
+  theme: Schema.Literals(["light", "dark"]),
+  artifactId: Schema.String,
+  version: Schema.Number,
+  recordingArtifactId: N(Schema.String),
+});
+
+export const ProofCheck = Schema.Struct({
+  name: Schema.String,
+  runId: N(Schema.String),
+  status: Schema.Literals(["running", "passed", "failed"]),
+  exitCode: N(Schema.Number),
+});
+
+export const ProofContent = Schema.Struct({
+  proofId: Schema.String,
+  summary: Schema.String,
+  screens: Schema.Array(ProofScreen),
+  checks: Schema.Array(ProofCheck),
+  resolved: Schema.Array(Schema.Struct({ checklistId: Schema.String, note: Schema.String })),
+  missingRoutes: Schema.Array(Schema.String),
+  missingChecklist: Schema.Array(Schema.String),
+  status: Schema.Literals(["checking", "complete", "incomplete"]),
+});
+
+export type ProofContent = typeof ProofContent.Type;
+
 export const ITEM_CONTENT = {
   run: RunContent,
   agent_proposal: AgentProposalContent,
   intent: IntentContent,
+  proof: ProofContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -643,6 +688,7 @@ export const Item = Schema.Union([
   itemOf("run"),
   itemOf("agent_proposal"),
   itemOf("intent"),
+  itemOf("proof"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),

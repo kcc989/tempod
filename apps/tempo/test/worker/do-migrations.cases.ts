@@ -39,7 +39,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0011_agent_proposals",
       "0012_session_agents",
       "0013_repository_merge",
-      "0014_intents",
+      "0014_loop",
     ]);
   });
 });
@@ -191,7 +191,7 @@ describe("deployed workspace upgrade", () => {
                     "0011_agent_proposals",
                     "0012_session_agents",
                     "0013_repository_merge",
-                    "0014_intents",
+                    "0014_loop",
                   ].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))

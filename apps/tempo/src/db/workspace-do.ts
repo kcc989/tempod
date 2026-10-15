@@ -380,8 +380,33 @@ export const intents = sqliteTable("intents", {
   decidedAt: integer("decided_at"),
 });
 
+export const proofs = sqliteTable("proofs", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  changeId: text("change_id"),
+  itemId: text("item_id"),
+  summary: text("summary").notNull(),
+  screensJson: text("screens_json").notNull(),
+  checklistJson: text("checklist_json").notNull(),
+  checksJson: text("checks_json").notNull(),
+  missingJson: text("missing_json").notNull(),
+  complete: integer("complete"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const checklist = sqliteTable("checklist", {
+  id: text("id").primaryKey(),
+  text: text("text").notNull(),
+  status: text("status", { enum: ["open", "resolved"] }).notNull(),
+  sourceItemId: text("source_item_id"),
+  resolvedBy: text("resolved_by"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const workspaceSchema = {
   intents,
+  proofs,
+  checklist,
   lifecycleEvents,
   runs,
   artifacts,
@@ -414,6 +439,10 @@ export type OpRow = typeof ops.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 
 export type IntentRow = typeof intents.$inferSelect;
+
+export type ProofRow = typeof proofs.$inferSelect;
+
+export type ChecklistRow = typeof checklist.$inferSelect;
 
 export type TurnRow = typeof turns.$inferSelect;
 

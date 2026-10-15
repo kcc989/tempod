@@ -603,7 +603,7 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
     ],
   },
   {
-    tag: "0014_intents",
+    tag: "0014_loop",
     when: 1792872000000,
     statements: [
       `CREATE TABLE intents (
@@ -622,8 +622,29 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
   created_at    INTEGER NOT NULL,
   decided_at    INTEGER
 )`,
+      `CREATE TABLE proofs (
+  id              TEXT PRIMARY KEY,
+  session_id      TEXT NOT NULL,
+  change_id       TEXT,
+  item_id         TEXT,
+  summary         TEXT NOT NULL,
+  screens_json    TEXT NOT NULL,
+  checklist_json  TEXT NOT NULL,
+  checks_json     TEXT NOT NULL,
+  missing_json    TEXT NOT NULL,
+  complete        INTEGER,
+  created_at      INTEGER NOT NULL
+)`,
+      `CREATE TABLE checklist (
+  id              TEXT PRIMARY KEY,
+  text            TEXT NOT NULL,
+  status          TEXT NOT NULL CHECK (status IN ('open','resolved')),
+  source_item_id  TEXT UNIQUE,
+  resolved_by     TEXT,
+  created_at      INTEGER NOT NULL
+)`,
       `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
-        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent')),
+        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof')),
         status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
       "INSERT INTO items_new SELECT * FROM items",
       "DROP TABLE items",

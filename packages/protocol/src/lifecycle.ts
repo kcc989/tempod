@@ -95,6 +95,10 @@ export const LifecycleIntentDecidedPayload = Schema.Struct({
 
 export const LifecycleIntentCorrectedPayload = Schema.Struct({ intentId: Ulid });
 
+export const LifecycleProofPayload = Schema.Struct({ proofId: Ulid, complete: Schema.Boolean });
+
+export const LifecycleChecklistPayload = Schema.Struct({ checklistId: Ulid });
+
 export const LifecycleChangeEndedPayload = Schema.Struct({
   status: Schema.Literals(["done", "failed", "cancelled"]),
 });
@@ -123,6 +127,9 @@ export const LifecycleEvent = Schema.Union([
   event("loop.intent.proposed", "agent", LifecycleIntentProposedPayload),
   event("loop.intent.confirmed", "tempo", LifecycleIntentDecidedPayload),
   event("loop.intent.corrected", "tempo", LifecycleIntentCorrectedPayload),
+  event("loop.proof.submitted", "agent", LifecycleProofPayload),
+  event("loop.checklist.added", "tempo", LifecycleChecklistPayload),
+  event("loop.checklist.reopened", "tempo", LifecycleChecklistPayload),
 ]);
 
 export type LifecycleEvent = typeof LifecycleEvent.Type;

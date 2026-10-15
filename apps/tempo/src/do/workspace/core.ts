@@ -1,4 +1,5 @@
 import { pendingIntent } from "./intent.ts";
+import { listChecklist } from "./proof.ts";
 import { proposalRecords } from "../../agents/proposals.ts";
 import type { CiCoordinator } from "../../ci/types.ts";
 import type { DeployCoordinator } from "../../deploy/types.ts";
@@ -545,6 +546,7 @@ export class WorkspaceCore {
       environmentId: row.environmentId,
       environmentProposals: this.pendingProposals(),
       agentProposals: proposalRecords(this),
+      checklist: listChecklist(this),
     };
   }
   /**

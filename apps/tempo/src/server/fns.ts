@@ -164,6 +164,14 @@ export const correctIntent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"correctIntent">) => data)
   .handler(({ data }) => run("correctIntent", data));
 
+export const addChecklistItem = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"addChecklistItem">) => data)
+  .handler(({ data }) => run("addChecklistItem", data));
+
+export const reopenChecklistItem = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"reopenChecklistItem">) => data)
+  .handler(({ data }) => run("reopenChecklistItem", data));
+
 export const getProjectProfile = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getProjectProfile">) => data)
   .handler(({ data }) => run("getProjectProfile", data));

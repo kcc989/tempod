@@ -478,6 +478,30 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
       enforced: true,
     },
   }),
+  item("proof", {
+    n: 13,
+    rev: 13,
+    seconds: 112,
+    content: {
+      proofId: uid(1013),
+      summary: "Todos have an optional due date.\nThe edit form has a date picker.",
+      screens: [
+        {
+          route: "/todos",
+          viewport: "phone",
+          theme: "dark",
+          artifactId: uid(1014),
+          version: 1,
+          recordingArtifactId: null,
+        },
+      ],
+      checks: [{ name: "typecheck", runId: uid(1015), status: "passed", exitCode: 0 }],
+      resolved: [{ checklistId: uid(1016), note: "The picker uses the theme's input style." }],
+      missingRoutes: [],
+      missingChecklist: [],
+      status: "complete",
+    },
+  }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {

@@ -20,6 +20,7 @@ import { storeChanges, summarize } from "./git.ts";
 import { afterTurnEnded, finishTurn } from "./queue.ts";
 import type { OpRunner } from "./runner.ts";
 import { appendLog, runToWire, scriptRun, startScript, uploadLog } from "./scripts.ts";
+import { onCheckExited } from "./proof.ts";
 import { defaultRunScriptId } from "@tempo/settings";
 
 export interface EventRuntime {
@@ -300,8 +301,10 @@ const onScriptExited = (rt: EventRuntime, event: TempodEventOf<"script.exited">)
     .set({ status, exitCode: event.exitCode, signal: event.signal, endedAt: Date.now() })
     .where(eq(scriptRuns.id, run.id))
     .run();
-  core.broadcast({ type: "script.run", run: runToWire(scriptRun(core, run.id)!) });
+  const ended = scriptRun(core, run.id)!;
+  core.broadcast({ type: "script.run", run: runToWire(ended) });
   core.ctx.waitUntil(uploadLog(core, run.id));
+  onCheckExited(core, ended);
   const ok = status === "exited" && event.exitCode === 0;
 
   if (run.kind === "setup") {

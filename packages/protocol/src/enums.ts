@@ -173,7 +173,13 @@ export const ITEM_KINDS = [
   "run",
   "agent_proposal",
   "intent",
+  "proof",
 ] as const;
+
+/** 13, L-ADR-2. */
+export const ChecklistStatus = Schema.Literals(["open", "resolved"]);
+
+export type ChecklistStatus = typeof ChecklistStatus.Type;
 
 /** 13, L-ADR-1. */
 export const IntentStatus = Schema.Literals(["awaiting", "proposed", "confirmed", "corrected"]);

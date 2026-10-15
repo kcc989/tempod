@@ -1,4 +1,5 @@
 import { INTENT_TEXT, intentBeforeTurn, intentRuleDue } from "./intent.ts";
+import { checklistBlock } from "./proof.ts";
 import { syncIdleCredentials } from "./credential-sync.ts";
 import { Match, Schema } from "effect";
 import { Files } from "@cloudflare/sandbox";
@@ -343,6 +344,9 @@ export const buildContent = async (
   }
 
   if (intentRuleDue(core, turn.id)) blocks.push(text(INTENT_TEXT.rule));
+  const open = checklistBlock(core);
+
+  if (open) blocks.push(text(open));
 
   if (prompt.text) blocks.push(text(prompt.text));
 

@@ -594,3 +594,15 @@ Tab 13, L-ADR-1 (Exact rules) and L-ADR-9. Choices made without the owner, as as
 | Judge context | Branch and project name | The deploy configuration's targets are not in the WorkspaceDO; adding a cross-DO read to every proposal was not worth it yet. The spec row is updated. |
 | Retry | The rule stays on the turn until the agent proposes | A deferred `session.prompt` retry must keep it, as it keeps the general prompt. |
 | Settings | TypeSafe AI sits under Cloudflare in Settings | Both are owner credentials for loop services. |
+
+## Loop: proof and checklist (2026-10-15)
+
+Tab 13, L-ADR-2 (Exact rules). Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Migration | Proofs, checklist and the `proof` item kind are in migration `0014_loop` with the intents table | 0014 was not released yet; one items rebuild instead of two. |
+| Paths | `image` and `recording` may be absolute or relative to `/workspace` | Agents give both forms; the artifact row stores the absolute path. |
+| Checklist text | The user message text, trimmed; a repeat of Add to checklist returns the same item | The spec has the 2,000-character limit and no rule for repeats. |
+| Reopen | Shown on a proof card next to each item that this proof resolved | It is where the owner sees the result. |
+| Not built yet | The proof above the preview pane, and the "routes named by the agent" note for changed files in no `screens` entry | The transcript card shows the proof; the Exact rules table has no field for the agent's routes. |

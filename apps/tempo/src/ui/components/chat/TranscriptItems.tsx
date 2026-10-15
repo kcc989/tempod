@@ -1,5 +1,6 @@
 import { AgentProposalCard } from "./AgentProposalCard";
 import { IntentCard } from "./IntentCard";
+import { AddToChecklist, ProofCard } from "./ProofCard";
 import { RunCard } from "./RunCard";
 import { Match, Schema } from "effect";
 import type { AgentId, Item, ItemOf, Turn } from "@tempo/protocol";
@@ -107,6 +108,8 @@ export const ItemView = memo(function ItemView({
       );
     case "intent":
       return <IntentCard workspaceId={ctx.workspaceId} intent={item.content} writable={ctx.writable} />;
+    case "proof":
+      return <ProofCard workspaceId={ctx.workspaceId} proof={item.content} writable={ctx.writable} />;
     case "user_message":
       return <UserMessage ctx={ctx} item={item} turn={turn} />;
     case "agent_message":
@@ -227,6 +230,9 @@ function UserMessage({
       </div>
       <div className="flex h-5 items-center gap-2 text-xs text-muted-foreground opacity-0 transition-opacity group-focus-within/user:opacity-100 group-hover/user:opacity-100">
         <time dateTime={new Date(item.createdAt).toISOString()}>{formatTime(item.createdAt)}</time>
+        {ctx.writable && text.trim() !== "" && (
+          <AddToChecklist workspaceId={ctx.workspaceId} itemId={item.id} />
+        )}
         {canRevert && (
           <Button
             size="sm"
