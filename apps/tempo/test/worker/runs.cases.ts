@@ -282,6 +282,26 @@ describe("workspace runs", { timeout: 15000 }, () => {
     await waitFor(async () => unwrap(await w.stub.listRuns({}))[0]?.status === "failed");
     expect(unwrap(await w.stub.listRuns({}))[0]?.errorCode).toBe("RUN_ACCESS_VIOLATION");
   });
+  it("runs when a login file is missing, as for an owner without a Codex login", async () => {
+    const w = await setup();
+    vi.mocked(Files.prototype.readFile).mockImplementation(async (path: string) => {
+      if (path !== "/home/tempo/.codex/auth.json") return new Response("abc");
+
+      throw Object.assign(new Error(`readFile '${path}': No such file or directory (os error 2)`), {
+        name: "SandboxFileError",
+        code: "ENOENT",
+        operation: "readFile",
+        path,
+        detail: "No such file or directory (os error 2)",
+      });
+    });
+    const req = await request(w);
+    const prompt = await active(w);
+    await report(w, prompt.sessionId, req.runId, { status: "done", summary: "Done" });
+    await finish(w, prompt);
+    await waitFor(async () => unwrap(await w.stub.listRuns({}))[0]?.status === "completed");
+    expect(unwrap(await w.stub.listRuns({}))[0]?.errorCode).toBeNull();
+  });
   it("serializes write runs and cancels a waiting run without prompting it", async () => {
     const w = await setup();
     await request(w);

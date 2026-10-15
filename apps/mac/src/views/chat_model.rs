@@ -1040,7 +1040,10 @@ mod tests {
             cached_write_tokens: None,
         });
         assert_eq!(turn_footer(&turn, false), "12 s · 15k tokens");
-        assert_eq!(turn_usage_detail(&turn).as_deref(), Some("12k in, 3.3k out"));
+        assert_eq!(
+            turn_usage_detail(&turn).as_deref(),
+            Some("12k in, 3.3k out")
+        );
         turn.status = TurnStatus::Cancelled;
         turn.usage = None;
         assert_eq!(turn_footer(&turn, false), "12 s · Stopped");

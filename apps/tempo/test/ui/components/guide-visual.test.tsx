@@ -30,8 +30,7 @@ describe("guide visuals", () => {
   it("selects flow nodes and opens their code", () => {
     render(
       createElement(GuideVisual, {
-        workspaceId: "w1",
-        live: true,
+        source: { kind: "workspace" as const, workspaceId: "w1", live: true },
         visual: {
           kind: "flow",
           title: "Request flow",
@@ -60,8 +59,7 @@ describe("guide visuals", () => {
 
     const { container } = render(
       createElement(GuideVisual, {
-        workspaceId: "w1",
-        live: true,
+        source: { kind: "workspace" as const, workspaceId: "w1", live: true },
         visual: { kind: "html", title: "Try the change", path: ".tempo/artifacts/demo.html" },
       }),
       { wrapper: environment.Provider },
@@ -85,8 +83,7 @@ describe("guide visuals", () => {
     call.mockResolvedValue({ content: "aW1hZ2U=", encoding: "base64", size: 5 });
 
     const props = {
-      workspaceId: "w1",
-      live: true,
+      source: { kind: "workspace" as const, workspaceId: "w1", live: true },
       visual: { kind: "image" as const, title: "Screenshot", path: "demo.png" },
     };
 

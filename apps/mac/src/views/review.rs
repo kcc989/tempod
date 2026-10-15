@@ -1025,7 +1025,8 @@ impl ReviewPanel {
     }
 }
 /// 04, Workspace activity: the empty state.
-pub const NO_RUN_ACTIVITY: &str = "No agent runs yet. Runs that project hooks start, outside a chat, appear here.";
+pub const NO_RUN_ACTIVITY: &str =
+    "No agent runs yet. Runs that project hooks start, outside a chat, appear here.";
 impl ReviewPanel {
     /// 04, Checks: PR number, title, state and a link to GitHub; one row per check run.
     fn render_run_activity(&self, cx: &mut Context<Self>) -> AnyElement {

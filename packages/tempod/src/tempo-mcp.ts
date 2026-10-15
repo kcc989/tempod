@@ -224,6 +224,12 @@ const describeSummary = (s: EnvironmentSummary | null): string => {
 };
 
 /** Handles one JSON-RPC message; returns the response, or null for a notification. */
+/** MCP clients require `type: "object"`; Effect renders a struct with no fields as any non-null value. */
+const toolInputSchema = (input: Schema.Struct<Schema.Struct.Fields>) =>
+  Object.keys(input.fields).length === 0
+    ? { type: "object", properties: {}, additionalProperties: false }
+    : JsonSchema.toDocumentDraft07(Schema.toJsonSchemaDocument(input, { onExcessProperty: "error" })).schema;
+
 export const handleMcpMessage = async (
   msg: Json,
   call: Call,
@@ -254,9 +260,7 @@ export const handleMcpMessage = async (
           ...ISSUE_TOOL_NAMES.map((name) => ({
             name,
             description: ISSUE_TOOLS[name].description,
-            inputSchema: JsonSchema.toDocumentDraft07(
-              Schema.toJsonSchemaDocument(ISSUE_TOOLS[name].input, { onExcessProperty: "error" }),
-            ).schema,
+            inputSchema: toolInputSchema(ISSUE_TOOLS[name].input),
           })),
           ...DEPLOY_TOOL_NAMES.map((name) => ({
             name,

@@ -388,8 +388,12 @@ impl Render for WorkspaceInfo {
         let state = match w.state {
             p::WorkspaceState::Error => "Needs attention".into(),
             _ => {
-                super::indicators::pill_text(w.state, w.op.as_ref(), Some(&w.settings.environment.instance))
-                    .text
+                super::indicators::pill_text(
+                    w.state,
+                    w.op.as_ref(),
+                    Some(&w.settings.environment.instance),
+                )
+                .text
             }
         };
         let body = v_flex()

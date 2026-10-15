@@ -504,6 +504,20 @@ Verification: four Worker cases in `public-profile.cases.ts` (visitor reads and 
 
 A deploy updated the Worker but new workspaces kept the previous image: tempod reported `0.1.0`, so native repos could not bootstrap (`CLONE_FAILED`). `scripts/deploy-worker.ts` now always builds and pushes the image and pins its digest; `TEMPO_BUILD_CA` only adds the CA secret. The deploy fails if the image's tempod does not contain the deploy's build id. tempod read `process.env["TEMPO_BUILD_ID"]`, which `bun build --env` does not inline, so every image reported the `package.json` version; it now reads `process.env.TEMPO_BUILD_ID`. `--prepare` still writes the Dockerfile-based config without building.
 
+## PR guide in native pull requests (2026-10-15)
+
+09, Web and Mac, PR guide. No new function; both clients read the guide with `getRepositoryFile`.
+
+| Choice | What the code does | Why |
+| --- | --- | --- |
+| Guide ref | `pullRequestGuideRefs` (web) and `pull_request_guide_refs` (Mac): open/draft `headBranch`; merged `headSha` then `headBranch`; closed `headBranch` then `headSha`; the next ref is read only on `NOT_FOUND` | `headSha` is the exact merged head, but a closed PR's `headSha` is the tip from creation or reopen, while its branch is never changed by closing |
+| Shared web rendering | `GuideChapters` holds the chapter list, overview, visuals and Previous/Next; the workspace Guide passes its diffs and `Files outside guide`, the PR detail passes file links. `GuideVisual` takes a `GuideSource` (workspace `readFile` or repository `getRepositoryFile` at a ref) | One renderer, no duplicate guide code |
+| HTML visuals in a PR | Reuse the workspace Guide's sandboxed `srcdoc` iframe (`allow-scripts`, the 05 CSP), loaded only on `Open artifact` | PRs are owner-only (11, P3), so the viewer and trust are the same as the workspace Guide |
+| Mac parsing | `parse_guide` in `views/guides.rs` applies the `parsePrGuide` checks (lengths, path rule, unique chapter and node ids, flow edges) to the JSON value; the workspace Guides panel uses it too | Wire types stay in `packages/protocol`; the guide file has no generated Rust type |
+| Mac visuals | Comparisons and flows render as text; `markdown`, `image` and `html` visuals are path links (Code tab in a PR, a native file tab in a workspace) | Native views never execute HTML (07) and the Code tab already shows repository files |
+
+Verification: web component cases for a guide with chapters, the file link target, a markdown visual read from the head ref, a missing guide, an invalid guide and a merged PR's `headSha`; a model case for the ref order. Mac: a `parse_guide` unit case, a ref-order unit case, and repository view cases for a guide, the Code-tab target at the head ref, a missing guide and an invalid guide. Not checked against a deployed Tempo or by hand in the Mac app.
+
 ## App deploy (2026-10-15)
 
 The owner asked for a Cloudflare control plane that deploys apps from Tempo with Alchemy v2 and `cloudflare.config.ts`. They chose: a dedicated deploy container like CI, a master token that mints a token per project from what the project needs, all three triggers (agent tool, UI button, CI on merge), and spec plus full implementation in one change. Tab 12 App Deploy defines the contracts. Choices:

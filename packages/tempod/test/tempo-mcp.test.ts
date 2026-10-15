@@ -66,6 +66,35 @@ describe("tempo MCP server (01, Environments)", () => {
     expect(TOOLS[1].description).toContain("never ask the user to paste a secret value");
   });
 
+  test("every tool's input schema is an object, as MCP clients require", async () => {
+    const call = () => Promise.reject(new Error("unused"));
+
+    const Listed = Schema.Struct({
+      result: Schema.Struct({
+        tools: Schema.Array(
+          Schema.Struct({ name: Schema.String, inputSchema: Schema.Struct({ type: Schema.String }) }),
+        ),
+      }),
+    });
+
+    for (const [runId, outputKind] of [
+      [undefined, undefined],
+      ["run-1", "review"],
+    ] as const) {
+      const list = Schema.decodeUnknownSync(Listed)(
+        await handleMcpMessage(
+          { jsonrpc: "2.0", id: 1, method: "tools/list" },
+          call,
+          "session-1",
+          runId,
+          outputKind,
+        ),
+      );
+
+      expect(list.result.tools.filter((t) => t.inputSchema.type !== "object").map((t) => t.name)).toEqual([]);
+    }
+  });
+
   test("environment_status returns the last environment.set summary; a proposal becomes an event", async () => {
     h = startTempod();
     const client = new DoClient(h.base);

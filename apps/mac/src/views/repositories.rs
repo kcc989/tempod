@@ -1,3 +1,4 @@
+use super::guides::{GuideTarget, PR_GUIDE_PATH, parse_guide, render_guide};
 use super::profile_model;
 use super::tokens::{Token, color};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -9,6 +10,7 @@ use gpui_kit::{
     IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
     Subscription, Window, div,
 };
+use serde_json::Value;
 use tempo_client::{ApiError, Client};
 use tempo_protocol::{self as p, api};
 
@@ -60,6 +62,8 @@ pub struct RepositoryView {
     deploys: Option<Entity<super::repository_deploys::DeploysView>>,
     /// The newest check run of the open PR's head branch (10, Clients); `Some(None)` when none ran.
     pr_check: Option<Option<p::CiRun>>,
+    pr_guide: Option<PrGuide>,
+    guide_chapter: usize,
     merge_workspace: Option<p::WorkspaceDetail>,
     workspace_loading: bool,
     tab: RepositoryTab,
@@ -96,6 +100,31 @@ fn is_artifacts(project: &p::Project) -> bool {
 
 fn github_url(project: &p::Project) -> String {
     format!("https://github.com/{}/{}", project.owner, project.name)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum PrGuide {
+    Loading,
+    Missing,
+    Invalid,
+    Failed(String),
+    Ready { reference: String, guide: Value },
+}
+
+/// 09, Web and Mac: refs to read a PR guide from, in order; the next is tried on NOT_FOUND.
+fn pull_request_guide_refs(pr: &p::RepositoryPullRequest) -> Vec<String> {
+    let refs = match pr.state {
+        p::PrState::Merged => vec![pr.head_sha.clone(), Some(pr.head_branch.clone())],
+        p::PrState::Closed => vec![Some(pr.head_branch.clone()), pr.head_sha.clone()],
+        _ => vec![Some(pr.head_branch.clone())],
+    };
+    let mut unique = Vec::new();
+    for reference in refs.into_iter().flatten() {
+        if !reference.is_empty() && !unique.contains(&reference) {
+            unique.push(reference);
+        }
+    }
+    unique
 }
 
 impl RepositoryView {
@@ -140,6 +169,8 @@ impl RepositoryView {
             checks: None,
             deploys: None,
             pr_check: None,
+            pr_guide: None,
+            guide_chapter: 0,
             merge_workspace: None,
             workspace_loading: false,
             tab: RepositoryTab::Code,
@@ -609,13 +640,17 @@ impl RepositoryView {
             cx.notify();
             return;
         }
+        self.load_file(entry.path, cx);
+    }
+
+    fn load_file(&mut self, file_path: String, cx: &mut Context<Self>) {
         let Some(project) = &self.project else {
             return;
         };
         let Ok(reference) = self.reference.clone().try_into() else {
             return;
         };
-        let Ok(path) = entry.path.clone().try_into() else {
+        let Ok(path) = file_path.clone().try_into() else {
             return;
         };
         self.generation += 1;
@@ -637,7 +672,7 @@ impl RepositoryView {
                 }
                 this.loading = false;
                 match result {
-                    Ok(file) => this.file = Some((entry.path, file)),
+                    Ok(file) => this.file = Some((file_path, file)),
                     Err(error) => this.error = Some(error.to_string()),
                 }
                 cx.notify();
@@ -754,6 +789,7 @@ impl RepositoryView {
         self.pr_form = false;
         self.editing_pr = false;
         self.pull_request = None;
+        self.pr_guide = None;
         self.merge_workspace = None;
         self.error = None;
         let request =
@@ -774,6 +810,7 @@ impl RepositoryView {
                         this.pull_request = Some(pr);
                         this.load_pr_workspace(cx);
                         this.load_pr_check(cx);
+                        this.load_pr_guide(cx);
                     }
                     Err(error) => this.error = Some(error.to_string()),
                 }
@@ -1018,6 +1055,74 @@ impl RepositoryView {
             });
         })
         .detach();
+    }
+
+    fn load_pr_guide(&mut self, cx: &mut Context<Self>) {
+        let Some(pr) = &self.pull_request else {
+            return;
+        };
+        self.pr_guide = Some(PrGuide::Loading);
+        self.guide_chapter = 0;
+        let refs = pull_request_guide_refs(pr);
+        let project_id = pr.project_id.clone();
+        let client = self.client.clone();
+        let generation = self.generation;
+        cx.spawn(async move |this, cx| {
+            let mut state = PrGuide::Missing;
+            for reference in refs {
+                let (Ok(ref_), Ok(path)) = (
+                    reference.clone().try_into(),
+                    PR_GUIDE_PATH.to_string().try_into(),
+                ) else {
+                    continue;
+                };
+                let result = client
+                    .call::<api::GetRepositoryFile>(p::GetRepositoryFileIn {
+                        project_id: project_id.clone(),
+                        ref_,
+                        path,
+                    })
+                    .await;
+                state = match result {
+                    Err(error) if super::toast::error_code(&error) == "NOT_FOUND" => continue,
+                    Err(error) => PrGuide::Failed(error.to_string()),
+                    Ok(file) if file.encoding == p::GetRepositoryFileOutEncoding::Utf8 => {
+                        parse_guide(&file.content).map_or(PrGuide::Invalid, |guide| {
+                            PrGuide::Ready { reference, guide }
+                        })
+                    }
+                    Ok(_) => PrGuide::Invalid,
+                };
+                break;
+            }
+            let _ = this.update(cx, |this, cx| {
+                if this.generation == generation {
+                    this.pr_guide = Some(state);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn open_guide_target(
+        &mut self,
+        reference: String,
+        target: GuideTarget,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (GuideTarget::File(path) | GuideTarget::Artifact(path)) = target;
+        self.tab = RepositoryTab::Code;
+        self.pull_request = None;
+        self.detail = None;
+        self.reference = reference.clone();
+        self.explicit_ref = true;
+        self.path = parent_path(&path);
+        self.inputs
+            .reference
+            .update(cx, |input, cx| input.set_value(reference, window, cx));
+        self.load_file(path, cx);
     }
 
     fn load_pr_workspace(&mut self, cx: &mut Context<Self>) {
@@ -1358,6 +1463,9 @@ impl RepositoryView {
                         .label("Back to files")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.file = None;
+                            if this.detail.is_none() {
+                                this.load_tab(cx);
+                            }
                             cx.notify();
                         })),
                 )
@@ -1574,6 +1682,56 @@ impl RepositoryView {
             .into_any_element()
     }
 
+    fn render_pr_guide(&self, cx: &mut Context<Self>) -> AnyElement {
+        let muted = |text: String, cx: &Context<Self>| {
+            div()
+                .text_color(color(Token::MutedForeground, cx))
+                .child(text)
+                .into_any_element()
+        };
+        match self.pr_guide.clone() {
+            None => div().into_any_element(),
+            Some(PrGuide::Loading) => muted("Loading guide…".into(), cx),
+            Some(PrGuide::Missing) => muted("No guide for this pull request.".into(), cx),
+            Some(PrGuide::Invalid) => div()
+                .child("This pull request’s guide is not valid.")
+                .into_any_element(),
+            Some(PrGuide::Failed(error)) => h_flex()
+                .gap_2()
+                .child(format!("Could not load the guide: {error}"))
+                .child(
+                    Button::new("retry-pr-guide")
+                        .label("Retry")
+                        .on_click(cx.listener(|this, _, _, cx| this.load_pr_guide(cx))),
+                )
+                .into_any_element(),
+            Some(PrGuide::Ready { reference, guide }) => v_flex()
+                .gap_3()
+                .border_t_1()
+                .pt_3()
+                .child(div().font_weight(gpui_kit::FontWeight::SEMIBOLD).child("Guide"))
+                .child(muted(
+                    format!(
+                        "Agent-authored explanation from {reference}. Open the pull request in a workspace to review its diff."
+                    ),
+                    cx,
+                ))
+                .child(render_guide(
+                    &guide,
+                    self.guide_chapter,
+                    cx,
+                    |this: &mut Self, index, cx| {
+                        this.guide_chapter = index;
+                        cx.notify();
+                    },
+                    move |this: &mut Self, target, window, cx| {
+                        this.open_guide_target(reference.clone(), target, window, cx)
+                    },
+                ))
+                .into_any_element(),
+        }
+    }
+
     fn render_pull_requests(&mut self, cx: &mut Context<Self>) -> AnyElement {
         if self.pr_form {
             let valid = [&self.inputs.title, &self.inputs.head, &self.inputs.base]
@@ -1748,6 +1906,7 @@ impl RepositoryView {
                         )
                 }))
                 .child(merge_controls)
+                .child(self.render_pr_guide(cx))
                 .into_any_element();
         }
         v_flex()
@@ -2083,6 +2242,7 @@ mod tests {
         url: String,
         requests: Arc<Mutex<Vec<(String, Value)>>>,
         linked: Arc<AtomicBool>,
+        guide: Arc<Mutex<Option<String>>>,
         stop: Arc<AtomicBool>,
         worker: Option<std::thread::JoinHandle<()>>,
     }
@@ -2108,6 +2268,8 @@ mod tests {
             let stopping = stop.clone();
             let linked = Arc::new(AtomicBool::new(true));
             let worker_linked = linked.clone();
+            let guide = Arc::new(Mutex::new(None::<String>));
+            let worker_guide = guide.clone();
             let worker = std::thread::spawn(move || {
                 let mut pr = pull_request();
                 let mut listed = json!(project());
@@ -2196,6 +2358,15 @@ mod tests {
                                 "defaultBranch":"main","remote":"https://git.example/repo.git","readOnly":read_only,
                                 "ref":input.get("ref").and_then(Value::as_str).unwrap_or("main"),"empty":empty,"entries":entries,"commit":if empty { Value::Null } else { commit }}),
                             )
+                        }
+                        "getRepositoryFile" if input["path"] == PR_GUIDE_PATH => {
+                            match worker_guide.lock().unwrap().clone() {
+                                Some(content) => (
+                                    200,
+                                    json!({"content":content,"encoding":"utf8","size":content.len()}),
+                                ),
+                                None => (404, json!({"code":"NOT_FOUND","message":"Not found."})),
+                            }
                         }
                         "getRepositoryFile" if fail_file => (
                             500,
@@ -2304,6 +2475,7 @@ mod tests {
                 url,
                 requests,
                 linked,
+                guide,
                 stop,
                 worker: Some(worker),
             }
@@ -2917,6 +3089,141 @@ mod tests {
                 p::PrState::Closed
             )
         });
+    }
+
+    fn guide_json() -> String {
+        json!({"version":1,"title":"Cache reads","summary":"Avoid repeated reads.",
+            "before":"Always fetch.","after":"Cache repeated reads.","chapters":[
+            {"id":"lookup","title":"Read from cache","description":"Try the cache first.",
+                "files":["src/main.rs"],"visuals":[{"kind":"markdown","title":"Notes","path":"docs/cache.md"}]},
+            {"id":"fallback","title":"Handle misses","description":"Fetch on a miss.","files":[],"visuals":[]}]})
+        .to_string()
+    }
+
+    fn open_guided_pull_request(
+        cx: &mut TestAppContext,
+        server: &LocalServer,
+        runtime: &tempo_client::Runtime,
+    ) -> (AnyWindowHandle, Entity<RepositoryView>) {
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, client);
+        settle(cx, &view);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.select_project(project(), window, cx))
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.update(cx, |view, cx| {
+            view.tab = RepositoryTab::PullRequests;
+            view.open_pull_request(1., cx);
+        });
+        settle(cx, &view);
+        wait_for_guide(cx, &view);
+        (window, view)
+    }
+
+    fn wait_for_guide(cx: &mut TestAppContext, view: &Entity<RepositoryView>) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while view.read_with(cx, |view, _| {
+            matches!(view.pr_guide, None | Some(PrGuide::Loading))
+        }) {
+            assert!(Instant::now() < deadline, "PR guide did not load");
+            cx.run_until_parked();
+            std::thread::yield_now();
+        }
+    }
+
+    fn file_reads(server: &LocalServer) -> Vec<(String, String)> {
+        server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/getRepositoryFile"))
+            .map(|(_, input)| {
+                (
+                    input["ref"].as_str().unwrap().to_string(),
+                    input["path"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[gpui_kit::test]
+    fn native_pull_request_shows_its_head_guide_and_opens_files_at_the_head_ref(
+        cx: &mut TestAppContext,
+    ) {
+        let server = LocalServer::new(false, false);
+        *server.guide.lock().unwrap() = Some(guide_json());
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let (window, view) = open_guided_pull_request(cx, &server, &runtime);
+        view.read_with(cx, |view, _| {
+            let Some(PrGuide::Ready { reference, guide }) = &view.pr_guide else {
+                panic!("guide did not load: {:?}", view.pr_guide);
+            };
+            assert_eq!(reference, "feature");
+            assert_eq!(guide["chapters"][1]["title"], "Handle misses");
+        });
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.open_guide_target(
+                    "feature".into(),
+                    GuideTarget::Artifact("docs/cache.md".into()),
+                    window,
+                    cx,
+                )
+            })
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.read_with(cx, |view, _| {
+            assert!(view.tab == RepositoryTab::Code && view.pull_request.is_none());
+            assert_eq!(
+                (view.reference.as_str(), view.path.as_str()),
+                ("feature", "docs")
+            );
+            assert_eq!(view.file.as_ref().unwrap().0, "docs/cache.md");
+        });
+        assert_eq!(
+            file_reads(&server),
+            [
+                ("feature".to_string(), PR_GUIDE_PATH.to_string()),
+                ("feature".to_string(), "docs/cache.md".to_string()),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn native_pull_request_guide_reports_missing_and_invalid_files(cx: &mut TestAppContext) {
+        let server = LocalServer::new(false, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let (_, view) = open_guided_pull_request(cx, &server, &runtime);
+        assert_eq!(
+            view.read_with(cx, |view, _| view.pr_guide.clone()),
+            Some(PrGuide::Missing)
+        );
+        *server.guide.lock().unwrap() =
+            Some(json!({"version":1,"title":"No chapters"}).to_string());
+        view.update(cx, |view, cx| view.load_pr_guide(cx));
+        wait_for_guide(cx, &view);
+        assert_eq!(
+            view.read_with(cx, |view, _| view.pr_guide.clone()),
+            Some(PrGuide::Invalid)
+        );
+    }
+
+    #[test]
+    fn pull_request_guides_read_the_live_head_or_the_recorded_merge_head() {
+        let mut pr: p::RepositoryPullRequest = serde_json::from_value(pull_request()).unwrap();
+        assert_eq!(pull_request_guide_refs(&pr), ["feature"]);
+        pr.state = p::PrState::Merged;
+        assert_eq!(pull_request_guide_refs(&pr), ["head", "feature"]);
+        pr.state = p::PrState::Closed;
+        assert_eq!(pull_request_guide_refs(&pr), ["feature", "head"]);
+        pr.head_sha = None;
+        assert_eq!(pull_request_guide_refs(&pr), ["feature"]);
     }
 
     #[test]

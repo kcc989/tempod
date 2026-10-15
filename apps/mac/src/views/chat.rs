@@ -7,13 +7,13 @@ use super::tokens::{Token, color};
 use crate::image_policy::LocalImageCache;
 use crate::links::{self, LinkTarget};
 use crate::markdown::{escape_raw_html, tool_text};
-use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::{TextView, TextViewStyle};
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
     ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
