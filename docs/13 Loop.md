@@ -216,7 +216,7 @@ Each step writes one lifecycle event (08), so loop times come from the event log
 | Endpoint | `POST https://api.typesafe.ai/v1/systemone` (through the SDK) |
 | Key | The owner's `CredentialDO`, key `typesafe.api_key`, set in Settings. It never enters a container, a log or an event. |
 | Where it runs | The Worker and DOs only. Never in a container. |
-| Timeout | 5 seconds, one retry. No answer counts as high risk: the owner decides. |
+| Timeout | 10 seconds per attempt, one retry. Measured on 2026-10-15 over 12 calls: median 0.7 s, p90 2.2 s, max 9.1 s. No answer counts as high risk: the owner decides. |
 | Checks | Intent risk (L-ADR-1), Cloudflare API calls (L-ADR-8) |
 
 - Each check stores the question ids, the answers and the model id on its event. It stores no state text beyond what the event already holds.

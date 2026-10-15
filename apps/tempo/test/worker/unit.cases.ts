@@ -28,6 +28,7 @@ import {
   type EgressConfig,
 } from "../../src/egress/rules.ts";
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
+import { JEV_MODEL, jevClient, judgeCloudflareCall, judgeIntent } from "../../src/judge/jev.ts";
 import { checksStateOf, prStateOf } from "../../src/github/provider.ts";
 import { appJwt, pkcs1ToPkcs8 } from "../../src/github/app.ts";
 import {
@@ -1876,5 +1877,105 @@ describe("terminal PTY bridge", () => {
     socket.close(1000, "panel closed");
     await waitFor(() => f.terminals.size === 0 && !f.proc.stdout.locked && !f.proc.stdin.locked);
     expect(f.proc.kill).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Jev judge (13, L-ADR-9)", () => {
+  const INTENT = {
+    goal: "Add a due date to todos",
+    approach: "New nullable column and a date picker",
+    notDoing: "No reminders",
+  };
+
+  interface Seen {
+    readonly path: string;
+    readonly auth: string | null;
+    readonly model: string;
+  }
+
+  const Body = Schema.Struct({
+    model: Schema.String,
+    questions: Schema.Record(Schema.String, Schema.Struct({ type: Schema.String })),
+  });
+
+  const jev = (answers: Record<string, number>, seen: Seen[] = []) =>
+    jevClient("ts-key", async (input, init) => {
+      const req = new Request(input, init);
+      const body = Schema.decodeUnknownSync(Body)(await req.json());
+
+      seen.push({
+        path: new URL(req.url).pathname,
+        auth: req.headers.get("authorization"),
+        model: body.model,
+      });
+
+      const out = Object.fromEntries(
+        Object.entries(body.questions).map(([id, q]) =>
+          q.type === "noul"
+            ? [id, { type: "noul", noul: answers[id] }]
+            : [id, { type: "score", score: answers[id], confidence: 0.9, legend: {}, probabilities: {} }],
+        ),
+      );
+
+      return Response.json({
+        model: "jev-1.14.0",
+        answers: out,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    });
+
+  it("lets a low-risk intent go on and calls jev-1.14.0 with the owner's key", async () => {
+    const seen: Seen[] = [];
+
+    const result = await judgeIntent(
+      jev({ new_access: 0.1, security_risk: 0.2, hard_rollback: 0.3 }, seen),
+      INTENT,
+      {},
+    );
+
+    expect(result).toEqual({
+      high: false,
+      reasons: [],
+      answers: { new_access: 0.1, security_risk: 0.2, hard_rollback: 0.3 },
+      model: JEV_MODEL,
+    });
+    expect(seen).toEqual([{ path: "/v1/systemone", auth: "Bearer ts-key", model: JEV_MODEL }]);
+  });
+
+  it("asks the owner for new access, a security risk or a hard rollback", async () => {
+    const result = await judgeIntent(
+      jev({ new_access: 0.5, security_risk: 0.9, hard_rollback: 1 }),
+      INTENT,
+      {},
+    );
+
+    expect(result.high).toBe(true);
+    expect(result.reasons).toEqual(["new_access", "security_risk", "hard_rollback"]);
+  });
+
+  it("treats no key and no answer as high risk", async () => {
+    expect(await judgeIntent(null, INTENT, {})).toMatchObject({ high: true, reasons: ["no_answer"] });
+    const down = jevClient("ts-key", async () => new Response("{}", { status: 401 }));
+    expect(await judgeIntent(down, INTENT, {})).toMatchObject({ high: true, reasons: ["no_answer"] });
+  });
+
+  it("holds a Cloudflare call that is outside the intent", async () => {
+    const call = { method: "DELETE", path: "/accounts/a/d1/database/x", resource: "todo-db" };
+
+    const result = await judgeCloudflareCall(
+      jev({ aligned: 0.2, security_risk: 0.1, hard_rollback: 0 }),
+      call,
+      INTENT,
+    );
+
+    expect(result).toMatchObject({ high: true, reasons: ["not_aligned"] });
+
+    const aligned = await judgeCloudflareCall(
+      jev({ aligned: 0.9, security_risk: 0.1, hard_rollback: 0 }),
+      call,
+      INTENT,
+    );
+
+    expect(aligned.high).toBe(false);
   });
 });

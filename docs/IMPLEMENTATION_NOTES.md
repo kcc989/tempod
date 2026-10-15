@@ -535,3 +535,16 @@ The owner asked for a Cloudflare control plane that deploys apps from Tempo with
 | Mac deep links | The Mac Deploys tab has no `tab=deploys&deployment=` link routing. | The Mac client has none for `tab=checks` either. |
 
 Live Cloudflare acceptance (a real token mint and revoke, an Alchemy v2 deploy with `Cloudflare.state()`, a `cloudflare.config.ts` deploy, and `cf`/`alchemy` accepting an account-owned token) has not been run.
+
+## Loop: Jev judge (2026-10-15)
+
+Tab 13, L-ADR-9. The first loop slice adds the judge module (`apps/tempo/src/judge/jev.ts`) with no caller yet. The intent gate (L-ADR-1) and the Cloudflare call gate (L-ADR-8) use it in later slices.
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Library | `@typesafe-ai/sdk` 0.7.0, pinned, in `apps/tempo` only | Owner asked for the TypeSafe TypeScript SDK. It has no dependencies, guards its `process` use and takes an explicit key and `fetch`, so it runs in workerd (the unit tests run it there). |
+| Model | `jev-1.14.0` | Owner asked for Jev 1.14. `jev-1.14` is refused by the API; the model ID has the patch number. |
+| Key | `typesafe.api_key` in the owner's `CredentialDO`, read by `ownerJudge`. Not in `SECRET_KEYS`, so it is not listed as an agent login. | It is not an agent credential and never goes to a container. The Settings field comes with the web and Mac slice that first uses the judge. |
+| New-access question | A noul with yes and no criteria that name permissions, credentials and access, and exclude product features | A plain "new capability" question scored a harmless due-date feature 0.67. With criteria it scored 0.09; a Stripe secret scored 0.92 (live, 2026-10-15). |
+| Timeout | 10 s per attempt, one retry, no compression | 12 live calls: median 0.7 s, p90 2.2 s, max 9.1 s. The spec's first 5 s draft would drop real answers. |
+| No answer | Counts as high: the owner decides | 13, L-ADR-9. |
