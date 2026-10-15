@@ -656,6 +656,7 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
   created_at      INTEGER NOT NULL
 )`,
       "ALTER TABLE sessions ADD COLUMN manifest_json TEXT",
+      "ALTER TABLE sessions ADD COLUMN intent_check INTEGER NOT NULL DEFAULT 1",
       "ALTER TABLE egress_log ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
       `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
         kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof','cloudflare_hold')),

@@ -176,6 +176,10 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("setSessionMode", input);
   }
 
+  setIntentCheck(input: MethodInput<"setIntentCheck">): Promise<Result<FnOutput<"setIntentCheck">>> {
+    return this.rpc("setIntentCheck", input);
+  }
+
   setSessionConfig(input: MethodInput<"setSessionConfig">): Promise<Result<FnOutput<"setSessionConfig">>> {
     return this.rpc("setSessionConfig", input);
   }

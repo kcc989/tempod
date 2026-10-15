@@ -17,11 +17,11 @@ export const INTENT_TEXT = {
   tooLong: "Intent must be at most 5 lines.",
   lineTooLong: "Each line must be at most 160 characters.",
   noTask: "There is no task waiting for an intent.",
+  off: "The owner turned the intent check off for this chat. Do the work.",
+  modeKept: "The agent left read-only mode before the intent was confirmed. Tempo set read-only mode again.",
 } as const;
 
 const LIMITS = { lines: 5, lineChars: 160 } as const;
-
-const GO = /^\/go(\s+|$)/;
 
 const NonEmpty = Schema.String.check(Schema.isMinLength(1));
 
@@ -52,13 +52,18 @@ const planMode = (session: SessionRow): string | null => {
   return id && json.modes.read(session.modesJson, []).some((m) => m.id === id) ? id : null;
 };
 
-/** Before a turn's prompt is built: starts the check on the first prompt of a chat (13, Exact rules). */
+/** Before a turn's prompt is built: starts the check on the first prompt of a chat while the owner's control is on (13, Exact rules). */
 export const intentBeforeTurn = async (core: WorkspaceCore, session: SessionRow, turn: TurnRow) => {
-  if (session.runId || turn.origin !== "user" || !turn.changeId || row(core, session.id)) return;
-  const prompt = json.prompt.read(turn.promptJson, EMPTY_PROMPT);
+  if (
+    session.runId ||
+    session.intentCheck === 0 ||
+    turn.origin !== "user" ||
+    !turn.changeId ||
+    row(core, session.id)
+  )
+    return;
   const now = Date.now();
-  const skip = GO.test(prompt.text);
-  const mode = skip ? null : planMode(session);
+  const mode = planMode(session);
 
   core.db
     .insert(intents)
@@ -67,29 +72,23 @@ export const intentBeforeTurn = async (core: WorkspaceCore, session: SessionRow,
       sessionId: session.id,
       changeId: turn.changeId,
       itemId: null,
-      status: skip ? "confirmed" : "awaiting",
+      status: "awaiting",
       goal: "",
       approach: "",
       notDoing: "",
-      decidedBy: skip ? "owner" : null,
+      decidedBy: null,
       judgeJson: null,
       priorModeId: mode ? session.modeId : null,
       enforced: mode ? 1 : 0,
       createdAt: now,
-      decidedAt: skip ? now : null,
+      decidedAt: null,
     })
     .onConflictDoNothing()
     .run();
+  core.setKv(`intentRule:${turn.id}`, true);
+  core.setKv(`ownerMode:${session.id}`, undefined);
 
-  if (skip)
-    core.updateTurn(turn.id, {
-      promptJson: json.prompt.write({ ...prompt, text: prompt.text.replace(GO, "") }),
-    });
-  else {
-    core.setKv(`intentRule:${turn.id}`, true);
-
-    if (mode) await setMode(core, session, mode);
-  }
+  if (mode) await setMode(core, session, mode);
 };
 
 /** Whether buildContent adds the intent rule to this turn. Kept until the agent proposes, so a retried send keeps it. */
@@ -136,6 +135,7 @@ export const proposeIntent = async (
   session: SessionRow,
   params: Schema.Json,
 ): Promise<string> => {
+  if (session.intentCheck === 0) return INTENT_TEXT.off;
   const input = Schema.decodeUnknownSync(ProposeInput)(params);
   const lines = lineCount(input);
 
@@ -157,6 +157,8 @@ export const proposeIntent = async (
       .set({ priorModeId: mode ? session.modeId : null, enforced: mode ? 1 : 0 })
       .where(eq(intents.id, current.id))
       .run();
+
+    core.setKv(`ownerMode:${session.id}`, undefined);
 
     if (mode) await setMode(core, session, mode);
   }
@@ -312,4 +314,60 @@ export const correctIntent = (core: WorkspaceCore, intentId: string, text: strin
   queueTurn(core, corrected, text);
   core.recomputeAttention();
   core.lifecycle.kick();
+};
+
+/** `setIntentCheck`: the owner's control. Turning it off decides a waiting intent as the owner. */
+export const setIntentCheck = async (
+  core: WorkspaceCore,
+  sessionId: string,
+  enabled: boolean,
+): Promise<void> => {
+  const session = core.sessionRow(sessionId);
+
+  if (session.runId) throw new TempoError("VALIDATION_FAILED", undefined, "Runs have no intent check.");
+  core.updateSession(sessionId, { intentCheck: enabled ? 1 : 0 });
+  const r = row(core, sessionId);
+
+  if (enabled || !r) return;
+
+  if (r.status === "proposed") {
+    await confirm(core, r, "owner");
+
+    return;
+  }
+
+  if (r.status !== "awaiting") return;
+  core.db
+    .update(intents)
+    .set({ status: "confirmed", decidedBy: "owner", decidedAt: Date.now() })
+    .where(eq(intents.id, r.id))
+    .run();
+  const running = core.runningTurn();
+
+  if (running?.sessionId === sessionId) core.setKv(`intentRule:${running.id}`, undefined);
+
+  if (r.priorModeId && session.status !== "closed")
+    await setMode(core, core.sessionRow(sessionId), r.priorModeId);
+  showItem(core, core.db.select().from(intents).where(eq(intents.id, r.id)).get()!, null);
+  core.recomputeAttention();
+};
+
+/**
+ * While an enforced intent waits, the chat stays read-only: a mode change the agent makes is undone
+ * (13, Exact rules, Read-only). The owner's own mode changes go through setSessionMode.
+ */
+export const guardAgentMode = async (
+  core: WorkspaceCore,
+  sessionId: string,
+  modeId: string,
+): Promise<void> => {
+  const r = row(core, sessionId);
+
+  if (!r || r.enforced !== 1 || (r.status !== "awaiting" && r.status !== "proposed")) return;
+  const session = core.sessionRow(sessionId);
+  const plan = planMode(session);
+
+  if (!plan || modeId === plan || core.kv<string>(`ownerMode:${sessionId}`) === modeId) return;
+  await setMode(core, { ...session, modeId }, plan);
+  core.notice("warning", INTENT_TEXT.modeKept, sessionId);
 };

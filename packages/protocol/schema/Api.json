@@ -2032,6 +2032,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "setIntentCheck": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetIntentCheckIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "setSessionConfig": {
       "type": "object",
       "properties": {
@@ -2853,6 +2869,7 @@
     "deleteQueuedTurn",
     "reorderQueue",
     "setSessionMode",
+    "setIntentCheck",
     "setSessionConfig",
     "respondPermission",
     "getChanges",

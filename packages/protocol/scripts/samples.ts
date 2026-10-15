@@ -1139,6 +1139,7 @@ export const INPUT_SAMPLES = {
   updateRepositoryPullRequest: [{ projectId: PROJECT_ID, number: 1, state: "closed" }],
   resolveAgentProposal: [{ workspaceId: W1, proposalId: uid(704), apply: true }],
   confirmIntent: [{ workspaceId: W1, intentId: uid(1012) }],
+  setIntentCheck: [{ workspaceId: W1, sessionId: S1, enabled: false }],
   getLoopReport: [{ from: at(0), to: at(7 * 86_400) }],
   decideCloudflareHold: [{ workspaceId: W1, holdId: uid(1018), allow: true }],
   addChecklistItem: [{ workspaceId: W1, itemId: uid(1001) }],

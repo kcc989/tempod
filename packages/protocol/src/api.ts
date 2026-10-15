@@ -457,6 +457,7 @@ export const API = {
   deleteQueuedTurn: fn("POST", Schema.Struct({ ...W, turnId: S }), Empty),
   reorderQueue: fn("POST", Schema.Struct({ ...W, turnIds: Schema.Array(S) }), Empty),
   setSessionMode: fn("POST", Schema.Struct({ ...W, sessionId: S, modeId: S }), Empty),
+  setIntentCheck: fn("POST", Schema.Struct({ ...W, sessionId: S, enabled: B }), Empty),
   setSessionConfig: fn(
     "POST",
     Schema.Struct({ ...W, sessionId: S, configId: S, value: Schema.Union([S, B]) }),

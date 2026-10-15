@@ -82,8 +82,9 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 
 | Rule | Value |
 | --- | --- |
-| When | The first prompt of each chat (session) with no run. Each message is its own change in Tempo (08), so later prompts in the same chat do not ask again; the agent proposes again when its work leaves the confirmed goal. A first prompt that starts with `/go` skips the check for that chat; Tempo removes `/go` from the text. |
-| Read-only | Before that turn's prompt, when the session's modes include `PLAN_MODE` of its agent (Claude and OpenCode `plan`, Codex `read-only`), Tempo sets that mode with `session.setMode` and keeps the mode it replaced. Pi has no such mode; its intent has `enforced: false` and relies on the instruction. |
+| When | The first prompt of each chat (session) with no run, while the chat's **Intent check** control is on. Each message is its own change in Tempo (08), so later prompts in the same chat do not ask again; the agent proposes again when its work leaves the confirmed goal. |
+| Control (owner-requested 2026-10-15) | `sessions.intent_check` (default on), shown as `Session.intentCheck` and changed only by `setIntentCheck {workspaceId, sessionId, enabled}`. No agent tool or ACP method changes it; text in a prompt does not either. Web and Mac show `Intent check: On` or `Off` in the composer. While it is off, `propose_intent` answers `The owner turned the intent check off for this chat. Do the work.` and stores nothing. Turning it off decides a waiting intent as the owner: a proposed intent is confirmed (Confirm, below); an intent the agent has not proposed yet is set `confirmed` and the prior mode is restored. Turning it on starts the check on the chat's next prompt when the chat has no intent yet. |
+| Read-only | Before that turn's prompt, when the session's modes include `PLAN_MODE` of its agent (Claude and OpenCode `plan`, Codex `read-only`), Tempo sets that mode with `session.setMode` and keeps the mode it replaced. Pi has no such mode; its intent has `enforced: false` and relies on the instruction. While an enforced intent is `awaiting` or `proposed`, a mode change that the agent reports (`session.updated`) is undone, and the chat gets the notice `The agent left read-only mode before the intent was confirmed. Tempo set read-only mode again.` A mode the owner picks with `setSessionMode` is kept. |
 | Instruction | One text block before the prompt, exact: `Before you change any file, call the tempo tool propose_intent with the goal, your approach and what you will not do, in at most 5 lines in total. Then end your turn. Do not change files until Tempo confirms the intent.` |
 | Tool | `propose_intent {goal, approach, notDoing}`, each a nonempty string. All lines together at most 5, each line at most 160 characters. Errors (tool errors, exact): `Intent must be at most 5 lines.`, `Each line must be at most 160 characters.`, `There is no task waiting for an intent.` Listed only in sessions with no run. |
 | Storage | WorkspaceDO table `intents`, one row per chat: `id`, `session_id` (unique), `change_id` (the change it was last proposed in), `item_id`, `status` (`awaiting`, `proposed`, `confirmed`, `corrected`), `goal`, `approach`, `not_doing`, `decided_by` (`owner`, `judge` or null), `judge_json`, `prior_mode_id`, `enforced`, `created_at`, `decided_at`. One `intent` item per chat, updated in place. |
@@ -409,6 +410,7 @@ Tempo will not build these while this loop is the goal.
 | 2026-10-15 | Removed access | Running sessions that hold it end (14) |
 | 2026-10-15 | Call limits | HTTP methods are enough (14) |
 | 2026-10-15 | Todo app MCP sign-in | OAuth through Better Auth |
+| 2026-10-15 | Skipping the intent check | A per-chat control that only the owner changes, not a `/go` text prefix. The agent cannot leave read-only mode while an intent waits. |
 
 ## Open questions
 

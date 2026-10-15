@@ -107,6 +107,7 @@ export const sessions = sqliteTable("sessions", {
   profileJson: text("profile_json"),
   profileIssuesJson: text("profile_issues_json").notNull().default("[]"),
   manifestJson: text("manifest_json"),
+  intentCheck: integer("intent_check").notNull().default(1),
   sortOrder: integer("sort_order").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),

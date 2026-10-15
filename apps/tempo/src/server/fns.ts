@@ -160,6 +160,10 @@ export const confirmIntent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"confirmIntent">) => data)
   .handler(({ data }) => run("confirmIntent", data));
 
+export const setIntentCheck = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setIntentCheck">) => data)
+  .handler(({ data }) => run("setIntentCheck", data));
+
 export const correctIntent = createServerFn({ method: "POST" })
   .validator((data: FnInput<"correctIntent">) => data)
   .handler(({ data }) => run("correctIntent", data));

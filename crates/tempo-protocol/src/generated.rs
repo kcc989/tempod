@@ -12856,6 +12856,11 @@ pub struct Session {
     pub config_options: ::std::vec::Vec<ConfigOption>,
     pub id: ::std::string::String,
     #[serde(
+        rename = "intentCheck",
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub intent_check: ::std::option::Option<bool>,
+    #[serde(
         rename = "modeId",
         deserialize_with = "::std::option::Option::deserialize"
     )]
@@ -13181,6 +13186,15 @@ pub struct SetEnvironmentSecretIn {
     pub environment_id: ::std::string::String,
     pub name: ::std::string::String,
     pub value: ::std::string::String,
+}
+///`SetIntentCheckIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SetIntentCheckIn {
+    pub enabled: bool,
+    #[serde(rename = "sessionId")]
+    pub session_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`SetJudgeKeyIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -17373,6 +17387,15 @@ pub mod api {
         type Input = crate::SetEnvironmentSecretIn;
         type Output = crate::Empty;
     }
+    /// `setIntentCheck`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SetIntentCheck;
+    impl crate::Function for SetIntentCheck {
+        const NAME: &'static str = "setIntentCheck";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SetIntentCheckIn;
+        type Output = crate::Empty;
+    }
     /// `setJudgeKey`
     #[derive(Clone, Copy, Debug)]
     pub struct SetJudgeKey;
@@ -17764,6 +17787,7 @@ pub mod api {
         ("setClaudeToken", crate::Method::Post),
         ("setCodexAuth", crate::Method::Post),
         ("setEnvironmentSecret", crate::Method::Post),
+        ("setIntentCheck", crate::Method::Post),
         ("setJudgeKey", crate::Method::Post),
         ("setPinned", crate::Method::Post),
         ("setProjectEnvironment", crate::Method::Post),
@@ -18132,6 +18156,7 @@ pub mod wire {
         "SetClaudeTokenIn",
         "SetCodexAuthIn",
         "SetEnvironmentSecretIn",
+        "SetIntentCheckIn",
         "SetJudgeKeyIn",
         "SetJudgeKeyOut",
         "SetPinnedIn",
@@ -18590,6 +18615,7 @@ pub mod wire {
             "SetClaudeTokenIn" => crate::roundtrip::<crate::SetClaudeTokenIn>(text),
             "SetCodexAuthIn" => crate::roundtrip::<crate::SetCodexAuthIn>(text),
             "SetEnvironmentSecretIn" => crate::roundtrip::<crate::SetEnvironmentSecretIn>(text),
+            "SetIntentCheckIn" => crate::roundtrip::<crate::SetIntentCheckIn>(text),
             "SetJudgeKeyIn" => crate::roundtrip::<crate::SetJudgeKeyIn>(text),
             "SetJudgeKeyOut" => crate::roundtrip::<crate::SetJudgeKeyOut>(text),
             "SetPinnedIn" => crate::roundtrip::<crate::SetPinnedIn>(text),

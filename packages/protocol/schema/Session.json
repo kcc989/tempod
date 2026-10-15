@@ -139,6 +139,16 @@
           "type": "null"
         }
       ]
+    },
+    "intentCheck": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [

@@ -486,6 +486,8 @@ export const Session = Schema.Struct({
   agentVersion: Schema.optional(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
   agentSha: Schema.optional(Schema.String),
   profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
+  /** 13, L-ADR-1: the owner's intent check control for this chat. Only `setIntentCheck` changes it. */
+  intentCheck: Schema.optional(Schema.Boolean),
 });
 
 export type Session = typeof Session.Type;

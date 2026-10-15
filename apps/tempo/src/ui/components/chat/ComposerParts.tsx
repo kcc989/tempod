@@ -32,6 +32,7 @@ import {
 import { ShortcutKbd } from "~/ui/components/ui/kbd";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/components/ui/popover";
 import { Spinner } from "~/ui/components/ui/spinner";
+import { useCallMutation } from "~/ui/hooks/useCall";
 import { SimpleTooltip } from "~/ui/components/ui/tooltip";
 import { formatBytes, formatTokens } from "~/ui/lib/format";
 import { cn } from "~/ui/lib/utils";
@@ -691,5 +692,34 @@ export function PlanModeBadge() {
       <ListChecksIcon className="size-3" />
       Plan mode
     </span>
+  );
+}
+
+/** 13, L-ADR-1: the owner's intent check control for this chat. The agent cannot change it. */
+export function IntentCheckToggle({ workspaceId, session }: { workspaceId: string; session: Session }) {
+  const set = useCallMutation("setIntentCheck");
+
+  if (session.intentCheck === undefined) return null;
+  const on = session.intentCheck;
+
+  return (
+    <SimpleTooltip
+      label={
+        on
+          ? "The agent states its plan first; risky plans wait for you. Click to turn off for this chat."
+          : "The agent starts work at once. Click to turn on for this chat."
+      }
+    >
+      <button
+        type="button"
+        className={pickerTrigger}
+        aria-pressed={on}
+        disabled={set.isPending}
+        onClick={() => set.mutate({ workspaceId, sessionId: session.id, enabled: !on })}
+      >
+        <span className="shrink-0 text-xs text-muted-foreground">Intent check:</span>
+        <span>{on ? "On" : "Off"}</span>
+      </button>
+    </SimpleTooltip>
   );
 }

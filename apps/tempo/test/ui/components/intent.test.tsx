@@ -108,3 +108,29 @@ it("saves the project profile and shows the first problem in place (13, L-ADR-3)
     revision: 2,
   });
 });
+
+it("turns the intent check off for one chat with the owner's switch (13, L-ADR-1)", async () => {
+  const { IntentCheckToggle } = await import("../../../src/ui/components/chat/ComposerParts");
+  const { session } = await import("../fixtures");
+
+  environment.request.mockResolvedValue({});
+
+  const { rerender } = render(
+    <IntentCheckToggle workspaceId="w1" session={session({ id: "s1", intentCheck: true })} />,
+    { wrapper: environment.Provider },
+  );
+
+  const toggle = screen.getByRole("button", { name: "Intent check: On" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(toggle);
+  await waitFor(() =>
+    expect(environment.request).toHaveBeenCalledWith("setIntentCheck", {
+      workspaceId: "w1",
+      sessionId: "s1",
+      enabled: false,
+    }),
+  );
+
+  rerender(<IntentCheckToggle workspaceId="w1" session={session({ id: "s1", runId: "r1" })} />);
+  expect(screen.queryByRole("button", { name: /Intent check/ })).toBeNull();
+});
