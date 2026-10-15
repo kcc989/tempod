@@ -1,0 +1,54 @@
+{
+  "prs": {
+    "total": 67,
+    "merged": 66
+  },
+  "first_commit_to_pr_open": {
+    "n": 66,
+    "median": 2.2,
+    "p90": 85.6
+  },
+  "pr_open_to_merge": {
+    "n": 66,
+    "median": 23.6,
+    "p90": 131.3
+  },
+  "first_ci_run_to_green_on_final_head": {
+    "n": 63,
+    "median": 12.9,
+    "p90": 53.6
+  },
+  "failed_ci_runs_per_pr": {
+    "n": 66,
+    "median": 0.0,
+    "p90": 2
+  },
+  "prs_with_a_failed_ci_run": 31,
+  "prs_with_ci_runs": 66,
+  "merge_to_next_worker_version": {
+    "n": 57,
+    "median": 157.2,
+    "p90": 1062.4
+  },
+  "worker_versions": 14,
+  "incidents": [
+    {
+      "worker": "tempo",
+      "version": "eaeb14fe-ab1b-4974-8fda-e71250abf193",
+      "deployed": "2026-10-12T22:19:00Z",
+      "first_error": "2026-10-12T22:21:00Z",
+      "last_error": "2026-10-12T22:31:43Z",
+      "fix_version": "62a6628d",
+      "fix_deployed": "2026-10-12T22:31:42Z",
+      "errors": {
+        "Rollback (DrizzleError in WorkspaceDO)": 690,
+        "request failed": 230,
+        "server function failed": 20
+      },
+      "seen_in_owner_messages": false,
+      "fixed_through_tempo": false,
+      "deploy_to_first_error": 2.0,
+      "first_error_to_fix_deployed": 10.7
+    }
+  ]
+}

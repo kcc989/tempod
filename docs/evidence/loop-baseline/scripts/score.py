@@ -3,10 +3,12 @@
 Usage:
   python3 -I score.py split <out-dir>          # writes batch0..3.jsonl and sample_ids.json
   python3 -I score.py score <out-dir> <json>   # reads labels0..3.jsonl and hand_labels.json
+  python3 -I score.py lost <out-dir> <json>    # minutes lost to each friction code
 
 The output JSON holds only counts. It holds no message text.
 """
 import json, os, random, re, statistics as st, sys
+from datetime import datetime
 from collections import Counter, defaultdict
 
 OBS = ['STACK', 'CF_PERMS', 'API_KEYS', 'CI_SLOW', 'UNCLEAR_IMPL', 'PLAN_VERBOSE', 'DESIGN',
@@ -99,5 +101,49 @@ def score(out, dest):
     print(json.dumps(r['agreement']), r['friction_messages'], 'friction messages of', n)
 
 
+# A friction message costs the owner the time to notice and write it (its gap after the agent's last
+# event, capped at NOTICE_CAP) plus the agent's rework until its last event before the next owner
+# message (capped at REWORK_CAP). Longer gaps mean the owner was away. A message with several codes
+# splits its minutes evenly. PLAN_VERBOSE is split into DIRECTION and PLAN_LENGTH by its reason.
+NOTICE_CAP, REWORK_CAP = 30, 60
+
+
+def lost(out, dest):
+    m = load(os.path.join(out, 'messages.jsonl'))
+    L = {x['id']: x for i in range(4) for x in load(os.path.join(out, f'labels{i}.jsonl'))}
+    nxt = {}
+    by_thread = defaultdict(list)
+    for x in m:
+        by_thread[x['thread']].append(x)
+    for xs in by_thread.values():
+        xs.sort(key=lambda x: x['idx'])
+        for a, b in zip(xs, xs[1:]):
+            nxt[a['id']] = b
+    per = defaultdict(list)
+    for x in m:
+        codes = [c for c in L[x['id']]['codes'] if c in FRICTION]
+        codes = [('PLAN_LENGTH' if LENGTH.search(L[x['id']]['why']) else 'DIRECTION') if c == 'PLAN_VERBOSE' else c
+                 for c in codes]
+        if not codes:
+            continue
+        notice = min((x['gap_s'] or 0) / 60, NOTICE_CAP)
+        b = nxt.get(x['id'])
+        rework = 0
+        if b:
+            rework = (datetime.fromisoformat(b['ts'].replace('Z', '+00:00')) -
+                      datetime.fromisoformat(x['ts'].replace('Z', '+00:00'))).total_seconds() / 60 - (b['gap_s'] or 0) / 60
+            rework = min(max(rework, 0), REWORK_CAP)
+        for c in codes:
+            per[c].append((notice + rework) / len(codes))
+    n = len(m)
+    r = dict(messages=n, notice_cap_min=NOTICE_CAP, rework_cap_min=REWORK_CAP,
+             codes={c: dict(messages=len(v), minutes=round(sum(v), 1), minutes_per_100=round(100 * sum(v) / n, 1),
+                            median=round(med(v), 1), p90=round(p90(v), 1))
+                    for c, v in sorted(per.items(), key=lambda kv: -sum(kv[1]))})
+    json.dump(r, open(dest, 'w'), indent=2)
+    print(json.dumps({c: v['minutes'] for c, v in r['codes'].items()}))
+
+
 if __name__ == '__main__':
-    {'split': lambda: split(sys.argv[2]), 'score': lambda: score(sys.argv[2], sys.argv[3])}[sys.argv[1]]()
+    {'split': lambda: split(sys.argv[2]), 'score': lambda: score(sys.argv[2], sys.argv[3]),
+     'lost': lambda: lost(sys.argv[2], sys.argv[3])}[sys.argv[1]]()

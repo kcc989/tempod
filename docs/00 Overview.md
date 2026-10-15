@@ -48,6 +48,8 @@ This version is for **one trusted user on their own Cloudflare account**. The sc
 | 10 Project CI | Project CI pipelines and runs |
 | 11 Public Profile | Public projects, the owner's profile and pinned projects |
 | 12 App Deploy | Deploying the owner's apps to Cloudflare with Alchemy v2 or `cloudflare.config.ts` |
+| 13 Loop | Draft. The closed loop from prompt to production fix, its events, targets and kill list |
+| 14 Capability Manifest | Draft. What each agent session can read, call and deploy, enforced by `TempoOutbound` |
 
 ## Goals and non-goals
 
