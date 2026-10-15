@@ -260,7 +260,7 @@ The run engine uses the existing session, turn, checkpoint and protected-file pa
 
 ## Results: `report_result`
 
-Add the tool `report_result` to the `tempo` MCP server. `tempod mcp` lists it only when `TEMPO_RUN_ID` is set, with the input schema of `TEMPO_RUN_OUTPUT_KIND`. Carry calls through request/response frames on the existing daemon socket. Tool arguments do not enter the raw event log; the WorkspaceDO validates and redacts reports before storing them. This transport correction was owner-approved on 2026-10-13.
+Add the tool `report_result` to the `tempo` MCP server. In a run session, `tempod` answers the agent's permission request for this tool itself, with its allow-once option: a read-only mode such as Claude's `plan` asks before any MCP tool, and no one answers a hook run. `tempod mcp` lists it only when `TEMPO_RUN_ID` is set, with the input schema of `TEMPO_RUN_OUTPUT_KIND`. Carry calls through request/response frames on the existing daemon socket. Tool arguments do not enter the raw event log; the WorkspaceDO validates and redacts reports before storing them. This transport correction was owner-approved on 2026-10-13.
 
 | Output kind | Input (Effect Schema in `packages/protocol`) |
 | --- | --- |
