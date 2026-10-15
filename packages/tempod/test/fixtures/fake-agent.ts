@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 /**
  * A scripted ACP v1 agent for tests. The first word of the prompt text picks the behaviour:
- * hello, tool, permission, slow, hang, crash, child, big-image, big-text, fail401, write <path>, read <path>.
+ * hello, tool, permission, report-permission, slow, hang, crash, child, big-image, big-text, fail401, write <path>, read <path>.
  * Env: FAKE_STATE_DIR (sessions on disk, for session/load), FAKE_LOAD=0 (no loadSession),
  * FAKE_LOAD_FAIL=1 (session/load fails after replaying), FAKE_CLOSE=0 (no session/close),
  * FAKE_IGNORE_SIGTERM=1, FAKE_MCP_HTTP=1 (mcpCapabilities.http).
@@ -313,6 +313,24 @@ class FakeAgent implements Agent {
           stopReason: "end_turn",
           usage: { totalTokens: 1500, inputTokens: 1200, outputTokens: 300, cachedReadTokens: 800 },
         };
+      case "report-permission": {
+        const res = await this.conn.requestPermission({
+          sessionId: sid,
+          toolCall: { toolCallId: "tc3", title: "mcp__tempo__report_result" },
+          options: [
+            { optionId: "yes", name: "Yes", kind: "allow_once" },
+            { optionId: "always", name: "Always", kind: "allow_always" },
+            { optionId: "no", name: "No", kind: "reject_once" },
+          ],
+        });
+
+        record(
+          `report ${res.outcome.outcome === "selected" ? `selected:${res.outcome.optionId}` : "cancelled"}`,
+        );
+
+        return { stopReason: "end_turn" };
+      }
+
       case "permission": {
         await this.update(sid, {
           sessionUpdate: "tool_call",

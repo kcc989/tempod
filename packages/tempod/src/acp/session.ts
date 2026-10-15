@@ -18,6 +18,7 @@ import {
   modelOption,
   newId,
   PLAYWRIGHT_MCP_SERVER,
+  TEMPO_RUN_ID_ENV,
   TempoError,
   toTurnUsage,
   type AgentId,
@@ -37,10 +38,16 @@ import { VERSION } from "../config.ts";
 import { killGroup } from "../exec.ts";
 import { insideRoots } from "../fs.ts";
 import { errorText, type Logger } from "../log.ts";
-import { isObj, modeConfig, toConfigOptions, toModes } from "./convert.ts";
+import { isObj, modeConfig, toConfigOptions, toModes, toPermissionOptions } from "./convert.ts";
 import { offeredOption, sessionProfile } from "./profile.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
 import { acpMcpServers, type Bridge } from "./mcp.ts";
+
+const RUN_REPORT_TOOL_NAMES = new Set([
+  "mcp__tempo__report_result",
+  "tempo.report_result",
+  "mcp:tempo:report_result",
+]);
 
 const STDERR_LINES = 200;
 
@@ -303,6 +310,14 @@ export class AgentSession {
       return;
     }
 
+    const allow = this.runReportAllow(params);
+
+    if (allow) {
+      this.byRpcId.set(rpcId, Promise.resolve({ outcome: { outcome: "selected", optionId: allow } }));
+
+      return;
+    }
+
     const requestId = newId();
     const { itemId, title, options } = this.mapper.addPermission(requestId, params);
 
@@ -320,6 +335,18 @@ export class AgentSession {
       title,
       options,
     });
+  }
+  /**
+   * 08, Results: a run reports through Tempo's own `report_result`. A read-only mode such as Claude's
+   * `plan` asks before any MCP tool, and nobody answers a hook run, so tempod allows that one call.
+   */
+  private runReportAllow(params: AcpFields): string | null {
+    if (!this.env[TEMPO_RUN_ID_ENV]) return null;
+    const toolCall = isObj(params["toolCall"]) ? params["toolCall"] : {};
+
+    if (!RUN_REPORT_TOOL_NAMES.has(String(toolCall["title"] ?? ""))) return null;
+
+    return toPermissionOptions(params["options"]).find((o) => o.kind === "allow_once")?.optionId ?? null;
   }
   hasPermission(requestId: string): boolean {
     return this.permissions.has(requestId);

@@ -359,6 +359,26 @@ describe("session.prompt", () => {
   );
 
   test(
+    "a run session allows Tempo's report_result without asking; a chat session still asks",
+    async () => {
+      const { c, start, prompt, ended, calls } = await setup();
+      await start("run", {}, { TEMPO_RUN_ID: "run-1" });
+      await prompt("run", "t1", "report-permission");
+      expect((await ended("t1")).stopReason).toBe("end_turn");
+      expect(calls()).toContain("report selected:yes");
+      expect(c.of("permission.requested")).toEqual([]);
+
+      await start("chat");
+      await prompt("chat", "t2", "report-permission");
+      const req = await c.waitEvent("permission.requested", () => true, 10_000);
+      expect(req).toMatchObject({ sessionId: "chat", title: "mcp__tempo__report_result" });
+      await c.ok("permission.respond", { requestId: req.requestId, optionId: "no" });
+      await ended("t2");
+    },
+    T,
+  );
+
+  test(
     "a codex 401 fails the turn with CREDENTIAL_INVALID and sends credential.invalid",
     async () => {
       const { c, start, prompt, ended } = await setup();
