@@ -5,6 +5,7 @@ import * as credentials from "./handlers/credentials.ts";
 import * as dotfiles from "./handlers/dotfiles.ts";
 import * as environments from "./handlers/environments.ts";
 import * as mcp from "./handlers/mcp.ts";
+import * as modelList from "./handlers/model-list.ts";
 import * as projects from "./handlers/projects.ts";
 import * as repositories from "./handlers/repositories.ts";
 import * as issues from "./handlers/issues.ts";
@@ -133,6 +134,8 @@ const own = {
   deleteProjectSecret: credentials.deleteProjectSecret,
   listProjectSecretNames: credentials.listProjectSecretNames,
   listMcpServers: mcp.listMcpServers,
+  getModelList: modelList.getModelList,
+  setModelList: modelList.setModelList,
   saveMcpServer: mcp.saveMcpServer,
   deleteMcpServer: mcp.deleteMcpServer,
 } satisfies { [K in NonWorkspace]: Handler<K> };

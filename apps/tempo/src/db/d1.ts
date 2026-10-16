@@ -246,6 +246,15 @@ export const mcpServers = sqliteTable(
   ],
 );
 
+/** 01, Model list: one ordered list per owner. */
+export const modelLists = sqliteTable("model_lists", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  modelsJson: text("models_json").notNull().default("[]"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const WORKSPACE_STATE_SQL = sql`('creating','starting','setting_up','ready','working','stopping','sleeping','archiving','archived','error')`;
 
 export const workspaces = sqliteTable(

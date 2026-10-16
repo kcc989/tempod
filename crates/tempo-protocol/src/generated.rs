@@ -9281,6 +9281,22 @@ pub struct MergePullRequestIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`ModelList`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ModelList {
+    pub models: ::std::vec::Vec<ModelPick>,
+    #[serde(
+        rename = "updatedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub updated_at: ::std::option::Option<f64>,
+}
+///`ModelPick`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ModelPick {
+    pub agent: AgentId,
+    pub model: ::std::string::String,
+}
 ///`NewSource`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind")]
@@ -13362,6 +13378,11 @@ pub struct SetJudgeKeyOut {
     )]
     pub updated_at: ::std::option::Option<f64>,
 }
+///`SetModelListIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct SetModelListIn {
+    pub models: ::std::vec::Vec<ModelPick>,
+}
 ///`SetPinnedIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct SetPinnedIn {
@@ -16767,6 +16788,15 @@ pub mod api {
         type Input = crate::GetLoopReportIn;
         type Output = crate::LoopReport;
     }
+    /// `getModelList`
+    #[derive(Clone, Copy, Debug)]
+    pub struct GetModelList;
+    impl crate::Function for GetModelList {
+        const NAME: &'static str = "getModelList";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::Empty;
+        type Output = crate::ModelList;
+    }
     /// `getProfile`
     #[derive(Clone, Copy, Debug)]
     pub struct GetProfile;
@@ -17532,6 +17562,15 @@ pub mod api {
         type Input = crate::SetJudgeKeyIn;
         type Output = crate::SetJudgeKeyOut;
     }
+    /// `setModelList`
+    #[derive(Clone, Copy, Debug)]
+    pub struct SetModelList;
+    impl crate::Function for SetModelList {
+        const NAME: &'static str = "setModelList";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::SetModelListIn;
+        type Output = crate::ModelList;
+    }
     /// `setPinned`
     #[derive(Clone, Copy, Debug)]
     pub struct SetPinned;
@@ -17834,6 +17873,7 @@ pub mod api {
         ("getIssuesWebhook", crate::Method::Get),
         ("getJudgeSettings", crate::Method::Get),
         ("getLoopReport", crate::Method::Get),
+        ("getModelList", crate::Method::Get),
         ("getProfile", crate::Method::Get),
         ("getProjectConversation", crate::Method::Get),
         ("getProjectProfile", crate::Method::Get),
@@ -17919,6 +17959,7 @@ pub mod api {
         ("setEnvironmentSecret", crate::Method::Post),
         ("setIntentCheck", crate::Method::Post),
         ("setJudgeKey", crate::Method::Post),
+        ("setModelList", crate::Method::Post),
         ("setPinned", crate::Method::Post),
         ("setProjectEnvironment", crate::Method::Post),
         ("setProjectPinned", crate::Method::Post),
@@ -18193,6 +18234,8 @@ pub mod wire {
         "Mention",
         "MergeMethod",
         "MergePullRequestIn",
+        "ModelList",
+        "ModelPick",
         "NewSource",
         "NoteReport",
         "NoticeContent",
@@ -18294,6 +18337,7 @@ pub mod wire {
         "SetIntentCheckIn",
         "SetJudgeKeyIn",
         "SetJudgeKeyOut",
+        "SetModelListIn",
         "SetPinnedIn",
         "SetProjectEnvironmentIn",
         "SetProjectPinnedIn",
@@ -18653,6 +18697,8 @@ pub mod wire {
             "Mention" => crate::roundtrip::<crate::Mention>(text),
             "MergeMethod" => crate::roundtrip::<crate::MergeMethod>(text),
             "MergePullRequestIn" => crate::roundtrip::<crate::MergePullRequestIn>(text),
+            "ModelList" => crate::roundtrip::<crate::ModelList>(text),
+            "ModelPick" => crate::roundtrip::<crate::ModelPick>(text),
             "NewSource" => crate::roundtrip::<crate::NewSource>(text),
             "NoteReport" => crate::roundtrip::<crate::NoteReport>(text),
             "NoticeContent" => crate::roundtrip::<crate::NoticeContent>(text),
@@ -18758,6 +18804,7 @@ pub mod wire {
             "SetIntentCheckIn" => crate::roundtrip::<crate::SetIntentCheckIn>(text),
             "SetJudgeKeyIn" => crate::roundtrip::<crate::SetJudgeKeyIn>(text),
             "SetJudgeKeyOut" => crate::roundtrip::<crate::SetJudgeKeyOut>(text),
+            "SetModelListIn" => crate::roundtrip::<crate::SetModelListIn>(text),
             "SetPinnedIn" => crate::roundtrip::<crate::SetPinnedIn>(text),
             "SetProjectEnvironmentIn" => crate::roundtrip::<crate::SetProjectEnvironmentIn>(text),
             "SetProjectPinnedIn" => crate::roundtrip::<crate::SetProjectPinnedIn>(text),

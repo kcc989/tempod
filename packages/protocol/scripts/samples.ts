@@ -488,6 +488,11 @@ export const SHARED_SAMPLES = {
       options: [{ value: "reported-model", name: "Reported model" }],
     },
   ],
+  ModelPick: [{ agent: "claude", model: "reported-model" }],
+  ModelList: [
+    { models: [], updatedAt: null },
+    { models: [{ agent: "codex", model: "reported-model" }], updatedAt: 1760000000000 },
+  ],
   ErrorBody: [
     { code: "NOT_FOUND", message: "Not found." },
     {
@@ -1389,6 +1394,8 @@ export const INPUT_SAMPLES = {
   listArtifacts: [ws],
   openArtifact: [{ ...ws, artifactId: w.ARTIFACT_ID, version: 2 }],
   listModels: [{}],
+  getModelList: [{}],
+  setModelList: [{ models: [] }, { models: [{ agent: "claude", model: "reported-model" }] }],
   getCredentialStatus: [{}],
   setClaudeToken: [{ token: "fixture-claude-token-not-a-secret" }],
   setCodexAuth: [{ authJson: '{"tokens":{"note":"fixture"}}' }],

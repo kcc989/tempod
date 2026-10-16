@@ -166,6 +166,8 @@ export const SHARED = {
   WorkspaceDetail: P.WorkspaceDetail,
   Session: P.Session,
   AgentModelOptions: P.AgentModelOptions,
+  ModelPick: P.ModelPick,
+  ModelList: P.ModelList,
   Mention: P.Mention,
   TurnPrompt: P.TurnPrompt,
   Turn: P.Turn,

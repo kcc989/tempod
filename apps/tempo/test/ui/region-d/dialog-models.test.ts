@@ -30,7 +30,9 @@ import {
   initialModel,
   modelChoices,
   isSourceTab,
+  pickedChoices,
 } from "~/ui/components/dialogs/new-workspace-model";
+import { modelColumns, pickName, togglePick } from "~/ui/components/dialogs/model-list-model";
 
 const off = { set: false, updatedAt: null };
 
@@ -212,6 +214,76 @@ describe("New workspace", () => {
       model: "same-id",
     });
     expect(modelChoices(["pi"], [])).toEqual([]);
+  });
+
+  it("offers model-list picks in list order, else every reported model (01, Model list)", () => {
+    const reports = [
+      {
+        agent: "claude" as const,
+        currentValue: "a",
+        options: [
+          { value: "a", name: "A" },
+          { value: "b", name: "B" },
+        ],
+      },
+      { agent: "codex" as const, currentValue: "c", options: [{ value: "c", name: "C" }] },
+    ];
+
+    const choices = modelChoices(["claude", "codex"], reports);
+
+    const keys = (list: ReadonlyArray<{ agent: string; model: string }>) =>
+      list.map((c) => `${c.agent}/${c.model}`);
+
+    expect(keys(pickedChoices(choices, []))).toEqual(["claude/a", "claude/b", "codex/c"]);
+
+    const picks = [
+      { agent: "codex" as const, model: "c" },
+      { agent: "claude" as const, model: "gone" },
+      { agent: "claude" as const, model: "b" },
+    ];
+
+    expect(keys(pickedChoices(choices, picks))).toEqual(["codex/c", "claude/b"]);
+    expect(keys(pickedChoices(choices, [{ agent: "pi", model: "x" }]))).toEqual(keys(choices));
+    expect(
+      initialModel(pickedChoices(choices, picks), reports, { settings: { agent: { default: "claude" } } }),
+    ).toMatchObject({ agent: "claude", model: "b" });
+  });
+
+  it("toggles picks and lists models an agent no longer reports (04, Settings → Models)", () => {
+    const reports = [
+      {
+        agent: "claude" as const,
+        currentValue: "a",
+        options: [
+          { value: "a", name: "A" },
+          { value: "b", name: "B" },
+        ],
+      },
+    ];
+
+    const picks = togglePick(togglePick([], { agent: "claude", model: "b" }), {
+      agent: "claude",
+      model: "gone",
+    });
+
+    expect(picks).toEqual([
+      { agent: "claude", model: "b" },
+      { agent: "claude", model: "gone" },
+    ]);
+    expect(togglePick(picks, { agent: "claude", model: "b" })).toEqual([{ agent: "claude", model: "gone" }]);
+    expect(modelColumns(["claude", "codex"], reports, picks)).toEqual([
+      {
+        agent: "claude",
+        rows: [
+          { model: "a", name: "A", reported: true, picked: false },
+          { model: "b", name: "B", reported: true, picked: true },
+          { model: "gone", name: "gone", reported: false, picked: true },
+        ],
+      },
+      { agent: "codex", rows: [] },
+    ]);
+    expect(pickName(picks[0]!, reports)).toBe("B");
+    expect(pickName(picks[1]!, reports)).toBe("gone");
   });
 
   it("filters pull requests by number, title or branch", () => {

@@ -42,7 +42,7 @@ import {
   type ConnectHandlers,
 } from "./container.ts";
 import { CONVERSATION_INTERVAL_MS, markConversationDirty, saveConversation } from "./conversations.ts";
-import { discoverModels } from "./model-catalog.ts";
+import { discoverModels, storedModels } from "./model-catalog.ts";
 import { ciAlarm, ciCancel, ciJob, ciLog, ciStart } from "./ci-runner.ts";
 import { deployAlarm, deployCancel, deployJob, deployLog, deployStart } from "./deploy-runner.ts";
 import { deployTokenKey, type DeployJobStart } from "../../deploy/types.ts";
@@ -328,14 +328,30 @@ export class WorkspaceDO extends WorkspaceRpcBase {
   async discoverModels(userId: string): Promise<Result<FnOutput<"listModels">>> {
     return capture(async () => {
       if (this.ctx.id.name !== `models:${userId}`) throw new TempoError("NOT_FOUND");
+      const stored = await storedModels(this.core, userId);
+
+      if (stored) {
+        if (!stored.current)
+          this.ctx.waitUntil(
+            this.runModelDiscovery(userId).catch((e) =>
+              log("warn", "model catalog refresh failed", { error: errorText(e) }),
+            ),
+          );
+
+        return stored.models;
+      }
 
       if (this.modelDiscovery) await this.modelDiscovery;
-      this.modelDiscovery ??= discoverModels(this.core, userId).finally(() => {
-        this.modelDiscovery = null;
-      });
 
-      return this.modelDiscovery;
+      return this.runModelDiscovery(userId);
     });
+  }
+  private runModelDiscovery(userId: string): Promise<FnOutput<"listModels">> {
+    this.modelDiscovery ??= discoverModels(this.core, userId).finally(() => {
+      this.modelDiscovery = null;
+    });
+
+    return this.modelDiscovery;
   }
 
   async agentsChanged(): Promise<Result<{}>> {

@@ -333,7 +333,7 @@ Project conversations are copied from WorkspaceDO SQLite to private Cloudflare R
 
 ## Prompt-focused workspace creation (2026-10-12)
 
-New workspace defaults to a new branch, places branch/source and Keep open controls in a secondary menu, and chooses a model rather than an agent. `listModels` discovers every configured agent's ACP model option in a short-lived private container, before any workspace or chat is created. The discovery instance reuses the existing WorkspaceDO container binding under `models:<userId>`, without a workspace row. Credentials and egress use the existing guarded paths, and refreshed Codex auth returns to CredentialDO. The picker shows loading/retry states and never substitutes a default-only model list. Model metadata caches for fifteen minutes and refreshes when credentials or the pinned image change.
+New workspace defaults to a new branch, places branch/source and Keep open controls in a secondary menu, and chooses a model rather than an agent. `listModels` discovers every configured agent's ACP model option in a short-lived private container, before any workspace or chat is created. The discovery instance reuses the existing WorkspaceDO container binding under `models:<userId>`, without a workspace row. Credentials and egress use the existing guarded paths, and refreshed Codex auth returns to CredentialDO. The picker shows loading/retry states and never substitutes a default-only model list. Model metadata is stored without a time limit. Reads return it without a container; a credential or pinned-image change refreshes it in the background, and only an agent with no stored models makes the read wait.
 
 The selected model passes through `createWorkspace` into the initial session config. Workspace initialization always creates a first chat, including when no prompt is supplied, and only queues a turn when a prompt exists. The native New workspace dialog uses the same discovery endpoint, submits the selected model, focuses the prompt, and hides branch/source settings behind Workspace options.
 
@@ -645,3 +645,7 @@ Tab 12, Access requests and grants. Choices made without the owner:
 | Partial approval | Approve and Deny cover the whole request | The owner can remove one permission afterwards in the Deploys tab. |
 | Agent token | Tempo re-mints the workspace's Cloudflare token when the grant changes | A token keeps the permissions it was minted with. |
 | Native projects | The grant API works only for Tempo-hosted projects, as the rest of 12 does | Deploys exist only for them. |
+
+## Model list
+
+Settings → Models keeps one ordered model list per owner, in D1 `model_lists`, like Conductor's model loadout. It filters only the New workspace and New chat pickers; an empty list, or a list with no available pick, offers every reported model. Ordering is by the order picks were added; there is no drag reordering, because that needs a library the spec stack does not name.

@@ -1651,6 +1651,38 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "getModelList": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "ModelList.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setModelList": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetModelListIn.json"
+        },
+        "output": {
+          "$ref": "ModelList.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "listWorkspaces": {
       "type": "object",
       "properties": {
@@ -2899,6 +2931,8 @@
     "getProjectConversation",
     "createWorkspace",
     "listModels",
+    "getModelList",
+    "setModelList",
     "listWorkspaces",
     "getWorkspace",
     "renameWorkspace",

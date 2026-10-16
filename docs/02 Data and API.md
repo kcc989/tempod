@@ -102,6 +102,12 @@ CREATE TABLE mcp_servers (
   UNIQUE (user_id, name)
 );
 
+CREATE TABLE model_lists (
+  user_id          TEXT PRIMARY KEY REFERENCES user(id) ON DELETE CASCADE,
+  models_json      TEXT NOT NULL DEFAULT '[]', -- ModelPick[] in the owner's order; empty = every reported model
+  updated_at       INTEGER NOT NULL
+);
+
 CREATE TABLE workspaces (
   id               TEXT PRIMARY KEY,
   project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -679,7 +685,7 @@ Public projects, the profile and pins: `getProfile`, `listProfileProjects`, `get
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
 | `createWorkspace` | `{projectId, source, agent?, model?, agentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `agentId`, the first session starts from that agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
-| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
+| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; stored without a time limit; a credential or image change refreshes it in the background, and a read waits only when a configured agent has no stored models | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |
@@ -831,6 +837,15 @@ Workspace channel publishes `run {run}`. `Session` exposes optional flat `runId`
 | --- | --- | --- | --- |
 | `getDotfiles` | `{}` | `DotfilesState`: `{files, defaults, saved, updatedAt}`. Without a `dotfiles` row, `files` equals `defaults` and `saved` is false. Reads the files at the tip of `main`; when that differs from `head_sha` (a save whose D1 write was lost; only Tempo pushes), it first stores the tip as `head_sha`. | `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
 | `updateDotfiles` | `{files}`, which replaces the whole list. Validated with `isDotfilePath` and `dotfilesProblem`. | `DotfilesState` after the push | `VALIDATION_FAILED`, `DOTFILES_CHANGED`, `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
+
+**Model list** (01, Model list)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `getModelList` | `{}` | `ModelList` (`{models: ModelPick[], updatedAt: number | null}`). `ModelPick` is `{agent: AgentId, model: string}`. With no saved row, `models` is empty and `updatedAt` is null. | — |
+| `setModelList` | `{models: ModelPick[]}`. Replaces the whole list; order is kept. | `ModelList` | `VALIDATION_FAILED` |
+
+Validation, else `VALIDATION_FAILED`: at most 200 picks; each `model` is 1 to 200 characters; no two picks have the same `agent` and `model`. The server does not check picks against `listModels`, because an agent can stop reporting a model.
 
 **MCP servers** (01, User MCP servers)
 

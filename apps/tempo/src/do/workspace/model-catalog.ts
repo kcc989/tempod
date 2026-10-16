@@ -16,9 +16,49 @@ import { waitHealthy } from "./container.ts";
 import { agentEnv } from "./queue.ts";
 import { TempodClient, openTempodSocket } from "./tempod-client.ts";
 
-const CACHE_MS = 15 * 60_000;
-
 const LIFETIME_MS = 10 * 60_000;
+
+type Catalog = { signature: string; models: FnOutput<"listModels"> };
+
+const PROVIDERS: Record<AgentId, readonly string[]> = {
+  claude: [SECRET_KEYS.claude, SECRET_KEYS.anthropic],
+  codex: [SECRET_KEYS.codex, SECRET_KEYS.openai],
+  opencode: [SECRET_KEYS.openrouter],
+  pi: [SECRET_KEYS.openrouter],
+};
+
+const catalogKey = async (core: WorkspaceCore) => {
+  const status = await core.credentials().status();
+  const keys = new Set(status.map((entry) => entry.key));
+  const agents = AGENT_IDS.filter((agent) => PROVIDERS[agent].some((key) => keys.has(key)));
+  const agentStatus = status.filter((entry) => Object.values(SECRET_KEYS).some((key) => key === entry.key));
+  const signature = () => JSON.stringify([core.container?.images["workspace"], agentStatus]);
+
+  return { agents, agentStatus, signature };
+};
+
+/**
+ * The stored catalog, read without a container. Null when an agent with a login has no stored
+ * models yet. `current` is false when credential metadata or the image changed since discovery.
+ */
+export const storedModels = async (
+  core: WorkspaceCore,
+  userId: string,
+): Promise<{ models: FnOutput<"listModels">; current: boolean } | null> => {
+  if (core.ctx.id.name !== `models:${userId}` || core.wsOrNull()) throw new TempoError("NOT_FOUND");
+  core.setKv("catalogUserId", userId);
+  const { agents, signature } = await catalogKey(core);
+
+  if (!agents.length) return { models: [], current: true };
+  const cached = core.kv<Catalog>("catalogModels");
+
+  if (!cached) return null;
+  const models = cached.models.filter((entry) => agents.includes(entry.agent));
+
+  if (models.length !== agents.length) return null;
+
+  return { models, current: cached.signature === signature() };
+};
 
 export const discoverModels = async (
   core: WorkspaceCore,
@@ -27,28 +67,15 @@ export const discoverModels = async (
   if (core.ctx.id.name !== `models:${userId}` || core.wsOrNull()) throw new TempoError("NOT_FOUND");
   core.setKv("catalogUserId", userId);
   const credentials = core.credentials();
-  const status = await credentials.status();
-  const keys = new Set(status.map((entry) => entry.key));
-
-  const providers: Record<AgentId, readonly string[]> = {
-    claude: [SECRET_KEYS.claude, SECRET_KEYS.anthropic],
-    codex: [SECRET_KEYS.codex, SECRET_KEYS.openai],
-    opencode: [SECRET_KEYS.openrouter],
-    pi: [SECRET_KEYS.openrouter],
-  };
-
-  const agents = AGENT_IDS.filter((agent) => providers[agent].some((key) => keys.has(key)));
+  const { agents, agentStatus, signature: cacheSignature } = await catalogKey(core);
 
   if (!agents.length) return [];
   const container = core.container;
 
   if (!container) throw new TempoError("CONTAINER_START_FAILED");
-  const agentStatus = status.filter((entry) => Object.values(SECRET_KEYS).some((key) => key === entry.key));
-  const cacheSignature = () => JSON.stringify([container.images["workspace"], agentStatus]);
-  const signature = cacheSignature();
-  const cached = core.kv<{ signature: string; at: number; models: FnOutput<"listModels"> }>("catalogModels");
+  const cached = core.kv<Catalog>("catalogModels");
 
-  if (cached?.signature === signature && Date.now() - cached.at < CACHE_MS) return cached.models;
+  if (cached?.signature === cacheSignature()) return cached.models;
 
   core.setKv("catalogToken", randomToken(32));
   await core.ctx.storage.setAlarm(Date.now() + LIFETIME_MS);
@@ -156,7 +183,7 @@ export const discoverModels = async (
     });
 
     await client.drained();
-    core.setKv("catalogModels", { signature: cacheSignature(), at: Date.now(), models });
+    core.setKv("catalogModels", { signature: cacheSignature(), models });
 
     return models;
   } finally {

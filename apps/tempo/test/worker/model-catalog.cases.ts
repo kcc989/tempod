@@ -60,18 +60,39 @@ describe("model discovery", { timeout: 30_000 }, () => {
     ).toEqual([]);
   });
 
-  it("invalidates the cache when an agent is configured", async () => {
+  it("serves the stored list during a background refresh and waits only for a new agent", async () => {
     const w = await setup();
     await w.credentials.putSecret("claude.oauth_token", "claude-token");
     expect(unwrap(await w.stub.discoverModels(w.userId)).map((entry) => entry.agent)).toEqual(["claude"]);
     await w.stub.discoverModels(w.userId);
     expect(w.container.starts).toHaveLength(1);
+    let release: () => void = () => undefined;
+
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    w.tempod.on("session.start", async ({ agent }) => {
+      await gate;
+
+      return sessionResult(agent);
+    });
+    await w.credentials.putSecret("claude.oauth_token", "rotated-token");
+
+    try {
+      expect(unwrap(await w.stub.discoverModels(w.userId)).map((entry) => entry.agent)).toEqual(["claude"]);
+      await waitFor(() => w.tempod.requestsOf("session.start").length === 2, 5000, "background refresh");
+    } finally {
+      release();
+    }
+
+    await waitFor(() => w.container.destroyed === 2, 5000, "background refresh done");
     await w.credentials.putSecret("openai.api_key", "openai-key");
     expect(unwrap(await w.stub.discoverModels(w.userId)).map((entry) => entry.agent)).toEqual([
       "claude",
       "codex",
     ]);
-    expect(w.container.starts).toHaveLength(2);
+    expect(w.container.starts).toHaveLength(3);
   });
 
   it("starts other adapters while one adapter is still loading", async () => {
@@ -173,7 +194,7 @@ describe("model discovery", { timeout: 30_000 }, () => {
     expect(w.container.starts).toHaveLength(1);
     await w.credentials.replaceCodexAuth(initial, Date.parse("2026-10-11T00:00:00Z"));
     expect(unwrap(await w.stub.discoverModels(w.userId))).toHaveLength(1);
-    expect(w.container.starts).toHaveLength(2);
+    await waitFor(() => w.container.destroyed === 2, 5000, "background refresh");
     expect(
       await runInDurableObject(w.stub, (_, state) =>
         state.storage.sql.exec("SELECT id FROM events").toArray(),

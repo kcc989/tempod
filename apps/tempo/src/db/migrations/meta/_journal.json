@@ -85,6 +85,13 @@
       "when": 1792011455970,
       "tag": "0011_public_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792115221376,
+      "tag": "0012_model_lists",
+      "breakpoints": true
     }
   ]
 }

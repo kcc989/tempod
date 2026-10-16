@@ -80,11 +80,11 @@ const show = (
 afterEach(resetUiState);
 
 describe("Settings → Agents", () => {
-  it("is a Personal page after Logins", () => {
+  it("is a Personal page after Logins and Models", () => {
     show();
     expect(screen.getByRole("heading", { name: "Agents" })).toBeTruthy();
     const items = screen.getAllByRole("button").map((b) => b.textContent);
-    expect(items.indexOf("Agents")).toBe(items.indexOf("Logins") + 1);
+    expect(items.indexOf("Agents")).toBe(items.indexOf("Logins") + 2);
     expect(screen.getByText("No agents yet.")).toBeTruthy();
   });
 
