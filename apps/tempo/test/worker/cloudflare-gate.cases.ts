@@ -173,7 +173,7 @@ describe("Cloudflare API gate (13, L-ADR-8)", { timeout: 30_000 }, () => {
     unwrap(
       await w.stub.sendPrompt({
         sessionId: session.id,
-        text: "/go add due dates",
+        text: "add due dates",
         mentions: [],
         attachmentIds: [],
         reviewCommentIds: [],
@@ -186,7 +186,10 @@ describe("Cloudflare API gate (13, L-ADR-8)", { timeout: 30_000 }, () => {
     expect(await gate("POST", query)).toEqual({ allow: false, body: CF_GATE_TEXT.held });
     const [noIntent] = await sqlRows(w.stub, "SELECT reasons_json FROM cloudflare_holds");
     expect(JSON.parse(String(noIntent!["reasons_json"]))).toEqual(["no_intent"]);
-    await sqlRows(w.stub, "UPDATE intents SET goal = 'Add due dates', approach = 'A nullable column'");
+    await sqlRows(
+      w.stub,
+      "UPDATE intents SET status = 'confirmed', goal = 'Add due dates', approach = 'A nullable column'",
+    );
     await sqlRows(w.stub, "DELETE FROM cloudflare_holds");
 
     expect(await gate("POST", query)).toEqual({ allow: true });

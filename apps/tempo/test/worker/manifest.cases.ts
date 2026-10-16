@@ -109,7 +109,7 @@ describe("capability manifest (14)", { timeout: 30_000 }, () => {
     unwrap(
       await w.stub.sendPrompt({
         sessionId: session.id,
-        text: "/go hi",
+        text: "hi",
         mentions: [],
         attachmentIds: [],
         reviewCommentIds: [],

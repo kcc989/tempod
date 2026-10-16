@@ -189,7 +189,7 @@ describe("proof and checklist (13, L-ADR-2)", { timeout: 30_000 }, () => {
     expect,
   }) => {
     const w = await setup();
-    const itemId = await w.userMessage("/go The date picker should use the theme's input style.");
+    const itemId = await w.userMessage("The date picker should use the theme's input style.");
     const item = unwrap(await w.stub.addChecklistItem({ itemId }));
     expect(unwrap(await w.stub.addChecklistItem({ itemId })).id).toBe(item.id);
     expect(unwrap(await w.stub.getWorkspace({})).checklist).toEqual([
