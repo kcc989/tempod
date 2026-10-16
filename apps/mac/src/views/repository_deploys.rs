@@ -1,6 +1,7 @@
 //! The Deploys tab of a native repository (12, Clients): deployments, detail with the log,
 //! Deploy/Cancel/Redeploy/Roll back, production errors and the owner deploy configuration.
 
+use super::chat_model;
 use super::ci_model::{CiTone, short_sha};
 use super::deploy_model::{self as model, Action, Page};
 use super::tokens::{Token, color};
@@ -31,6 +32,7 @@ pub struct DeploysView {
     config: Option<p::DeployConfig>,
     errors: Vec<p::ProductionError>,
     webhook: Option<p::GetIssuesWebhookOut>,
+    grants: Option<Vec<p::CloudflareGrant>>,
     secret: Option<String>,
     page: Page,
     target: Option<String>,
@@ -67,6 +69,7 @@ impl DeploysView {
             config: None,
             errors: vec![],
             webhook: None,
+            grants: None,
             secret: None,
             page: Page::default(),
             target: None,
@@ -83,6 +86,7 @@ impl DeploysView {
         view.load_errors(cx);
         view.load_config(window, cx);
         view.load_webhook(cx);
+        view.load_grants(cx);
         view
     }
 
@@ -213,6 +217,51 @@ impl DeploysView {
                         });
                         this.secret = Some(out.secret);
                     }
+                    Err(error) => this.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn load_grants(&mut self, cx: &mut Context<Self>) {
+        let request = self
+            .client
+            .call::<api::ListCloudflareGrants>(p::ListCloudflareGrantsIn {
+                project_id: self.project_id.clone(),
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                if let Ok(grants) = result {
+                    this.grants = Some(grants);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn remove_grant(&mut self, permission: p::DeployPermission, cx: &mut Context<Self>) {
+        if self.pending || permission == p::DeployPermission::Workers {
+            return;
+        }
+        self.pending = true;
+        self.error = None;
+        let request = self
+            .client
+            .call::<api::RemoveCloudflareGrant>(p::RemoveCloudflareGrantIn {
+                project_id: self.project_id.clone(),
+                permission,
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                this.pending = false;
+                match result {
+                    Ok(grants) => this.grants = Some(grants),
                     Err(error) => this.error = Some(error.to_string()),
                 }
                 cx.notify();
@@ -606,6 +655,7 @@ impl DeploysView {
                     })),
             )
             .child(self.render_config(cx))
+            .children(self.render_grants(cx))
             .children(self.render_webhook(cx))
             .into_any_element()
     }
@@ -651,6 +701,43 @@ impl DeploysView {
                             ),
                         )
                         .child(action)
+                }))
+                .into_any_element(),
+        )
+    }
+
+    fn render_grants(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let grants = self.grants.as_ref()?;
+        let muted = color(Token::MutedForeground, cx);
+        Some(
+            v_flex()
+                .gap_2()
+                .child(div().child("Cloudflare access"))
+                .child(div().text_color(muted).child(model::GRANTS_HELP))
+                .children(grants.iter().enumerate().map(|(index, grant)| {
+                    let permission = grant.permission;
+                    h_flex()
+                        .gap_2()
+                        .justify_between()
+                        .child(
+                            h_flex()
+                                .flex_wrap()
+                                .child(div().child(chat_model::permission_text(permission)))
+                                .child(
+                                    div()
+                                        .text_color(muted)
+                                        .child(chat_model::permission_groups_text(permission)),
+                                ),
+                        )
+                        .children((permission != p::DeployPermission::Workers).then(|| {
+                            Button::new(("deploy-grant-remove", index))
+                                .ghost()
+                                .label("Remove")
+                                .disabled(self.pending)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.remove_grant(permission, cx)
+                                }))
+                        }))
                 }))
                 .into_any_element(),
         )

@@ -926,6 +926,32 @@ impl WorkspaceView {
         })
         .detach();
     }
+    /// Approve or Deny on a Cloudflare access card (12, Access requests and grants).
+    fn decide_access(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        request_id: String,
+        approve: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let request =
+            self.client
+                .call::<api::DecideCloudflareAccess>(p::DecideCloudflareAccessIn {
+                    workspace_id: self.store.read(cx).workspace_id.clone(),
+                    request_id: request_id.clone(),
+                    approve,
+                });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                transcript.update(cx, |t, cx| t.access_finished(&request_id, cx));
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
     fn operation(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -1555,6 +1581,10 @@ impl WorkspaceView {
                 TranscriptEvent::DecideCloudflareHold { hold_id, allow } => {
                     this.decide_hold(transcript.clone(), hold_id.clone(), *allow, cx)
                 }
+                TranscriptEvent::DecideCloudflareAccess {
+                    request_id,
+                    approve,
+                } => this.decide_access(transcript.clone(), request_id.clone(), *approve, cx),
                 TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
                     p::RequestAgentIn {
                         workspace_id: this.store.read(cx).workspace_id.clone(),
@@ -4611,6 +4641,61 @@ mod tests {
                 (
                     "/api/v1/rpc/decideCloudflareHold".to_string(),
                     serde_json::json!({"workspaceId": workspace_id, "holdId": "hold-2", "allow": false})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn access_actions_send_approve_and_deny_once(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        for (request_id, approve) in [("request-1", true), ("request-2", false)] {
+            cx.update_window(window, |_, _, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.decide_access(request_id, approve, cx);
+                    assert!(t.access_busy(request_id));
+                    t.decide_access(request_id, !approve, cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.access_busy(request_id)) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "access call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/decideCloudflareAccess"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/decideCloudflareAccess".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "requestId": "request-1", "approve": true})
+                ),
+                (
+                    "/api/v1/rpc/decideCloudflareAccess".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "requestId": "request-2", "approve": false})
                 ),
             ]
         );
