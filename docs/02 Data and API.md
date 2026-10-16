@@ -20,7 +20,7 @@ One set of rules for every store and every wire format.
 | Wire format | JSON objects with a `type` field. Every schema lives once in `packages/protocol` (Effect Schema) and both sides import it. |
 | Protocol versions | `v: 1` in every `hello`. A side that gets an unknown `v` closes with code 4400. |
 | ORM | Drizzle. D1 migrations run at deploy with `drizzle-kit`. DO migrations run in the DO constructor inside `blockConcurrencyWhile`. |
-| Slugs | Lowercase `a` to `z`, `0` to `9`, and `-`. Workspace slugs come from a fixed list of animal names; a repeat gets `-2`, `-3`, and so on. |
+| Slugs | Lowercase `a` to `z`, `0` to `9`, and `-`. Workspace slugs are a random unused name from a fixed list of animal names; a repeat gets `-2`, `-3`, and so on. |
 
 ## D1 schema
 

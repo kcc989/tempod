@@ -2,13 +2,21 @@ import { describe, expect, it } from "vitest";
 import { ANIMALS, SLUG_PATTERN, pickSlug, promptSlug } from "../src/index.ts";
 
 describe("pickSlug", () => {
-  it("picks the first unused animal", () => {
-    expect(pickSlug([])).toBe("otter");
-    expect(pickSlug(["otter"])).toBe("fox");
+  it("picks a random unused animal", () => {
+    expect(pickSlug([], () => 0)).toBe("otter");
+    expect(pickSlug([], () => 0.999)).toBe("beetle");
+    expect(pickSlug(["otter"], () => 0)).toBe("fox");
+    expect(
+      pickSlug(
+        ANIMALS.filter((a) => a !== "lynx"),
+        () => 0.999,
+      ),
+    ).toBe("lynx");
   });
-  it("adds -2, -3 to the first name when all are used", () => {
-    expect(pickSlug(ANIMALS)).toBe("otter-2");
-    expect(pickSlug([...ANIMALS, "otter-2"])).toBe("otter-3");
+  it("adds -2, -3 to a random name when all are used", () => {
+    expect(pickSlug(ANIMALS, () => 0)).toBe("otter-2");
+    expect(pickSlug([...ANIMALS, "otter-2"], () => 0)).toBe("otter-3");
+    expect(pickSlug(ANIMALS, () => 0.999)).toBe("beetle-2");
   });
   it("every animal is a valid, unique slug", () => {
     expect(new Set(ANIMALS).size).toBe(ANIMALS.length);
