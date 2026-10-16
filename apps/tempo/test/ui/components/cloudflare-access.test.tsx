@@ -16,6 +16,7 @@ const access: CloudflareAccessContent = {
 
 it("shows each permission with its Cloudflare groups and the reason, and approves with one action (12)", async () => {
   environment.request.mockResolvedValue({});
+
   const { rerender } = render(<CloudflareAccessCard workspaceId="w1" access={access} writable />, {
     wrapper: environment.Provider,
   });
