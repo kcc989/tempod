@@ -627,7 +627,7 @@ const startTurn = async (core: WorkspaceCore, turn: TurnRow, signal: AbortSignal
     if (signal.aborted) return;
 
     if (!(await core.lifecycle.runs.beforeTurn(turn))) return;
-    await intentBeforeTurn(core, core.sessionRow(session.id), turn);
+    intentBeforeTurn(core, core.sessionRow(session.id), turn);
     const fresh = core.sessionRow(session.id);
     content = await buildContent(core, fresh, core.turnRow(turn.id));
 

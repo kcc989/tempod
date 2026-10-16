@@ -339,9 +339,9 @@ export class AgentSession {
     });
   }
   /**
-   * A read-only mode such as Claude's `plan` asks before any MCP tool. tempod allows Tempo's own
-   * gate tools: `report_result` in a run (08, Results; nobody answers a hook run) and the intent
-   * tools in a chat (13, L-ADR-1; the intent check itself starts the chat read-only).
+   * An agent's permission mode can ask before any MCP tool. tempod allows Tempo's own gate tools:
+   * `report_result` in a run (08, Results; nobody answers a hook run) and the intent tools in a
+   * chat (13, L-ADR-1).
    */
   private tempoToolAllow(params: AcpFields): string | null {
     const toolCall = isObj(params["toolCall"]) ? params["toolCall"] : {};

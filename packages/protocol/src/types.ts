@@ -663,6 +663,7 @@ export const IntentContent = Schema.Struct({
   notDoing: Schema.String,
   decidedBy: N(Schema.Literals(["owner", "judge"])),
   reasons: Schema.Array(Schema.String),
+  /** True only for intents made before 2026-10-16, when the check still used plan mode. */
   enforced: Schema.Boolean,
 });
 

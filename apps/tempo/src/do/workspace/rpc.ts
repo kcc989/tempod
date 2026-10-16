@@ -932,9 +932,6 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
 
-      // The intent mode guard keeps an owner's choice (13, Exact rules, Read-only).
-      core.setKv(`ownerMode:${sessionId}`, modeId);
-
       if (core.liveSessions.has(sessionId))
         await requireTempod(core).request("session.setMode", { sessionId, modeId });
       core.updateSession(sessionId, { modeId });

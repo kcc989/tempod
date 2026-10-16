@@ -589,8 +589,7 @@ Tab 13, L-ADR-1 (Exact rules) and L-ADR-9. Choices made without the owner, as as
 | Item | What the code does | Why |
 | --- | --- | --- |
 | Scope | Once per chat, not per message | Each message is its own change (08). A check per message would add a round trip to every follow-up. The agent proposes again when it leaves the goal. |
-| Read-only | The chat's mode switches to the agent's plan mode (Claude and OpenCode `plan`, Codex `read-only`) for the first prompt, and back after confirmation | It reuses `session.setMode` and needs no session restart. |
-| Pi | No read-only mode; the instruction alone, shown on the card as not enforced | Pi has no plan mode; a profile restart per chat would be heavy. A later change can add the tree check of 08 Runs step 7.4. |
+| No plan mode | The owner asked on 2026-10-16 that Tempo never use plan mode. The check relies on the instruction alone for every agent; `IntentContent.enforced` is always false for new intents. | A later change can add the tree check of 08 Runs step 7.4 to flag files changed before confirmation. |
 | Judge context | Branch and project name | The deploy configuration's targets are not in the WorkspaceDO; adding a cross-DO read to every proposal was not worth it yet. The spec row is updated. |
 | Retry | The rule stays on the turn until the agent proposes | A deferred `session.prompt` retry must keep it, as it keeps the general prompt. |
 | Settings | TypeSafe AI sits under Cloudflare in Settings | Both are owner credentials for loop services. |

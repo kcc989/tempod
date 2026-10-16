@@ -1195,14 +1195,6 @@ fn intent_card(
                 "Asking you because: {}",
                 chat_model::intent_reason_text(&intent.reasons)
             )))
-        })
-        .when(!intent.enforced, |card| {
-            card.child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child("This agent has no read-only mode; it was asked not to change files."),
-            )
         });
     if let (true, Some(input), Some(busy)) = (proposed, input, busy) {
         let can_correct = input

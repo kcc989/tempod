@@ -65,16 +65,16 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 
 **Decision.**
 
-1. A task with `origin: "prompt"` starts its session read-only, through the existing read-only path (08, Read-only).
+1. A task with `origin: "prompt"` gets the intent instruction in its prompt. Tempo does not change the session's mode: the agent is asked to plan in plain text, not through plan mode (owner-requested 2026-10-16).
 2. Add the tool `propose_intent` to the `tempo` MCP server. Input: `goal`, `approach`, `not_doing`. Together they are at most 5 lines, each line at most 160 characters. The WorkspaceDO refuses a longer input with the tool error `Intent must be at most 5 lines.`, so the agent corrects it in the same turn.
 3. The chat shows an intent card with two actions: **Confirm** (one click or ⌘↩) and **Correct** (a text field; sending it is the one action).
-4. **Confirm** switches the session to write with `session/set_config_option` (category `mode`), or removes the profile's edit-tool deny list, and queues the turn `Intent confirmed. Do the work.`
+4. **Confirm** queues the turn `Intent confirmed. Do the work.`
 5. **Correct** queues the correction as a user turn. The agent calls `propose_intent` again.
 6. **Risk decides who confirms (owner-approved 2026-10-15).** Exact rules below. Jev (L-ADR-9) judges each intent with the profile and the session's manifest as state. It asks three questions: does the work open new permissions or capabilities; does it add a security risk; how hard is it to roll back. When all three are low, Tempo confirms the intent itself (`loop.intent.confirmed` with `by: "judge"`) and the work starts. The card stays in the chat, and **Correct** still works. When any one is high, or Jev does not answer, the owner confirms as in step 3.
-7. The intent check runs once at the start of each task. The agent calls `propose_intent` again, and the session goes back to read-only, when it plans work outside the confirmed `goal`. That new intent is judged again.
+7. The intent check runs once at the start of each task. The agent calls `propose_intent` again when it plans work outside the confirmed `goal`. That new intent is judged again.
 8. The fixed prompt text that asks for the intent is given with the first turn of the task, as the run header is in 08.
 
-**Not chosen.** Plan mode only (not the same for four agents). ACP elicitation (needs a change to 02, and SDK 1.8.0 support is not verified). A free-text plan (the length is not enforceable).
+**Not chosen.** Plan mode (not the same for four agents; the owner does not want it used). ACP elicitation (needs a change to 02, and SDK 1.8.0 support is not verified). A free-text plan (the length is not enforceable).
 
 **Reduces.** DIRECTION.
 
@@ -83,16 +83,16 @@ The owner confirmed the user, Jev, the web search API and OAuth sign-in for MCP 
 | Rule | Value |
 | --- | --- |
 | When | The first prompt of each chat (session) with no run, while the chat's **Intent check** control is on. Each message is its own change in Tempo (08), so later prompts in the same chat do not ask again; the agent proposes again when its work leaves the confirmed goal. |
-| Control (owner-requested 2026-10-15) | `sessions.intent_check` (default on), shown as `Session.intentCheck` and changed only by `setIntentCheck {workspaceId, sessionId, enabled}`. No agent tool or ACP method changes it; text in a prompt does not either. Web and Mac show `Intent check: On` or `Off` in the composer. While it is off, `propose_intent` answers `The owner turned the intent check off for this chat. Do the work.` and stores nothing. Turning it off decides a waiting intent as the owner: a proposed intent is confirmed (Confirm, below); an intent the agent has not proposed yet is set `confirmed` and the prior mode is restored. Turning it on starts the check on the chat's next prompt when the chat has no intent yet. |
-| Read-only | Before that turn's prompt, when the session's modes include `PLAN_MODE` of its agent (Claude and OpenCode `plan`, Codex `read-only`), Tempo sets that mode with `session.setMode` and keeps the mode it replaced. Pi has no such mode; its intent has `enforced: false` and relies on the instruction. A read-only mode can ask before any MCP tool, so tempod allows the permission request for `propose_intent`, `get_capabilities` and `get_project_profile` in a chat, as it does `report_result` in a run (08). While an enforced intent is `awaiting` or `proposed`, a mode change that the agent reports (`session.updated`) is undone, and the chat gets the notice `The agent left read-only mode before the intent was confirmed. Tempo set read-only mode again.` A mode the owner picks with `setSessionMode` is kept. |
+| Control (owner-requested 2026-10-15) | `sessions.intent_check` (default on), shown as `Session.intentCheck` and changed only by `setIntentCheck {workspaceId, sessionId, enabled}`. No agent tool or ACP method changes it; text in a prompt does not either. Web and Mac show `Intent check: On` or `Off` in the composer. While it is off, `propose_intent` answers `The owner turned the intent check off for this chat. Do the work.` and stores nothing. Turning it off decides a waiting intent as the owner: a proposed intent is confirmed (Confirm, below); an intent the agent has not proposed yet is set `confirmed`. Turning it on starts the check on the chat's next prompt when the chat has no intent yet. |
+| No plan mode (owner-requested 2026-10-16) | Tempo never changes the chat's mode for the check. The instruction below asks the agent to plan and not to change files until Tempo confirms. New intents store `enforced: false` and no `prior_mode_id`; an intent made before this change that kept a prior mode still gets it back on confirm. An agent's permission mode can ask before any MCP tool, so tempod allows the permission request for `propose_intent`, `get_capabilities` and `get_project_profile` in a chat, as it does `report_result` in a run (08). |
 | Instruction | One text block before the prompt, exact: `Before you change any file, call the tempo tool propose_intent with the goal, your approach and what you will not do, in at most 5 lines in total. Then end your turn. Do not change files until Tempo confirms the intent.` |
 | Tool | `propose_intent {goal, approach, notDoing}`, each a nonempty string. All lines together at most 5, each line at most 160 characters. Errors (tool errors, exact): `Intent must be at most 5 lines.`, `Each line must be at most 160 characters.`, `There is no task waiting for an intent.` Listed only in sessions with no run. |
 | Storage | WorkspaceDO table `intents`, one row per chat: `id`, `session_id` (unique), `change_id` (the change it was last proposed in), `item_id`, `status` (`awaiting`, `proposed`, `confirmed`, `corrected`), `goal`, `approach`, `not_doing`, `decided_by` (`owner`, `judge` or null), `judge_json`, `prior_mode_id`, `enforced`, `created_at`, `decided_at`. One `intent` item per chat, updated in place. |
 | Judge | After each proposal, Jev (L-ADR-9) judges it with the branch and the project name as context. Low risk: Tempo confirms with `decided_by: "judge"`. Else the workspace's attention is `needs_input`. |
 | Tool answer | `Tempo confirmed the intent. End your turn; Tempo starts the work next.` or `The owner will confirm or correct the intent. End your turn now.` |
-| Confirm | `confirmIntent {workspaceId, intentId}`, or the judge. Sets `confirmed`, restores the prior mode, and queues the turn `Intent confirmed. Do the work.` in the same session and change. Writes `loop.intent.confirmed` with `by`. A second confirm does nothing. |
-| Correct | `correctIntent {workspaceId, intentId, text}` (1–4,000 characters). Sets `corrected` and queues the text as a turn in the same change. The mode stays read-only. Writes `loop.intent.corrected`. The agent proposes again. |
-| Re-propose | A call in a chat whose intent is `confirmed` sets it back to `proposed` and the mode back to read-only, and is judged again. |
+| Confirm | `confirmIntent {workspaceId, intentId}`, or the judge. Sets `confirmed` and queues the turn `Intent confirmed. Do the work.` in the same session and change. Writes `loop.intent.confirmed` with `by`. A second confirm does nothing. |
+| Correct | `correctIntent {workspaceId, intentId, text}` (1–4,000 characters). Sets `corrected` and queues the text as a turn in the same change. Writes `loop.intent.corrected`. The agent proposes again. |
+| Re-propose | A call in a chat whose intent is `confirmed` sets it back to `proposed` and is judged again. |
 
 ### L-ADR-2. Proof is a stored object that Tempo checks, not a claim
 
@@ -388,7 +388,7 @@ Tempo will not build these while this loop is the goal.
 |---|---|---|
 | L-S1 | Does `version.traffic: 0` in Alchemy 2.0.0-beta.81 upload a version for each Worker of a stack with no traffic change, and force 100% for a DO class migration? Can `cf` do the same? | A version ID per Worker, traffic unchanged; a migration deploy at 100% |
 | L-S2 | What does a Workers Issues generic webhook send for a new Issue? | The payload is recorded, with the Worker and version |
-| L-S3 | Do Claude, Codex, OpenCode and Pi call `propose_intent` before they write, when the session starts read-only? | Each agent, 5 of 5 prompts |
+| L-S3 | Do Claude, Codex, OpenCode and Pi call `propose_intent` before they write, when only the prompt asks them to? | Each agent, 5 of 5 prompts |
 | L-S4 | Can each agent make a phone and desktop screenshot of a route with the Playwright already in the image? | Images published with `submit_proof` |
 
 ## Decisions log
@@ -410,7 +410,8 @@ Tempo will not build these while this loop is the goal.
 | 2026-10-15 | Removed access | Running sessions that hold it end (14) |
 | 2026-10-15 | Call limits | HTTP methods are enough (14) |
 | 2026-10-15 | Todo app MCP sign-in | OAuth through Better Auth |
-| 2026-10-15 | Skipping the intent check | A per-chat control that only the owner changes, not a `/go` text prefix. The agent cannot leave read-only mode while an intent waits. |
+| 2026-10-15 | Skipping the intent check | A per-chat control that only the owner changes, not a `/go` text prefix. |
+| 2026-10-16 | Plan mode | Never used by the intent check. The agent is asked to plan in the prompt. |
 
 ## Open questions
 
