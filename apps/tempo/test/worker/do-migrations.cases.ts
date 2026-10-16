@@ -2,8 +2,9 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { describe, expect, it } from "vitest";
 import { newId } from "@tempo/protocol";
-import { WORKSPACE_MIGRATIONS, runMigrations } from "../../src/db/do-migrations.ts";
+import { APP_DEPLOY_MIGRATIONS, WORKSPACE_MIGRATIONS, runMigrations } from "../../src/db/do-migrations.ts";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
+import type { AppDeployDO } from "../../src/do/app-deploy.ts";
 
 /** 02: sessions.status drops 'broken' and review_comments.status drops 'resolved' (0004). */
 
@@ -40,6 +41,7 @@ describe("WORKSPACE_MIGRATIONS order", () => {
       "0012_session_agents",
       "0013_repository_merge",
       "0014_loop",
+      "0015_cloudflare_access",
     ]);
   });
 });
@@ -192,6 +194,7 @@ describe("deployed workspace upgrade", () => {
                     "0012_session_agents",
                     "0013_repository_merge",
                     "0014_loop",
+                    "0015_cloudflare_access",
                   ].includes(m.tag),
               )
                 .map((m) => (m.tag === "0002_turn_usage" ? { ...m, when: 1791835200000 } : m))
@@ -222,7 +225,7 @@ describe("deployed workspace upgrade", () => {
               "SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
             )
             .one().created_at,
-        ).toBe(1792872000000);
+        ).toBe(1792972800000);
         expect(sql.exec("SELECT id, title, status FROM sessions").toArray()).toEqual([
           { id: "legacy-session", title: "Existing chat", status: "idle" },
         ]);
@@ -356,6 +359,34 @@ describe("DO migration 0010_agents", () => {
       await runMigrations(db, WORKSPACE_MIGRATIONS);
       expect(sql.exec("SELECT id FROM runs").toArray()).toEqual([{ id: runId }]);
       expect(sql.exec("SELECT seq FROM lifecycle_events").toArray()).toEqual([{ seq: 9 }]);
+    });
+  });
+});
+
+describe("APP_DEPLOY migration 0003_grants (12, Access requests and grants)", () => {
+  it("copies the newest saved configuration's permissions into the grant once", async () => {
+    const stub = env.APP_DEPLOY.getByName(newId());
+    await runInDurableObject(stub, async (_i: AppDeployDO, state: DurableObjectState) => {
+      const sql = state.storage.sql;
+
+      for (const name of tablesOf(sql)) sql.exec(`DROP TABLE "${name}"`);
+      const db = drizzle(state.storage);
+      const before = APP_DEPLOY_MIGRATIONS.findIndex((m) => m.tag === "0003_grants");
+      await runMigrations(db, APP_DEPLOY_MIGRATIONS.slice(0, before));
+      sql.exec(
+        "INSERT INTO configs (revision, source, spec_json, created_at) VALUES (1, 'old', ?, 1), (2, 'new', ?, 2)",
+        JSON.stringify({ permissions: ["workers", "kv"] }),
+        JSON.stringify({ permissions: ["workers", "d1", "routes"] }),
+      );
+      await runMigrations(db, APP_DEPLOY_MIGRATIONS);
+      await runMigrations(db, APP_DEPLOY_MIGRATIONS);
+
+      expect(
+        sql
+          .exec<{ permission: string }>("SELECT permission FROM grants ORDER BY permission")
+          .toArray()
+          .map((r) => r.permission),
+      ).toEqual(["d1", "routes"]);
     });
   });
 });

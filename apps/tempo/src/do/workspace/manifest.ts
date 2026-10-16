@@ -17,7 +17,7 @@ import { mcpToEgress } from "../../lib/mcp.ts";
 import { errorText, log } from "../../log.ts";
 import type { WorkspaceCore } from "./core.ts";
 import { dropQueuedTurnsOf, finishTurn } from "./queue.ts";
-import { releaseAgentToken } from "./cloudflare-gate.ts";
+import { agentTokenStale, releaseAgentToken } from "./cloudflare-gate.ts";
 
 export const MANIFEST_SUMMARY_LINES = 30;
 
@@ -387,7 +387,8 @@ export const workspaceManifest = async (core: WorkspaceCore): Promise<Capability
   await enforceRemovedAccess(core, (id, removed) => endSessionForAccess(core, id, removed));
   const manifest = await compileManifest(core, { kind: "chat", access: "write", agent: null });
 
-  if (manifest.cloudflare === null) await releaseAgentToken(core);
+  if (manifest.cloudflare === null || agentTokenStale(core, manifest.cloudflare.permissions))
+    await releaseAgentToken(core);
 
   return manifest;
 };

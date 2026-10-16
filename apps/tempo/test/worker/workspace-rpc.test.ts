@@ -3022,6 +3022,10 @@ describe("cloudflare gate", async () => {
   await import("./cloudflare-gate.cases.ts");
 });
 
+describe("cloudflare access", async () => {
+  await import("./cloudflare-access.cases.ts");
+});
+
 describe("protocol-additions", async () => {
   await import("./protocol-additions.cases.ts");
 });

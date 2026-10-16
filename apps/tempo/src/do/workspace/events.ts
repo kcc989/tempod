@@ -1,5 +1,4 @@
 import { Match, Schema } from "effect";
-import { guardAgentMode } from "./intent.ts";
 import { asc, eq } from "drizzle-orm";
 import {
   ENVIRONMENT_LIMITS,
@@ -80,13 +79,6 @@ export const applyTempodEvent = (rt: EventRuntime, event: TempodEvent): Promise<
 
       if (p.title) patch.title = p.title;
       core.updateSession(event.sessionId, patch);
-
-      if (p.modeId)
-        core.ctx.waitUntil(
-          guardAgentMode(core, event.sessionId, p.modeId).catch((e) =>
-            log("warn", "intent mode guard failed", { workspaceId: core.workspaceId, error: errorText(e) }),
-          ),
-        );
 
       return;
     }

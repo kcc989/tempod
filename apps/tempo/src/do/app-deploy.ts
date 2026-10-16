@@ -4,11 +4,14 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne } from "dri
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { drizzle, type DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import {
+  DEPLOY_PERMISSIONS,
   TempoError,
   capture,
   newId,
   type DeployConclusion,
+  type CloudflareGrant,
   type DeployConfig,
+  type DeployPermission,
   type DeployRolloutWorker,
   type DeployTrigger,
   type Deployment,
@@ -27,6 +30,7 @@ import {
   prodErrors,
   profiles,
   manifests,
+  grants,
 } from "../db/app-deploy-do.ts";
 import { ISSUES, type ParsedIssue } from "../deploy/issues.ts";
 import { projects } from "../db/d1.ts";
@@ -432,7 +436,9 @@ export class AppDeployDO extends DurableObject<Env> {
   }
 
   /** Mints the workspace's Cloudflare token from the deploy permissions; the value goes to CredentialDO only. */
-  async mintAgentToken(workspaceId: string): Promise<Result<{ tokenId: string; expiresAt: number } | null>> {
+  async mintAgentToken(
+    workspaceId: string,
+  ): Promise<Result<{ tokenId: string; expiresAt: number; permissions: DeployPermission[] } | null>> {
     return capture(async () => {
       const config = this.configWire();
 
@@ -452,12 +458,12 @@ export class AppDeployDO extends DurableObject<Env> {
       const minted = await createToken(this.cloudflare, master, accountId, {
         name: `tempo-agent-${workspaceId}`,
         expiresAt,
-        policies: tokenPolicies(groups, config.permissions, accountId),
+        policies: tokenPolicies(groups, this.grantedPermissions(), accountId),
       });
 
       await creds.putSecret(agentCloudflareTokenKey(workspaceId), minted.value);
 
-      return { tokenId: minted.id, expiresAt };
+      return { tokenId: minted.id, expiresAt, permissions: this.grantedPermissions() };
     });
   }
 
@@ -472,6 +478,71 @@ export class AppDeployDO extends DurableObject<Env> {
       ]);
 
       return master && accountId ? deleteToken(this.cloudflare, master, accountId, tokenId) : true;
+    });
+  }
+
+  // ---------- Cloudflare access grants (12, Access requests and grants) ----------
+  /** `workers` and the owner-approved permissions, in catalog order. */
+  private grantedPermissions(): DeployPermission[] {
+    const granted = new Set(
+      this.db
+        .select({ p: grants.permission })
+        .from(grants)
+        .all()
+        .map((r) => r.p),
+    );
+
+    return DEPLOY_PERMISSIONS.filter((p) => p === "workers" || granted.has(p));
+  }
+
+  private grantList(): CloudflareGrant[] {
+    const rows = new Map(
+      this.db
+        .select()
+        .from(grants)
+        .all()
+        .map((r) => [r.permission, r.grantedAt]),
+    );
+
+    return this.grantedPermissions().map((permission) => ({
+      permission,
+      grantedAt: rows.get(permission) ?? null,
+    }));
+  }
+
+  async listGrants(): Promise<Result<CloudflareGrant[]>> {
+    return capture(async () => this.grantList());
+  }
+
+  /** Adds owner-approved permissions. A permission already granted keeps its first approval. */
+  async grant(input: {
+    permissions: ReadonlyArray<DeployPermission>;
+    workspaceId: string;
+    requestId: string;
+  }): Promise<Result<CloudflareGrant[]>> {
+    return capture(async () => {
+      const now = Date.now();
+
+      for (const permission of input.permissions) {
+        if (permission === "workers") continue;
+        this.db
+          .insert(grants)
+          .values({ permission, grantedAt: now, workspaceId: input.workspaceId, requestId: input.requestId })
+          .onConflictDoNothing()
+          .run();
+      }
+
+      return this.grantList();
+    });
+  }
+
+  async removeGrant(permission: DeployPermission): Promise<Result<CloudflareGrant[]>> {
+    return capture(async () => {
+      if (permission === "workers")
+        throw new TempoError("VALIDATION_FAILED", undefined, "workers is always granted.");
+      this.db.delete(grants).where(eq(grants.permission, permission)).run();
+
+      return this.grantList();
     });
   }
 
@@ -780,7 +851,7 @@ export class AppDeployDO extends DurableObject<Env> {
       root: spec.root,
       install: spec.install,
       build: spec.build,
-      permissions: spec.permissions,
+      permissions: this.grantedPermissions(),
       stage: config.stage,
       target,
       rollout: config.rollout,
@@ -1527,7 +1598,7 @@ export class AppDeployDO extends DurableObject<Env> {
       enabled: spec !== null,
       tool: spec?.tool ?? null,
       root: spec?.root ?? "",
-      permissions: spec?.permissions ?? [],
+      permissions: this.grantedPermissions(),
       timeoutMinutes: spec?.timeoutMinutes ?? 0,
       egressAllowlist: spec?.egressAllowlist ?? [],
       targets: spec?.targets ?? [],

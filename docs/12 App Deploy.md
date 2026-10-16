@@ -51,7 +51,6 @@ tool: alchemy
 root: apps/web
 install: bun install --frozen-lockfile
 build: bun run build
-permissions: [d1, r2]
 timeout_minutes: 20
 egress_allowlist: ["pkg.example.com"]
 targets:
@@ -71,7 +70,7 @@ targets:
 | `root` | Optional. The project directory, relative to the checkout root. Segments match `^[A-Za-z0-9._-]+$`, joined by `/`, no `.` or `..` segment, at most 200 characters. Default: the checkout root. |
 | `install` | Optional. A nonempty string, at most 4,096 characters. Default: `bun install --frozen-lockfile` when `root` has `bun.lock` or `bun.lockb`, else `npm ci` when it has `package-lock.json`. With neither file and no `install`, the deployment fails with summary `No lockfile found. Set install in the deploy configuration.` |
 | `build` | Optional. A nonempty string, at most 4,096 characters. Runs after install and before the deploy command. |
-| `permissions` | Optional list of permissions (below), no duplicates. `workers` is always granted and may be listed. |
+| `permissions` | Not accepted (owner-requested 2026-10-16). Permissions come from the project's grant (Access requests and grants). |
 | `timeout_minutes` | Optional integer 1–60. Default 20. |
 | `egress_allowlist` | Optional list of at most 50 host patterns (`host.example` or `*.example`), added to the built-in hosts. |
 | `auto_fix` | Optional boolean, default `false`. A new production error starts its fix workspace with no owner action (Production errors). |
@@ -107,6 +106,20 @@ Each permission maps to Cloudflare permission groups. Account-scope groups use t
 | `routes` | `Workers Routes Write`, `DNS Write`, `Zone Read` | zone |
 
 Tempo looks up group IDs by exact name and scope from the permission groups endpoint at mint time. A missing group fails the deployment with summary `Cloudflare has no permission group "<name>".`
+
+### Access requests and grants (owner-requested 2026-10-16)
+
+The project's permissions are a **grant** that the owner approves; they are not part of the deploy configuration. `workers` is always granted. The master token mints every token from the grant, for one use, and the token is revoked after it (Tokens; 13, L-ADR-8).
+
+| Rule | Value |
+| --- | --- |
+| Request | The `tempo` MCP tool `request_cloudflare_access {permissions, reason}` in a chat with no run. `permissions`: 1–9 distinct values of `DeployPermission`; `reason`: 1–500 characters. Permissions already granted are left out; when none are left, the tool answers `Already granted: <list>.` Otherwise the WorkspaceDO stores a request and answers `Tempo asked the owner for <list>. End your turn; you will get the answer as a message.` A second request in the same chat while one is pending is refused: `A Cloudflare access request is already waiting for the owner.` |
+| Card | One `cloudflare_access` item in the chat: each permission with its Cloudflare groups (Permissions, above), the reason, and **Approve** and **Deny**. The workspace needs input while a request is pending. |
+| Decide | `decideCloudflareAccess {workspaceId, requestId, approve}`. Approve adds the permissions to the project's grant (`AppDeployDO.grant`) and queues the turn `The owner approved Cloudflare access: <list>.` in the same chat; Deny queues `The owner denied Cloudflare access: <list>.` A repeat does nothing. |
+| Storage | WorkspaceDO table `cloudflare_access_requests`: `id`, `session_id`, `item_id`, `permissions_json`, `reason`, `status` (`pending`, `approved`, `denied`), `created_at`, `decided_at`. AppDeployDO table `grants`: `permission` (primary key), `granted_at`, `workspace_id`, `request_id`. |
+| List and remove | `listCloudflareGrants {projectId}` returns `[{permission, grantedAt}]`, `workers` first. `removeCloudflareGrant {projectId, permission}` removes one (not `workers`) and returns the list; removed access ends the sessions that held it (14, C-ADR-1). The repository's Deploys tab lists the grant with **Remove** on web and Mac. |
+| Use | A deployment records the grant at admission as its permissions. The agent's Cloudflare API token (13, L-ADR-8) and the manifest's `cloudflare.permissions` (14) use the current grant. |
+| Earlier configurations | A saved configuration's `permissions` were approved by the owner when saved, so migration `0003_grants` copies them into `grants` once. The key is no longer accepted in a configuration. |
 
 ## Tools
 
@@ -150,7 +163,7 @@ A deployment is one target at one commit SHA of one branch.
 For each deployment, at admission, `AppDeployDO`:
 
 1. Reads the master token and account ID. Missing settings complete the deployment as `failure` with summary `Add a Cloudflare account and token in Settings first.`
-2. Creates an account-owned token with `POST /client/v4/accounts/<accountId>/tokens`: name `tempo-deploy-<projectId>-<number>`, one policy per scope with the deployment's permission groups, and `expires_on` set to the start time plus the timeout plus 15 minutes (whole seconds, UTC).
+2. Creates an account-owned token with `POST /client/v4/accounts/<accountId>/tokens`: name `tempo-deploy-<projectId>-<number>`, one policy per scope with the permission groups of the project's grant at admission (Access requests and grants), and `expires_on` set to the start time plus the timeout plus 15 minutes (whole seconds, UTC).
 3. Stores the token value in the owner's `CredentialDO` under key `deploy.<deploymentId>.token` and the token ID in its own SQLite. The value never enters D1, R2, logs, events or the container.
 4. Starts the runner. A mint failure completes the deployment as `failure` with summary `Cloudflare did not create a deploy token: <status>.`
 

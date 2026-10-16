@@ -1,10 +1,8 @@
 import {
-  DEPLOY_PERMISSIONS,
   DEPLOY_ROLLOUTS,
   DEPLOY_TOOL_KINDS,
   TempoError,
   isHostPattern,
-  type DeployPermission,
   type DeployTarget,
   type DeployTool,
 } from "@tempo/protocol";
@@ -29,7 +27,6 @@ export interface DeploySpec {
   readonly root: string;
   readonly install: string | null;
   readonly build: string | null;
-  readonly permissions: ReadonlyArray<DeployPermission>;
   readonly timeoutMinutes: number;
   readonly egressAllowlist: ReadonlyArray<string>;
   readonly targets: ReadonlyArray<DeployTarget>;
@@ -189,6 +186,9 @@ export const parseDeployConfig = (
   }
 
   if (!isObj(raw)) return invalid("the configuration must be a map");
+
+  if (raw["permissions"] !== undefined)
+    invalid("permissions: not accepted; the agent asks for Cloudflare access and you approve it");
   onlyKeys(
     raw,
     [
@@ -197,7 +197,6 @@ export const parseDeployConfig = (
       "root",
       "install",
       "build",
-      "permissions",
       "timeout_minutes",
       "egress_allowlist",
       "targets",
@@ -210,11 +209,6 @@ export const parseDeployConfig = (
   const tool = raw["tool"];
 
   if (!DEPLOY_TOOL_KINDS.some((t) => t === tool)) return invalid(`tool: ${DEPLOY_TOOL_KINDS.join(" or ")}`);
-  const listed = stringList(raw["permissions"], "permissions");
-  const unknown = listed.find((p) => !DEPLOY_PERMISSIONS.some((known) => known === p));
-
-  if (unknown !== undefined) invalid(`permissions: unknown permission "${unknown}"`);
-  const permissions = DEPLOY_PERMISSIONS.filter((p) => p === "workers" || listed.includes(p));
   const { min, max } = DEPLOY_LIMITS.timeoutMinutes;
   const timeoutMinutes = raw["timeout_minutes"] ?? DEPLOY_LIMITS.timeoutMinutes.default;
 
@@ -241,7 +235,6 @@ export const parseDeployConfig = (
     root: parseRoot(raw["root"]),
     install: command(raw["install"], "install"),
     build: command(raw["build"], "build"),
-    permissions,
     timeoutMinutes,
     egressAllowlist,
     targets: entries.map(([key, target]) => parseTarget(key, target, isBranch)),

@@ -61,12 +61,12 @@ call:
     builtin: true                           # rules 4–6
 cloudflare:                                 # 13, L-ADR-8
   resources: [farstep-web, farstep-core, farstep-app-db-preview]
-  permissions: [workers, d1]                # 12, Permissions; read for all, write per L-ADR-8
+  permissions: [workers, d1]                # the project's grant (12); read for all, write per L-ADR-8
 exceptions: [claude_login, secrets_without_hosts]
 deploy:
   - target: preview
     workers: [farstep-web, farstep-core]
-    cloudflare: [workers, d1]               # 12, Permissions
+    cloudflare: [workers, d1]               # the project's grant (12)
     agent: true
 ```
 
@@ -76,7 +76,7 @@ deploy:
 | `call[]` | `id` unique. `hosts` are patterns as in 05. `credential.ref` names an environment secret or a built-in key. `methods` is optional; empty means all. Methods are the only limit; there are no path limits (owner-approved 2026-10-15). |
 | `cloudflare` | The project's Cloudflare resources and the permissions of the session token (13, L-ADR-8). Absent means the agent cannot call `api.cloudflare.com`. |
 | `exceptions` | The named exceptions (C-ADR-3) that apply to this session |
-| `deploy[]` | One entry per deploy target with `agent: true` in 12. `cloudflare` is a subset of the target's permissions. |
+| `deploy[]` | One entry per deploy target with `agent: true` in 12. `cloudflare` is the project's grant (12, Access requests and grants). |
 | Session kind | `run` sessions with `read-only` access get no `deploy` and no `call` methods other than `GET` and `HEAD`. `ci` and `deploy` sessions keep their rule sets from 10 and 12. |
 
 ## Delivery to the agent

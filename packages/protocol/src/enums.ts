@@ -83,6 +83,21 @@ export const DeployPermission = Schema.Literals(DEPLOY_PERMISSIONS);
 
 export type DeployPermission = typeof DeployPermission.Type;
 
+/** 12, Permissions. */
+export const PERMISSION_GROUPS: Readonly<
+  Record<DeployPermission, { readonly scope: "account" | "zone"; readonly groups: ReadonlyArray<string> }>
+> = {
+  workers: { scope: "account", groups: ["Workers Scripts Write", "Account Settings Read"] },
+  kv: { scope: "account", groups: ["Workers KV Storage Write"] },
+  d1: { scope: "account", groups: ["D1 Write"] },
+  r2: { scope: "account", groups: ["Workers R2 Storage Write"] },
+  queues: { scope: "account", groups: ["Queues Write"] },
+  vectorize: { scope: "account", groups: ["Vectorize Write"] },
+  hyperdrive: { scope: "account", groups: ["Hyperdrive Write"] },
+  secrets_store: { scope: "account", groups: ["Secrets Store Write"] },
+  routes: { scope: "zone", groups: ["Workers Routes Write", "DNS Write", "Zone Read"] },
+};
+
 export const DeployTrigger = Schema.Literals(["manual", "agent", "auto", "redeploy"]);
 
 export type DeployTrigger = typeof DeployTrigger.Type;
@@ -175,6 +190,7 @@ export const ITEM_KINDS = [
   "intent",
   "proof",
   "cloudflare_hold",
+  "cloudflare_access",
 ] as const;
 
 /** 13, L-ADR-2. */

@@ -734,6 +734,18 @@ export const SHARED_SAMPLES = {
       createdAt: at(2),
     },
   ],
+  CloudflareAccessContent: [
+    {
+      requestId: uid(1019),
+      permissions: ["d1", "secrets_store"],
+      reason: "The todo app needs a database and its TypeSafe key.",
+      status: "pending",
+    },
+  ],
+  CloudflareGrant: [
+    { permission: "workers", grantedAt: null },
+    { permission: "d1", grantedAt: at(3) },
+  ],
   CloudflareHoldContent: [
     {
       holdId: uid(1018),
@@ -1141,6 +1153,9 @@ export const INPUT_SAMPLES = {
   confirmIntent: [{ workspaceId: W1, intentId: uid(1012) }],
   setIntentCheck: [{ workspaceId: W1, sessionId: S1, enabled: false }],
   getLoopReport: [{ from: at(0), to: at(7 * 86_400) }],
+  decideCloudflareAccess: [{ workspaceId: W1, requestId: uid(1019), approve: true }],
+  listCloudflareGrants: [{ projectId: PROJECT_ID }],
+  removeCloudflareGrant: [{ projectId: PROJECT_ID, permission: "d1" }],
   decideCloudflareHold: [{ workspaceId: W1, holdId: uid(1018), allow: true }],
   addChecklistItem: [{ workspaceId: W1, itemId: uid(1001) }],
   reopenChecklistItem: [{ workspaceId: W1, checklistId: uid(1016) }],

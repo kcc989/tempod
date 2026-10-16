@@ -69,6 +69,11 @@ impl Server {
             let mut errors = vec![production_error("e-1", Value::Null, Value::Null)];
             let mut secret_set = false;
             let mut saves = 0;
+            let mut grants = json!([
+                {"permission":"workers","grantedAt":null},
+                {"permission":"d1","grantedAt":2},
+                {"permission":"r2","grantedAt":3}
+            ]);
             while !stopping.load(Ordering::Relaxed) {
                 let Ok((mut stream, _)) = listener.accept() else {
                     std::thread::yield_now();
@@ -157,6 +162,14 @@ impl Server {
                         current["status"] = json!("completed");
                         current["conclusion"] = json!("cancelled");
                         (200, current.clone())
+                    }
+                    "listCloudflareGrants" => (200, grants.clone()),
+                    "removeCloudflareGrant" => {
+                        grants
+                            .as_array_mut()
+                            .unwrap()
+                            .retain(|g| g["permission"] != input["permission"]);
+                        (200, grants.clone())
                     }
                     "getDeployConfig" => (200, config(2, &json!("version: 1\n"))),
                     "updateDeployConfig" => {
@@ -530,4 +543,46 @@ fn start_fix_opens_the_fix_workspace_and_new_secret_is_shown_once(cx: &mut TestA
         assert_eq!(view.secret.as_deref(), Some("s3cr3t"));
         assert!(view.webhook.as_ref().unwrap().secret_set);
     });
+}
+
+#[gpui_kit::test]
+fn cloudflare_access_lists_the_grant_and_remove_shows_the_returned_list(cx: &mut TestAppContext) {
+    let server = Server::new();
+    let runtime = tempo_client::Runtime::start().unwrap();
+    let (_, view) = mount(cx, &server, &runtime);
+    let permissions = |view: &DeploysView| -> Vec<p::DeployPermission> {
+        view.grants
+            .iter()
+            .flatten()
+            .map(|grant| grant.permission)
+            .collect()
+    };
+    wait(cx, &view, |view| view.grants.is_some());
+    assert_eq!(
+        server.calls("listCloudflareGrants"),
+        vec![json!({"projectId":"project-1"})]
+    );
+    assert_eq!(
+        view.read_with(cx, |view, _| permissions(view)),
+        [
+            p::DeployPermission::Workers,
+            p::DeployPermission::D1,
+            p::DeployPermission::R2
+        ]
+    );
+    view.update(cx, |view, cx| {
+        view.remove_grant(p::DeployPermission::Workers, cx);
+        assert!(!view.pending, "workers cannot be removed");
+        view.remove_grant(p::DeployPermission::D1, cx);
+    });
+    wait(cx, &view, |view| !view.pending);
+    assert_eq!(
+        server.calls("removeCloudflareGrant"),
+        vec![json!({"projectId":"project-1","permission":"d1"})]
+    );
+    assert_eq!(
+        view.read_with(cx, |view, _| permissions(view)),
+        [p::DeployPermission::Workers, p::DeployPermission::R2]
+    );
+    assert_eq!(server.calls("listCloudflareGrants").len(), 1);
 }

@@ -136,6 +136,7 @@ const ITEM_DEFAULTS = {
     status: "checking",
   },
   cloudflare_hold: { holdId: "", method: "", path: "", resource: null, reasons: [], status: "pending" },
+  cloudflare_access: { requestId: "", permissions: [], reason: "", status: "pending" },
   artifact: {
     artifactId: "",
     version: 1,

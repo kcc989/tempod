@@ -9,7 +9,9 @@ import {
   type Item,
   type ItemOf,
   type PermissionOption,
+  type CloudflareAccessContent,
   type CloudflareHoldContent,
+  type DeployPermission,
   type ProofContent,
   type Turn,
 } from "@tempo/protocol";
@@ -548,3 +550,28 @@ const HOLD_REASONS = new Map([
 
 export const holdReasonText = (reasons: ReadonlyArray<string>): string =>
   reasons.map((r) => HOLD_REASONS.get(r) ?? r).join("; ");
+
+const PERMISSION_TEXT = new Map<DeployPermission, string>([
+  ["workers", "Deploy Workers"],
+  ["kv", "Write KV namespaces"],
+  ["d1", "Write D1 databases"],
+  ["r2", "Write R2 buckets"],
+  ["queues", "Write Queues"],
+  ["vectorize", "Write Vectorize indexes"],
+  ["hyperdrive", "Write Hyperdrive configurations"],
+  ["secrets_store", "Write the Secrets Store"],
+  ["routes", "Write Workers routes and DNS"],
+]);
+
+/** 12, Access requests and grants: one permission in plain words. */
+export const permissionText = (permission: DeployPermission): string =>
+  PERMISSION_TEXT.get(permission) ?? permission;
+
+const ACCESS_STATUS = new Map<CloudflareAccessContent["status"], string>([
+  ["pending", "Cloudflare access: approve or deny"],
+  ["approved", "Cloudflare access approved"],
+  ["denied", "Cloudflare access denied"],
+]);
+
+export const accessStatusText = (status: CloudflareAccessContent["status"]): string =>
+  ACCESS_STATUS.get(status) ?? status;
