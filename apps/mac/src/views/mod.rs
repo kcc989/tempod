@@ -28,6 +28,8 @@ pub mod issues;
 pub mod judge_settings;
 pub mod main_window;
 pub mod mcp_model;
+pub mod models_model;
+pub mod models_page;
 pub mod palette;
 pub mod processes;
 pub mod profile_model;

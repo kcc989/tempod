@@ -400,6 +400,14 @@ export const listModels = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listModels">) => data)
   .handler(({ data }) => run("listModels", data));
 
+export const getModelList = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getModelList">) => data)
+  .handler(({ data }) => run("getModelList", data));
+
+export const setModelList = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setModelList">) => data)
+  .handler(({ data }) => run("setModelList", data));
+
 export const listWorkspaces = createServerFn({ method: "GET" })
   .validator((data: FnInput<"listWorkspaces">) => data)
   .handler(({ data }) => run("listWorkspaces", data));

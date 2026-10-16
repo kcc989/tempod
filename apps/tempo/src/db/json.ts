@@ -5,6 +5,7 @@ import {
   Capabilities,
   EnvironmentProposal,
   Injector,
+  ModelPick,
   SecretBinding,
   ITEM_CONTENT,
   PermissionOption,
@@ -95,6 +96,7 @@ export const json = {
   environmentInjectors: jsonColumn("environments.injectors_json", Schema.Array(Injector)),
   environmentProposal: jsonColumn("environment_proposals.proposal_json", EnvironmentProposal),
   profile: jsonColumn("sessions.profile_json", AgentProfile),
+  modelPicks: jsonColumn("model_lists.models_json", Schema.Array(ModelPick)),
   profileIssues: jsonColumn("sessions.profile_issues_json", Schema.Array(ProfileIssue)),
 } as const;
 

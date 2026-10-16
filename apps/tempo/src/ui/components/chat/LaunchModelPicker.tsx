@@ -21,13 +21,20 @@ import {
   initialAgent,
   initialModel,
   modelChoices,
+  pickedChoices,
 } from "~/ui/components/dialogs/new-workspace-model";
 
 export function useLaunchModels(settings: Project["settings"]) {
   const credentials = useCredentialStatus();
   const models = useCallQuery("listModels", {}, { staleTime: 30_000, enabled: credentials.isSuccess });
+  const list = useCallQuery("getModelList", {}, { staleTime: 30_000 });
   const available = agentsWithLogin(credentials.data);
-  const choices = modelChoices(available, models.data ?? []);
+  const listSettled = list.isSuccess || list.isError;
+
+  const choices = listSettled
+    ? pickedChoices(modelChoices(available, models.data ?? []), list.data?.models)
+    : [];
+
   const custom = libraryAgentsWithLogin(useAgentChoices(settings.agent?.default ?? "claude").data, available);
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -39,6 +46,7 @@ export function useLaunchModels(settings: Project["settings"]) {
   return {
     credentials,
     models,
+    list,
     available,
     choices,
     custom,
@@ -58,13 +66,13 @@ export function LaunchModelPicker({
   disabled: boolean;
   onClosed: () => void;
 }) {
-  const { credentials, models, choices, custom, selected, pickedAgent, setPicked } = selection;
+  const { credentials, models, list, choices, custom, selected, pickedAgent, setPicked } = selection;
   const [open, setOpen] = useState(false);
 
   const label =
     pickedAgent?.name ??
     selected?.name ??
-    (credentials.isPending || (credentials.isSuccess && models.isPending)
+    (credentials.isPending || (credentials.isSuccess && (models.isPending || list.isPending))
       ? "Loading models…"
       : "Choose a model");
 

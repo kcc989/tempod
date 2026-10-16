@@ -676,6 +676,7 @@ export type SettingsTab =
   | "general"
   | "shell"
   | "logins"
+  | "models"
   | "agents"
   | "environments"
   | "mcp"

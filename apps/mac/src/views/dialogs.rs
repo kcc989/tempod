@@ -31,6 +31,8 @@ pub struct Dialogs {
     agent: Option<p::AgentId>,
     library_default_agent: p::AgentId,
     models: Vec<p::AgentModelOptions>,
+    /// The owner's model list (01, Model list); filters the model choices.
+    model_picks: Vec<p::ModelPick>,
     model: Option<String>,
     model_picker: Entity<Picker>,
     picker_choices: Vec<Choice>,
@@ -130,6 +132,7 @@ impl Dialogs {
             agent: None,
             library_default_agent: p::AgentId::Claude,
             models: vec![],
+            model_picks: vec![],
             model: None,
             model_picker,
             picker_choices: vec![],
@@ -366,12 +369,14 @@ impl Dialogs {
         })
         .detach();
         let request = client.call::<api::ListModels>(Default::default());
+        let list = client.call::<api::GetModelList>(Default::default());
         self.models_loading = true;
         self.error = None;
         cx.spawn(async move |this, cx| {
-            let result = request.await;
+            let (result, list) = (request.await, list.await);
             let _ = this.update(cx, |this, cx| {
                 this.models_loading = false;
+                this.model_picks = list.map(|l| l.models).unwrap_or_default();
                 match result {
                     Ok(models) => {
                         this.models = models;
@@ -384,19 +389,14 @@ impl Dialogs {
                                 .and_then(|p| p.settings.agent.as_ref())
                                 .and_then(|a| a.default)
                         };
-                        let entry = this
-                            .models
-                            .iter()
-                            .find(|m| Some(m.agent) == preferred)
-                            .or_else(|| this.models.first());
-                        if let Some(entry) = entry {
-                            this.agent = Some(entry.agent);
-                            this.model = entry
-                                .options
-                                .iter()
-                                .find(|o| o.value == entry.current_value)
-                                .or_else(|| entry.options.first())
-                                .map(|o| o.value.clone());
+                        let initial = super::models_model::initial_model(
+                            &this.models,
+                            &this.model_picks,
+                            preferred,
+                        );
+                        if let Some((agent, model)) = initial {
+                            this.agent = Some(agent);
+                            this.model = Some(model);
                         } else {
                             this.agent = None;
                             this.model = None;
@@ -825,24 +825,17 @@ impl Render for Dialogs {
         let Some(kind) = self.kind else {
             return div().into_any_element();
         };
-        let choices: Vec<_> = self
-            .models
-            .iter()
-            .filter(|_| !self.models_loading)
-            .flat_map(|entry| {
-                entry.options.iter().map(|option| {
-                    (
-                        entry.agent,
-                        option.value.clone(),
-                        format!(
-                            "{} · {}",
-                            option.name,
-                            super::chat_model::agent_label(entry.agent)
-                        ),
-                    )
+        let choices: Vec<_> = if self.models_loading {
+            vec![]
+        } else {
+            super::models_model::offered_models(&self.models, &self.model_picks)
+                .into_iter()
+                .map(|(agent, value, name)| {
+                    let label = format!("{} · {}", name, super::chat_model::agent_label(agent));
+                    (agent, value, label)
                 })
-            })
-            .collect();
+                .collect()
+        };
         let base = |agent| self.library_base(agent);
         let custom: Vec<(p::AgentId, String, String)> = self
             .library_agents

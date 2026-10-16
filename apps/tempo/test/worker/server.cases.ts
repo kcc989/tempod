@@ -875,6 +875,28 @@ describe("listModels", () => {
   });
 });
 
+describe("model list (01, Model list)", () => {
+  it("keeps each owner's ordered picks and rejects duplicate picks", async () => {
+    const o = await owner();
+    const other = await owner();
+    expect(ok(await call("getModelList", o, {}))).toEqual({ models: [], updatedAt: null });
+
+    const picks = [
+      { agent: "codex", model: "gpt-b" },
+      { agent: "claude", model: "opus" },
+    ] as const;
+
+    const saved = ok(await call("setModelList", o, { models: picks }));
+    expect(saved.models).toEqual(picks);
+    expect(ok(await call("getModelList", o, {}))).toEqual(saved);
+    expect(ok(await call("getModelList", other, {})).models).toEqual([]);
+    expect(errOf(await call("setModelList", o, { models: [picks[0], picks[0]] }))).toMatchObject({
+      code: "VALIDATION_FAILED",
+    });
+    expect(ok(await call("getModelList", o, {})).models).toEqual(picks);
+  });
+});
+
 describe("createWorkspace (03, Create a workspace)", () => {
   it("picks an unused animal and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();

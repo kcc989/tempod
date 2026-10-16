@@ -500,6 +500,35 @@ export const AgentModelOptions = Schema.Struct({
 
 export type AgentModelOptions = typeof AgentModelOptions.Type;
 
+/** 01, Model list. */
+export const MODEL_LIST_MAX = 200;
+
+export const ModelPick = Schema.Struct({ agent: AgentId, model: Schema.String });
+
+export type ModelPick = typeof ModelPick.Type;
+
+export const ModelList = Schema.Struct({
+  models: Schema.Array(ModelPick),
+  updatedAt: Schema.NullOr(Schema.Number),
+});
+
+export type ModelList = typeof ModelList.Type;
+
+export const modelListProblem = (models: ReadonlyArray<ModelPick>): string | null => {
+  if (models.length > MODEL_LIST_MAX) return `You can pick at most ${MODEL_LIST_MAX} models.`;
+  const seen = new Set<string>();
+
+  for (const pick of models) {
+    if (pick.model.length < 1 || pick.model.length > 200) return "A model id must be 1 to 200 characters.";
+    const key = JSON.stringify([pick.agent, pick.model]);
+
+    if (seen.has(key)) return `${pick.model} is picked twice.`;
+    seen.add(key);
+  }
+
+  return null;
+};
+
 export const Mention = Schema.Struct({ path: Schema.String });
 
 export type Mention = typeof Mention.Type;

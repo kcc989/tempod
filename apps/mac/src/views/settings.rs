@@ -2,9 +2,10 @@
 //! Devices is web only (07, Scope).
 use super::agents_settings::AgentsSettings;
 use super::environments::EnvironmentsPage;
+use super::models_page::ModelsPage;
 use super::settings_form::{
     PROJECT_PAGES, SettingsForm, TAB_AGENTS, TAB_APPEARANCE, TAB_ENVIRONMENTS, TAB_GENERAL,
-    TAB_LOGINS, TAB_MCP, TAB_PROJECT, TAB_SHELL, TAB_SHORTCUTS,
+    TAB_LOGINS, TAB_MCP, TAB_MODELS, TAB_PROJECT, TAB_SHELL, TAB_SHORTCUTS,
 };
 use super::shell::ShellPage;
 use super::tokens::{Token, color};
@@ -19,7 +20,7 @@ use gpui_kit::{
     div, px,
 };
 
-pub const TABS: [&str; 9] = [
+pub const TABS: [&str; 10] = [
     "Logins",
     "Project",
     "Appearance",
@@ -29,6 +30,7 @@ pub const TABS: [&str; 9] = [
     "Environments",
     "MCP servers",
     "Agents",
+    "Models",
 ];
 
 /// The shortcut table of 04 with its Mac column, read-only.
@@ -73,6 +75,7 @@ pub struct SettingsView {
     environments: Entity<EnvironmentsPage>,
     shell: Entity<ShellPage>,
     agents: Entity<AgentsSettings>,
+    models: Entity<ModelsPage>,
     search: Entity<InputState>,
 }
 
@@ -96,6 +99,7 @@ impl SettingsView {
             environments: cx.new(|cx| EnvironmentsPage::new(window, cx)),
             shell: cx.new(|cx| ShellPage::new(window, cx)),
             agents: cx.new(|cx| AgentsSettings::new(window, cx)),
+            models: cx.new(|cx| ModelsPage::new(window, cx)),
             search,
         }
     }
@@ -130,6 +134,8 @@ impl Render for SettingsView {
             self.environments.clone().into_any_element()
         } else if tab == TAB_AGENTS {
             self.agents.clone().into_any_element()
+        } else if tab == TAB_MODELS {
+            self.models.clone().into_any_element()
         } else {
             self.form.clone().into_any_element()
         };
@@ -176,6 +182,7 @@ impl Render for SettingsView {
                     TAB_GENERAL,
                     TAB_SHELL,
                     TAB_LOGINS,
+                    TAB_MODELS,
                     TAB_AGENTS,
                     TAB_ENVIRONMENTS,
                     TAB_MCP,
@@ -191,6 +198,7 @@ impl Render for SettingsView {
                             TAB_GENERAL => IconName::Bell,
                             TAB_SHELL => IconName::SquareTerminal,
                             TAB_LOGINS => IconName::KeyRound,
+                            TAB_MODELS => IconName::ListChecks,
                             TAB_AGENTS => IconName::Bot,
                             TAB_ENVIRONMENTS => IconName::Network,
                             TAB_MCP => IconName::Server,
@@ -200,7 +208,10 @@ impl Render for SettingsView {
                         .accessibility_label(TABS[ix])
                         .child(div().w_full().text_left().child(TABS[ix]))
                         .selected(tab == ix)
-                        .on_click(cx.listener(move |this, _, _, cx| {
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if ix == TAB_MODELS {
+                                this.models.update(cx, |page, cx| page.load(window, cx));
+                            }
                             this.form.update(cx, |form, cx| form.show_tab(ix, cx));
                         }))
                 }),
@@ -331,6 +342,7 @@ impl Render for SettingsView {
                                         .child(div().text_sm().text_color(muted).child(
                                             match tab {
                                                 TAB_LOGINS => "Manage agent logins and API keys.",
+                                                TAB_MODELS => super::models_page::DESCRIPTION,
                                                 TAB_GENERAL => {
                                                     "Notifications and sound for this Mac."
                                                 }

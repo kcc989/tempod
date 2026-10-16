@@ -57,7 +57,7 @@ describe("settings page", () => {
     fireEvent.keyDown(screen.getByRole("main"), { code: "Escape" });
     expect(settingsStore.getSnapshot()).toBeNull();
   });
-  it("lists Environments after Logins in Personal", () => {
+  it("lists Models and Environments after Logins in Personal", () => {
     openDialog({ kind: "settings" });
     show();
     const nav = screen.getByRole("navigation", { name: "Settings" });
@@ -66,10 +66,11 @@ describe("settings page", () => {
       .getAllByRole("button")
       .map((b) => b.textContent);
 
-    expect(labels.slice(0, 10)).toEqual([
+    expect(labels.slice(0, 11)).toEqual([
       "General",
       "Shell",
       "Logins",
+      "Models",
       "Agents",
       "Environments",
       "MCP servers",
@@ -111,6 +112,7 @@ describe("settings page", () => {
       "General",
       "Shell",
       "Logins",
+      "Models",
       "Agents",
       "Environments",
       "MCP servers",

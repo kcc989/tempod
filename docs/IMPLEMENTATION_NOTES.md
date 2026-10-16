@@ -635,3 +635,7 @@ Tab 13, L-ADR-7 and Phase 3. Choices made without the owner:
 | Contract checks | `getLoopReport` lists intent order and length violations. Proof completeness and one-action rollback are enforced by worker tests. | These cannot happen from the event log once the code holds them. |
 | Daily job | Cron `41 5 * * *` (UTC). It writes `loop/<date>.json` for the owner (`TEMPO_OWNER_GITHUB_ID`) and opens the issue in the owner's first native project, at most once a week per step. The body gives the window and the numbers, and names the report key. | Tempo has one owner; issues (09) exist only in native projects. |
 | Not built yet | The weekly file in `docs/evidence/loop-weekly/` through a Tempo PR | Tempo has no API yet that commits a file and opens a PR from the Worker. The CI summary already prints the newest file there. |
+
+## Model list
+
+Settings → Models keeps one ordered model list per owner, in D1 `model_lists`, like Conductor's model loadout. It filters only the New workspace and New chat pickers; an empty list, or a list with no available pick, offers every reported model. Ordering is by the order picks were added; there is no drag reordering, because that needs a library the spec stack does not name.

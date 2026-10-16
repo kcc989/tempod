@@ -102,6 +102,12 @@ CREATE TABLE mcp_servers (
   UNIQUE (user_id, name)
 );
 
+CREATE TABLE model_lists (
+  user_id          TEXT PRIMARY KEY REFERENCES user(id) ON DELETE CASCADE,
+  models_json      TEXT NOT NULL DEFAULT '[]', -- ModelPick[] in the owner's order; empty = every reported model
+  updated_at       INTEGER NOT NULL
+);
+
 CREATE TABLE workspaces (
   id               TEXT PRIMARY KEY,
   project_id       TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -831,6 +837,15 @@ Workspace channel publishes `run {run}`. `Session` exposes optional flat `runId`
 | --- | --- | --- | --- |
 | `getDotfiles` | `{}` | `DotfilesState`: `{files, defaults, saved, updatedAt}`. Without a `dotfiles` row, `files` equals `defaults` and `saved` is false. Reads the files at the tip of `main`; when that differs from `head_sha` (a save whose D1 write was lost; only Tempo pushes), it first stores the tip as `head_sha`. | `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
 | `updateDotfiles` | `{files}`, which replaces the whole list. Validated with `isDotfilePath` and `dotfilesProblem`. | `DotfilesState` after the push | `VALIDATION_FAILED`, `DOTFILES_CHANGED`, `ARTIFACTS_NOT_CONFIGURED`, `ARTIFACTS_API_ERROR` |
+
+**Model list** (01, Model list)
+
+| Function | Input | Output | Errors |
+| --- | --- | --- | --- |
+| `getModelList` | `{}` | `ModelList` (`{models: ModelPick[], updatedAt: number | null}`). `ModelPick` is `{agent: AgentId, model: string}`. With no saved row, `models` is empty and `updatedAt` is null. | — |
+| `setModelList` | `{models: ModelPick[]}`. Replaces the whole list; order is kept. | `ModelList` | `VALIDATION_FAILED` |
+
+Validation, else `VALIDATION_FAILED`: at most 200 picks; each `model` is 1 to 200 characters; no two picks have the same `agent` and `model`. The server does not check picks against `listModels`, because an agent can stop reporting a model.
 
 **MCP servers** (01, User MCP servers)
 

@@ -6,6 +6,7 @@ import {
   FolderGit2Icon,
   KeyboardIcon,
   KeyRoundIcon,
+  ListChecksIcon,
   MonitorIcon,
   NetworkIcon,
   PaletteIcon,
@@ -23,6 +24,7 @@ import { DevicesTab } from "~/ui/components/dialogs/settings/DevicesTab";
 import { EnvironmentsTab } from "~/ui/components/dialogs/settings/EnvironmentsTab";
 import { LoginsTab } from "~/ui/components/dialogs/settings/LoginsTab";
 import { McpServersTab } from "~/ui/components/dialogs/settings/McpServersTab";
+import { ModelsTab } from "~/ui/components/dialogs/settings/ModelsTab";
 import { NotificationsTab } from "~/ui/components/dialogs/settings/NotificationsTab";
 import { ProjectTab } from "~/ui/components/dialogs/settings/ProjectTab";
 import { useOpenWorkspaceDetail } from "~/ui/components/dialogs/settings/useOpenWorkspace";
@@ -49,6 +51,12 @@ const PERSONAL = [
     icon: SquareTerminalIcon,
   },
   { id: "logins", label: "Logins", description: "Manage agent logins and API keys.", icon: KeyRoundIcon },
+  {
+    id: "models",
+    label: "Models",
+    description: "Choose which models you want to use.",
+    icon: ListChecksIcon,
+  },
   {
     id: "agents",
     label: "Agents",
@@ -272,6 +280,7 @@ export function SettingsPage() {
           {tab === "general" && <NotificationsTab />}
           {tab === "shell" && <ShellTab />}
           {tab === "logins" && <LoginsTab />}
+          {tab === "models" && <ModelsTab />}
           {tab === "agents" && <AgentsTab />}
           {tab === "environments" && <EnvironmentsTab />}
           {tab === "mcp" && <McpServersTab />}

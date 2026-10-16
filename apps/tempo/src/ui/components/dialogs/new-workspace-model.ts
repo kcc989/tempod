@@ -6,6 +6,7 @@ import {
   type CredentialStatus,
   type AgentSummary,
   type FnInput,
+  type ModelPick,
   type NewSource,
   type Project,
 } from "@tempo/protocol";
@@ -147,6 +148,18 @@ export const modelChoices = (
       name: option.name,
     })),
   );
+
+/** The owner's picks in list order (01, Model list); every choice when the list is empty or none is offered. */
+export const pickedChoices = (
+  choices: ReadonlyArray<ModelChoice>,
+  picks: ReadonlyArray<ModelPick> | undefined,
+): ModelChoice[] => {
+  const offered = (picks ?? []).flatMap((pick) =>
+    choices.filter((choice) => choice.agent === pick.agent && choice.model === pick.model),
+  );
+
+  return offered.length > 0 ? offered : [...choices];
+};
 
 export const initialModel = (
   choices: ReadonlyArray<ModelChoice>,

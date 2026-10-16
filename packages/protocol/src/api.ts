@@ -26,6 +26,8 @@ import { Agent, AgentDefinition, AgentSummary, AgentAttachment, AttachmentOption
 import { EnvName } from "./settings.ts";
 import {
   AgentModelOptions,
+  ModelList,
+  ModelPick,
   ChangedFile,
   ConversationArtifact,
   ConversationSummary,
@@ -396,6 +398,8 @@ export const API = {
     WorkspaceSummary,
   ),
   listModels: fn("GET", Empty, Schema.Array(AgentModelOptions)),
+  getModelList: fn("GET", Empty, ModelList),
+  setModelList: fn("POST", Schema.Struct({ models: Schema.Array(ModelPick) }), ModelList),
   listWorkspaces: fn("GET", Schema.Struct({ includeArchived: opt(B) }), Schema.Array(WorkspaceSummary)),
   getWorkspace: fn("GET", Schema.Struct(W), WorkspaceDetail),
   renameWorkspace: fn("POST", Schema.Struct({ ...W, title: S }), Empty),
