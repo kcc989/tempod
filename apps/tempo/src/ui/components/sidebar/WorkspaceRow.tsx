@@ -184,9 +184,12 @@ function RowMenu({
       </ContextMenuItem>
       {project && w.prNumber !== null && (
         <ContextMenuItem asChild>
-          <a href={githubUrlFor(project, w, undefined)} target="_blank" rel="noopener noreferrer">
+          <a
+            href={githubUrlFor(project, w, undefined)}
+            {...(project.provider === "artifacts" ? {} : { target: "_blank", rel: "noopener noreferrer" })}
+          >
             <ExternalLinkIcon />
-            {project.provider === "artifacts" ? "Open pull request" : "Open PR on GitHub"}
+            {project.provider === "artifacts" ? "Open PR in Repositories" : "Open PR on GitHub"}
           </a>
         </ContextMenuItem>
       )}

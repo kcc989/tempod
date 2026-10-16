@@ -287,28 +287,87 @@ pub fn primary_action(w: &p::WorkspaceDetail) -> Option<Primary> {
     }
 }
 
-pub fn github_pull_url(owner: &str, name: &str, number: f64) -> String {
+fn github_pull_url(owner: &str, name: &str, number: f64) -> String {
     format!("https://github.com/{owner}/{name}/pull/{}", number as u64)
+}
+
+/// Where Repositories opens: a project, at a PR or a branch.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RepositoryTarget {
+    pub project_id: String,
+    pub pull: Option<f64>,
+    pub branch: Option<String>,
+}
+
+/// A GitHub URL, or, for a Tempo-hosted project, Repositories in the app (04 Top bar).
+#[derive(Clone, Debug, PartialEq)]
+pub enum RepoLink {
+    GitHub(String),
+    Repositories(RepositoryTarget),
+}
+
+impl RepoLink {
+    pub fn hosted(&self) -> bool {
+        matches!(self, Self::Repositories(_))
+    }
+
+    pub fn open(&self, cx: &mut gpui_kit::App) {
+        match self {
+            Self::GitHub(url) => cx.open_url(url),
+            Self::Repositories(target) => {
+                if let Some(app) = crate::app::AppState::try_global(cx) {
+                    app.update(cx, |app, cx| app.open_repository(target.clone(), cx));
+                }
+            }
+        }
+    }
+}
+
+/// The PR, else the branch, else the repository.
+pub fn repo_link(project: &p::Project, pr_number: Option<f64>, branch: Option<&str>) -> RepoLink {
+    if project.provider == Some(p::ProjectProvider::Artifacts) {
+        return RepoLink::Repositories(RepositoryTarget {
+            project_id: project.id.clone(),
+            pull: pr_number,
+            branch: pr_number
+                .is_none()
+                .then(|| branch.map(str::to_string))
+                .flatten(),
+        });
+    }
+    let (owner, name) = (&project.owner, &project.name);
+    RepoLink::GitHub(match (pr_number, branch) {
+        (Some(number), _) => github_pull_url(owner, name, number),
+        (None, Some(branch)) => format!(
+            "https://github.com/{owner}/{name}/tree/{}",
+            branch
+                .split('/')
+                .map(encode_segment)
+                .collect::<Vec<_>>()
+                .join("/")
+        ),
+        (None, None) => format!("https://github.com/{owner}/{name}"),
+    })
 }
 
 #[derive(Debug, PartialEq)]
 pub struct PrLink {
     pub label: String,
-    pub url: String,
+    pub link: RepoLink,
     pub token: Token,
 }
 
-/// 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub.
+/// 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub
+/// or in Repositories.
 pub fn pr_link(
-    owner: &str,
-    name: &str,
+    project: &p::Project,
     pr_number: Option<f64>,
     pr_state: Option<p::PrState>,
 ) -> Option<PrLink> {
     let number = pr_number?;
     Some(PrLink {
         label: format!("#{} ↗", number as u64),
-        url: github_pull_url(owner, name, number),
+        link: repo_link(project, Some(number), None),
         token: pr_token(pr_state),
     })
 }
@@ -330,21 +389,6 @@ pub fn preview_links(
         .map(|port| PreviewLink::Port(port.port))
         .chain(browser_active.then_some(PreviewLink::Live))
         .collect()
-}
-
-/// Open on GitHub: the PR, else the branch.
-pub fn github_url_for(owner: &str, name: &str, pr_number: Option<f64>, branch: &str) -> String {
-    match pr_number {
-        Some(number) => github_pull_url(owner, name, number),
-        None => format!(
-            "https://github.com/{owner}/{name}/tree/{}",
-            branch
-                .split('/')
-                .map(encode_segment)
-                .collect::<Vec<_>>()
-                .join("/")
-        ),
-    }
 }
 
 fn encode_segment(segment: &str) -> String {
@@ -507,37 +551,87 @@ mod tests {
         assert!(!can_archive(State::Starting));
     }
 
+    fn project(provider: &str) -> p::Project {
+        serde_json::from_value(serde_json::json!({
+            "id":"project-1", "provider":provider, "installationId":null, "repoId":null,
+            "artifactRepoId":null, "cloneUrl":null, "owner":"acme", "name":"api",
+            "defaultBranch":"main", "settings":{}, "sortOrder":0
+        }))
+        .unwrap()
+    }
+
     #[test]
     fn github_links() {
+        let github = project("github");
+        let url = |link: RepoLink| match link {
+            RepoLink::GitHub(url) => url,
+            RepoLink::Repositories(_) => panic!("expected a GitHub link"),
+        };
         assert_eq!(
-            github_url_for("acme", "api", Some(12.), "tempo/x"),
+            url(repo_link(&github, Some(12.), Some("tempo/x"))),
             "https://github.com/acme/api/pull/12"
         );
         assert_eq!(
-            github_url_for("acme", "api", None, "tempo/fix #1"),
+            url(repo_link(&github, None, Some("tempo/fix #1"))),
             "https://github.com/acme/api/tree/tempo/fix%20%231"
+        );
+        assert_eq!(
+            url(repo_link(&github, None, None)),
+            "https://github.com/acme/api"
         );
     }
 
     #[test]
-    fn pr_link_follows_the_pr_number_and_state() {
+    fn hosted_links_open_repositories() {
+        let hosted = project("artifacts");
+        let target = |pull, branch: Option<&str>| {
+            RepoLink::Repositories(RepositoryTarget {
+                project_id: "project-1".into(),
+                pull,
+                branch: branch.map(str::to_string),
+            })
+        };
         assert_eq!(
-            pr_link("acme", "api", Some(12.), Some(p::PrState::Merged)),
+            repo_link(&hosted, Some(12.), Some("tempo/x")),
+            target(Some(12.), None)
+        );
+        assert_eq!(
+            repo_link(&hosted, None, Some("tempo/x")),
+            target(None, Some("tempo/x"))
+        );
+        assert_eq!(repo_link(&hosted, None, None), target(None, None));
+        assert!(repo_link(&hosted, None, None).hosted());
+        assert!(!repo_link(&project("github"), None, None).hosted());
+    }
+
+    #[test]
+    fn pr_link_follows_the_pr_number_and_state() {
+        let github = project("github");
+        assert_eq!(
+            pr_link(&github, Some(12.), Some(p::PrState::Merged)),
             Some(PrLink {
                 label: "#12 ↗".into(),
-                url: "https://github.com/acme/api/pull/12".into(),
+                link: RepoLink::GitHub("https://github.com/acme/api/pull/12".into()),
                 token: Token::Merged,
             })
         );
         assert_eq!(
-            pr_link("acme", "api", Some(3.), Some(p::PrState::Draft)).map(|l| l.token),
+            pr_link(&project("artifacts"), Some(12.), Some(p::PrState::Open)).map(|l| l.link),
+            Some(RepoLink::Repositories(RepositoryTarget {
+                project_id: "project-1".into(),
+                pull: Some(12.),
+                branch: None,
+            }))
+        );
+        assert_eq!(
+            pr_link(&github, Some(3.), Some(p::PrState::Draft)).map(|l| l.token),
             Some(Token::MutedForeground)
         );
         assert_eq!(
-            pr_link("acme", "api", Some(3.), Some(p::PrState::Closed)).map(|l| l.token),
+            pr_link(&github, Some(3.), Some(p::PrState::Closed)).map(|l| l.token),
             Some(Token::Destructive)
         );
-        assert_eq!(pr_link("acme", "api", None, None), None);
+        assert_eq!(pr_link(&github, None, None), None);
     }
 
     #[test]
