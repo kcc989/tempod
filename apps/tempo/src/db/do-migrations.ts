@@ -668,6 +668,30 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "CREATE INDEX items_by_rev ON items(rev)",
     ],
   },
+  {
+    tag: "0015_cloudflare_access",
+    when: 1792972800000,
+    statements: [
+      `CREATE TABLE cloudflare_access_requests (
+  id                TEXT PRIMARY KEY,
+  session_id        TEXT NOT NULL,
+  item_id           TEXT,
+  permissions_json  TEXT NOT NULL,
+  reason            TEXT NOT NULL,
+  status            TEXT NOT NULL CHECK (status IN ('pending','approved','denied')),
+  created_at        INTEGER NOT NULL,
+  decided_at        INTEGER
+)`,
+      `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
+        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof','cloudflare_hold','cloudflare_access')),
+        status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
+      "INSERT INTO items_new SELECT * FROM items",
+      "DROP TABLE items",
+      "ALTER TABLE items_new RENAME TO items",
+      "CREATE INDEX items_by_session ON items(session_id,created_at)",
+      "CREATE INDEX items_by_rev ON items(rev)",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [
@@ -858,6 +882,22 @@ export const APP_DEPLOY_MIGRATIONS: Migrations = [
   revision    INTEGER NOT NULL UNIQUE,
   created_at  INTEGER NOT NULL
 )`,
+    ],
+  },
+  {
+    tag: "0003_grants",
+    when: 1792972800000,
+    statements: [
+      `CREATE TABLE grants (
+  permission    TEXT PRIMARY KEY,
+  granted_at    INTEGER NOT NULL,
+  workspace_id  TEXT,
+  request_id    TEXT
+)`,
+      // 12, Access requests and grants: permissions of the newest saved configuration were owner-approved.
+      `INSERT OR IGNORE INTO grants (permission, granted_at)
+SELECT value, CAST(strftime('%s','now') AS INTEGER) * 1000 FROM configs, json_each(configs.spec_json, '$.permissions')
+WHERE configs.revision = (SELECT MAX(revision) FROM configs) AND configs.spec_json IS NOT NULL AND value != 'workers'`,
     ],
   },
 ];

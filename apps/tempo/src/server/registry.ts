@@ -60,6 +60,8 @@ const own = {
   deleteDeploySettings: deploy.deleteDeploySettings,
   getDeployConfig: deploy.getDeployConfig,
   updateDeployConfig: deploy.updateDeployConfig,
+  listCloudflareGrants: deploy.listCloudflareGrants,
+  removeCloudflareGrant: deploy.removeCloudflareGrant,
   listDeployments: deploy.listDeployments,
   getDeployment: deploy.getDeployment,
   startDeployment: deploy.startDeployment,

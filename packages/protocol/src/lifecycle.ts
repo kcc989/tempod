@@ -84,6 +84,7 @@ export const LifecycleRunDecidedPayload = Schema.Struct({
 export const LifecycleIntentProposedPayload = Schema.Struct({
   intentId: Ulid,
   lines: Int,
+  /** True only for intents made before 2026-10-16, when the check still used plan mode. */
   enforced: Schema.Boolean,
 });
 

@@ -379,6 +379,26 @@ describe("session.prompt", () => {
   );
 
   test(
+    "a chat allows Tempo's propose_intent without asking (13, L-ADR-1); a run still asks",
+    async () => {
+      const { c, start, prompt, ended, calls } = await setup();
+      await start("chat");
+      await prompt("chat", "t1", "intent-permission");
+      expect((await ended("t1")).stopReason).toBe("end_turn");
+      expect(calls()).toContain("report selected:yes");
+      expect(c.of("permission.requested")).toEqual([]);
+
+      await start("run", {}, { TEMPO_RUN_ID: "run-1" });
+      await prompt("run", "t2", "intent-permission");
+      const req = await c.waitEvent("permission.requested", () => true, 10_000);
+      expect(req).toMatchObject({ sessionId: "run", title: "mcp__tempo__propose_intent" });
+      await c.ok("permission.respond", { requestId: req.requestId, optionId: "no" });
+      await ended("t2");
+    },
+    T,
+  );
+
+  test(
     "a codex 401 fails the turn with CREDENTIAL_INVALID and sends credential.invalid",
     async () => {
       const { c, start, prompt, ended } = await setup();

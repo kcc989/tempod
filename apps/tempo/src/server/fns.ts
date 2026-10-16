@@ -172,6 +172,18 @@ export const getLoopReport = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getLoopReport">) => data)
   .handler(({ data }) => run("getLoopReport", data));
 
+export const decideCloudflareAccess = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"decideCloudflareAccess">) => data)
+  .handler(({ data }) => run("decideCloudflareAccess", data));
+
+export const listCloudflareGrants = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listCloudflareGrants">) => data)
+  .handler(({ data }) => run("listCloudflareGrants", data));
+
+export const removeCloudflareGrant = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"removeCloudflareGrant">) => data)
+  .handler(({ data }) => run("removeCloudflareGrant", data));
+
 export const decideCloudflareHold = createServerFn({ method: "POST" })
   .validator((data: FnInput<"decideCloudflareHold">) => data)
   .handler(({ data }) => run("decideCloudflareHold", data));

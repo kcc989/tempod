@@ -22,6 +22,8 @@ export const SHARED = {
   IntentContent: P.IntentContent,
   ProofContent: P.ProofContent,
   CloudflareHoldContent: P.CloudflareHoldContent,
+  CloudflareAccessContent: P.CloudflareAccessContent,
+  CloudflareGrant: P.CloudflareGrant,
   LifecycleRunDecidedPayload: P.LifecycleRunDecidedPayload,
   LifecycleEvent: P.LifecycleEvent,
   LifecycleTempoSource: P.LifecycleTempoSource,

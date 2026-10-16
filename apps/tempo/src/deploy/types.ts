@@ -39,23 +39,12 @@ export const DEPLOY_ACCOUNT_KEY = "cloudflare.account_id";
 
 export const ACCOUNT_ID = /^[0-9a-f]{32}$/;
 
-/** 12, Permissions. */
-export const PERMISSION_GROUPS: Readonly<
-  Record<DeployPermission, { readonly scope: "account" | "zone"; readonly groups: ReadonlyArray<string> }>
-> = {
-  workers: { scope: "account", groups: ["Workers Scripts Write", "Account Settings Read"] },
-  kv: { scope: "account", groups: ["Workers KV Storage Write"] },
-  d1: { scope: "account", groups: ["D1 Write"] },
-  r2: { scope: "account", groups: ["Workers R2 Storage Write"] },
-  queues: { scope: "account", groups: ["Queues Write"] },
-  vectorize: { scope: "account", groups: ["Vectorize Write"] },
-  hyperdrive: { scope: "account", groups: ["Hyperdrive Write"] },
-  secrets_store: { scope: "account", groups: ["Secrets Store Write"] },
-  routes: { scope: "zone", groups: ["Workers Routes Write", "DNS Write", "Zone Read"] },
-};
+export { PERMISSION_GROUPS } from "@tempo/protocol";
 
 /** The frozen values a deployment runs with (12, Deploy configuration). */
-export type DeployPlan = Pick<DeploySpec, "tool" | "root" | "install" | "build" | "permissions"> & {
+export type DeployPlan = Pick<DeploySpec, "tool" | "root" | "install" | "build"> & {
+  /** The project's grant at admission (12, Access requests and grants). */
+  readonly permissions: ReadonlyArray<DeployPermission>;
   readonly stage: string;
   readonly target: string;
   /** 12, Gradual rollout. Absent in plans stored before it. */

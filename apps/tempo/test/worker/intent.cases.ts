@@ -115,7 +115,7 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
       INTENT_TEXT.rule,
       "Add due dates to todos",
     ]);
-    expect(w.modes()).toEqual(["plan"]);
+    expect(w.modes()).toEqual([]);
 
     expect(text(await w.propose({ ...INTENT, goal: "a\nb\nc\nd\ne\nf" }))).toBe(
       `error: ${INTENT_TEXT.tooLong}`,
@@ -128,7 +128,7 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
         goal: "Add due dates",
         decidedBy: null,
         reasons: ["new_access"],
-        enforced: true,
+        enforced: false,
       },
     });
     expect(unwrap(await w.stub.getWorkspace({})).attention).toBe("needs_input");
@@ -140,7 +140,7 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
 
     const next = await w.sent(1);
     expect(next.content.map((c) => c.text)).toEqual([INTENT_TEXT.confirmed]);
-    expect(w.modes()).toEqual(["plan", "auto"]);
+    expect(w.modes()).toEqual([]);
     expect(await w.card()).toMatchObject({
       status: "completed",
       content: { status: "confirmed", decidedBy: "owner" },
@@ -257,35 +257,20 @@ describe("intent check (13, L-ADR-1)", { timeout: 30_000 }, () => {
     expect(reply).toMatchObject({ ok: true, result: { revision: 1, source } });
   });
 
-  it("keeps the chat read-only while the intent waits, and the owner's switch decides it", async ({
-    expect,
-  }) => {
+  it("never changes the chat's mode, and the owner's switch decides a waiting intent", async ({ expect }) => {
     const w = await setup(true);
     unwrap(await w.prompt("Add due dates to todos"));
     const first = await w.sent(0);
-    expect(w.modes()).toEqual(["plan"]);
-
-    await waitApplied(
-      w.stub,
-      await emitEvent(w.stub, w.tempod, {
-        kind: "session.updated",
-        sessionId: w.sid,
-        patch: { modeId: "auto" },
-      }),
-    );
-    await waitFor(() => w.modes().length === 2);
-    expect(w.modes()).toEqual(["plan", "plan"]);
-    const notices = await sqlRows(w.stub, "SELECT content_json FROM items WHERE kind = 'notice'");
-    expect(notices.map((n) => JSON.parse(String(n["content_json"])).text)).toContain(INTENT_TEXT.modeKept);
 
     expect(text(await w.propose(INTENT))).toBe(INTENT_TEXT.byOwner);
     await w.end(first);
-    const session = unwrap(await w.stub.getWorkspace({}));
-    expect(session.attention).toBe("needs_input");
+    expect(unwrap(await w.stub.getWorkspace({})).attention).toBe("needs_input");
     unwrap(await w.stub.setIntentCheck({ sessionId: w.sid, enabled: false }));
 
     expect((await w.sent(1)).content.map((c) => c.text)).toEqual([INTENT_TEXT.confirmed]);
-    expect(await w.card()).toMatchObject({ content: { status: "confirmed", decidedBy: "owner" } });
-    expect(w.modes().at(-1)).toBe("auto");
+    expect(await w.card()).toMatchObject({
+      content: { status: "confirmed", decidedBy: "owner", enforced: false },
+    });
+    expect(w.modes()).toEqual([]);
   });
 });

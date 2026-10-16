@@ -132,6 +132,10 @@ pub enum TranscriptEvent {
         hold_id: String,
         allow: bool,
     },
+    DecideCloudflareAccess {
+        request_id: String,
+        approve: bool,
+    },
 }
 
 impl TranscriptEvent {
@@ -223,6 +227,8 @@ pub struct TranscriptView {
     checklist_pending: HashSet<String>,
     /// Cloudflare holds with a decision in flight (13, L-ADR-8).
     hold_pending: HashSet<String>,
+    /// Cloudflare access requests with a decision in flight (12, Access requests and grants).
+    access_pending: HashSet<String>,
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
@@ -258,6 +264,7 @@ impl TranscriptView {
             checklist: Vec::new(),
             checklist_pending: HashSet::new(),
             hold_pending: HashSet::new(),
+            access_pending: HashSet::new(),
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
@@ -672,6 +679,32 @@ impl TranscriptView {
 
     pub fn hold_finished(&mut self, hold_id: &str, cx: &mut Context<Self>) {
         self.hold_pending.remove(hold_id);
+        cx.notify();
+    }
+
+    pub(crate) fn decide_access(
+        &mut self,
+        request_id: &str,
+        approve: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.read_only || !self.access_pending.insert(request_id.to_string()) {
+            return;
+        }
+        cx.emit(TranscriptEvent::DecideCloudflareAccess {
+            request_id: request_id.to_string(),
+            approve,
+        });
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn access_busy(&self, request_id: &str) -> bool {
+        self.access_pending.contains(request_id)
+    }
+
+    pub fn access_finished(&mut self, request_id: &str, cx: &mut Context<Self>) {
+        self.access_pending.remove(request_id);
         cx.notify();
     }
 
@@ -1195,14 +1228,6 @@ fn intent_card(
                 "Asking you because: {}",
                 chat_model::intent_reason_text(&intent.reasons)
             )))
-        })
-        .when(!intent.enforced, |card| {
-            card.child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child("This agent has no read-only mode; it was asked not to change files."),
-            )
         });
     if let (true, Some(input), Some(busy)) = (proposed, input, busy) {
         let can_correct = input
@@ -1335,6 +1360,96 @@ fn hold_card(
                     .gap_2()
                     .child(button("Allow once", true))
                     .child(button("Refuse", false)),
+            )
+        })
+        .into_any_element()
+}
+
+/// 12, Access requests and grants: an agent asks for Cloudflare permissions; the owner decides.
+fn access_card(
+    id: &SharedString,
+    access: &tempo_protocol::CloudflareAccessContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (writable, busy) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            (!v.read_only, v.access_pending.contains(&access.request_id))
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let pending = access.status == tempo_protocol::CloudflareAccessContentStatus::Pending;
+    let button = |label: &'static str, approve: bool| {
+        let view = view.clone();
+        let request_id = access.request_id.clone();
+        let button = Button::new(SharedString::from(format!(
+            "{id}:{}",
+            if approve { "approve" } else { "deny" }
+        )))
+        .small()
+        .label(label)
+        .disabled(busy)
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| this.decide_access(&request_id, approve, cx));
+        });
+        if approve {
+            button.primary()
+        } else {
+            button.outline()
+        }
+    };
+    v_flex()
+        .id(SharedString::from(format!("{id}:access")))
+        .role(Role::Group)
+        .aria_label("Cloudflare access request")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::access_status_text(access.status)),
+        )
+        .child(
+            v_flex()
+                .gap_1()
+                .children(access.permissions.iter().map(|&permission| {
+                    h_flex()
+                        .flex_wrap()
+                        .items_baseline()
+                        .child(
+                            div()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child(chat_model::permission_text(permission)),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .child(chat_model::permission_groups_text(permission)),
+                        )
+                })),
+        )
+        .child(
+            div()
+                .whitespace_normal()
+                .text_color(muted)
+                .child(format!("Reason: {}", access.reason)),
+        )
+        .when(writable && pending, |card| {
+            card.child(
+                h_flex()
+                    .gap_2()
+                    .child(button("Approve", true))
+                    .child(button("Deny", false)),
             )
         })
         .into_any_element()
@@ -1760,6 +1875,7 @@ fn render_native_row(
                 ItemContent::Intent(intent) => intent_card(&id, intent, view.clone(), cx),
                 ItemContent::Proof(proof) => proof_card(&id, proof, view.clone(), cx),
                 ItemContent::CloudflareHold(hold) => hold_card(&id, hold, view.clone(), cx),
+                ItemContent::CloudflareAccess(access) => access_card(&id, access, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let key: SharedString = format!("{}:block:{index}", id).into();

@@ -1077,6 +1077,60 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "decideCloudflareAccess": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DecideCloudflareAccessIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listCloudflareGrants": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListCloudflareGrantsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CloudflareGrant.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "removeCloudflareGrant": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RemoveCloudflareGrantIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "CloudflareGrant.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "decideCloudflareHold": {
       "type": "object",
       "properties": {
@@ -2843,6 +2897,9 @@
     "resolveAgentProposal",
     "confirmIntent",
     "getLoopReport",
+    "decideCloudflareAccess",
+    "listCloudflareGrants",
+    "removeCloudflareGrant",
     "decideCloudflareHold",
     "addChecklistItem",
     "reopenChecklistItem",

@@ -36,7 +36,6 @@ const CONFIG = [
   "version: 1",
   "tool: alchemy",
   "root: apps/web",
-  "permissions: [d1, routes]",
   "timeout_minutes: 10",
   "targets:",
   "  production:",
@@ -208,6 +207,8 @@ const deploys = async (opts: { settings?: boolean } = {}) => {
   });
 
   const creds = env.CREDENTIALS.getByName(seed.userId);
+  // 12, Access requests and grants: the owner approved these for the project.
+  await stub.grant({ permissions: ["d1", "routes"], workspaceId: "ws-test", requestId: "req-test" });
 
   if (opts.settings !== false) {
     await creds.putSecret(DEPLOY_MASTER_KEY, "master");

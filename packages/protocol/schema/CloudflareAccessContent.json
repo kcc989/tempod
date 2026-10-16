@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CloudflareAccessContent",
+  "type": "object",
+  "properties": {
+    "requestId": {
+      "type": "string"
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "$ref": "DeployPermission.json"
+      }
+    },
+    "reason": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "denied"]
+    }
+  },
+  "required": ["requestId", "permissions", "reason", "status"],
+  "additionalProperties": true
+}

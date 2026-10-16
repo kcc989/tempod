@@ -26,7 +26,7 @@ it("shows the intent with the judge's reason, confirms with ⌘↩ and sends a c
   const card = screen.getByRole("region", { name: "Intent" });
   expect(card.textContent).toContain("GoalAdd a due date to todos");
   expect(card.textContent).toContain("Asking you because: it is hard to roll back");
-  expect(card.textContent).toContain("This agent has no read-only mode");
+  expect(card.textContent).not.toContain("read-only");
 
   fireEvent.keyDown(card, { key: "Enter", metaKey: true });
   await waitFor(() =>

@@ -5,6 +5,9 @@ use tempo_protocol as p;
 
 pub const PAGE: usize = 50;
 
+/// 12, Access requests and grants: the help text of the repository's Cloudflare access list.
+pub const GRANTS_HELP: &str = "Agents ask for access in a chat, and you approve it there. Deploys and agents use only what is listed here.";
+
 pub fn state(deployment: &p::Deployment) -> (&'static str, CiTone) {
     match (deployment.status, deployment.conclusion) {
         (p::DeployStatus::Queued, _) => ("Queued", CiTone::Muted),

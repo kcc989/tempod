@@ -91,7 +91,15 @@ export const manifests = sqliteTable("manifests", {
   createdAt: integer("created_at").notNull(),
 });
 
+export const grants = sqliteTable("grants", {
+  permission: text("permission").primaryKey(),
+  grantedAt: integer("granted_at").notNull(),
+  workspaceId: text("workspace_id"),
+  requestId: text("request_id"),
+});
+
 export const appDeploySchema = {
+  grants,
   deployConfigs,
   deployments,
   deployKv,

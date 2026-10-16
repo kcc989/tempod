@@ -1,6 +1,7 @@
 import { confirmIntent, correctIntent, setIntentCheck } from "./intent.ts";
 import { addChecklistItem, reopenChecklistItem } from "./proof.ts";
 import { decideCloudflareHold } from "./cloudflare-gate.ts";
+import { decideCloudflareAccess } from "./cloudflare-access.ts";
 import { resolveAgentProposal } from "../../agents/proposals.ts";
 import { Schema } from "effect";
 import { promptSlug } from "@tempo/cities";
@@ -391,6 +392,12 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       notArchived(core);
       rt.ensureAwake();
       correctIntent(core, intentId, text);
+
+      return {};
+    },
+    decideCloudflareAccess: async ({ requestId, approve }) => {
+      notArchived(core);
+      await decideCloudflareAccess(core, requestId, approve);
 
       return {};
     },
@@ -931,9 +938,6 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     setSessionMode: async ({ sessionId, modeId }) => {
       core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
-
-      // The intent mode guard keeps an owner's choice (13, Exact rules, Read-only).
-      core.setKv(`ownerMode:${sessionId}`, modeId);
 
       if (core.liveSessions.has(sessionId))
         await requireTempod(core).request("session.setMode", { sessionId, modeId });

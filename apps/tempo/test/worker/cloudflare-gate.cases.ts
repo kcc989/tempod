@@ -28,7 +28,6 @@ const PROJECT: ProjectResources = {
 const CONFIG = [
   "version: 1",
   "tool: alchemy",
-  "permissions: [d1]",
   "targets:",
   "  production:",
   "    branch: main",
@@ -163,6 +162,7 @@ describe("Cloudflare API gate (13, L-ADR-8)", { timeout: 30_000 }, () => {
     const creds = env.CREDENTIALS.getByName(w.seeded.userId);
     await creds.putSecret(DEPLOY_MASTER_KEY, "master");
     await creds.putSecret(DEPLOY_ACCOUNT_KEY, ACCOUNT);
+    unwrap(await deploy.grant({ permissions: ["d1"], workspaceId: w.workspaceId, requestId: "req-test" }));
     unwrap(await deploy.updateConfig({ source: CONFIG, revision: 0 }));
     const aligned = { value: 0.9 };
     await runInDurableObject(w.stub, () => {

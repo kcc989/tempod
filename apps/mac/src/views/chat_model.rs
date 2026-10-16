@@ -1022,6 +1022,50 @@ pub fn hold_reason_text(reasons: &[String]) -> String {
         .join("; ")
 }
 
+/// 12, Access requests and grants: one permission in plain words.
+pub fn permission_text(permission: p::DeployPermission) -> &'static str {
+    match permission {
+        p::DeployPermission::Workers => "Deploy Workers",
+        p::DeployPermission::Kv => "Write KV namespaces",
+        p::DeployPermission::D1 => "Write D1 databases",
+        p::DeployPermission::R2 => "Write R2 buckets",
+        p::DeployPermission::Queues => "Write Queues",
+        p::DeployPermission::Vectorize => "Write Vectorize indexes",
+        p::DeployPermission::Hyperdrive => "Write Hyperdrive configurations",
+        p::DeployPermission::SecretsStore => "Write the Secrets Store",
+        p::DeployPermission::Routes => "Write Workers routes and DNS",
+    }
+}
+
+/// 12, Permissions: the Cloudflare permission groups of a permission (`PERMISSION_GROUPS`).
+pub fn permission_groups(permission: p::DeployPermission) -> &'static [&'static str] {
+    match permission {
+        p::DeployPermission::Workers => &["Workers Scripts Write", "Account Settings Read"],
+        p::DeployPermission::Kv => &["Workers KV Storage Write"],
+        p::DeployPermission::D1 => &["D1 Write"],
+        p::DeployPermission::R2 => &["Workers R2 Storage Write"],
+        p::DeployPermission::Queues => &["Queues Write"],
+        p::DeployPermission::Vectorize => &["Vectorize Write"],
+        p::DeployPermission::Hyperdrive => &["Hyperdrive Write"],
+        p::DeployPermission::SecretsStore => &["Secrets Store Write"],
+        p::DeployPermission::Routes => &["Workers Routes Write", "DNS Write", "Zone Read"],
+    }
+}
+
+/// The groups after a permission's text on the access card and in the grant list.
+pub fn permission_groups_text(permission: p::DeployPermission) -> String {
+    format!(" · {}", permission_groups(permission).join(", "))
+}
+
+/// 12, Access requests and grants: the access card's header.
+pub fn access_status_text(status: p::CloudflareAccessContentStatus) -> &'static str {
+    match status {
+        p::CloudflareAccessContentStatus::Pending => "Cloudflare access: approve or deny",
+        p::CloudflareAccessContentStatus::Approved => "Cloudflare access approved",
+        p::CloudflareAccessContentStatus::Denied => "Cloudflare access denied",
+    }
+}
+
 pub const ADD_TO_CHECKLIST: &str = "Add to checklist";
 pub const ON_CHECKLIST: &str = "On checklist";
 pub const REOPEN_CHECKLIST_ITEM: &str = "Reopen";
@@ -1175,6 +1219,56 @@ mod tests {
         assert_eq!(
             intent_reason_text(&["new_access".into(), "hard_rollback".into(), "custom".into()]),
             "it needs new access, it is hard to roll back, custom"
+        );
+    }
+    #[test]
+    fn access_texts_match_the_web_card() {
+        assert_eq!(
+            access_status_text(p::CloudflareAccessContentStatus::Pending),
+            "Cloudflare access: approve or deny"
+        );
+        assert_eq!(
+            access_status_text(p::CloudflareAccessContentStatus::Approved),
+            "Cloudflare access approved"
+        );
+        assert_eq!(
+            access_status_text(p::CloudflareAccessContentStatus::Denied),
+            "Cloudflare access denied"
+        );
+        let lines: Vec<String> = [
+            "workers",
+            "kv",
+            "d1",
+            "r2",
+            "queues",
+            "vectorize",
+            "hyperdrive",
+            "secrets_store",
+            "routes",
+        ]
+        .iter()
+        .map(|name| {
+            let permission = name.parse().unwrap();
+            format!(
+                "{}{}",
+                permission_text(permission),
+                permission_groups_text(permission)
+            )
+        })
+        .collect();
+        assert_eq!(
+            lines,
+            [
+                "Deploy Workers · Workers Scripts Write, Account Settings Read",
+                "Write KV namespaces · Workers KV Storage Write",
+                "Write D1 databases · D1 Write",
+                "Write R2 buckets · Workers R2 Storage Write",
+                "Write Queues · Queues Write",
+                "Write Vectorize indexes · Vectorize Write",
+                "Write Hyperdrive configurations · Hyperdrive Write",
+                "Write the Secrets Store · Secrets Store Write",
+                "Write Workers routes and DNS · Workers Routes Write, DNS Write, Zone Read",
+            ]
         );
     }
     #[test]

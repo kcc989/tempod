@@ -1,5 +1,6 @@
 import { proposeIntent } from "./intent.ts";
 import { submitProof } from "./proof.ts";
+import { requestCloudflareAccess } from "./cloudflare-access.ts";
 import { capabilitiesForAgent, sessionManifest } from "./manifest.ts";
 import { deployTool } from "../../agents/deploys.ts";
 import { issueTool } from "../../agents/issues.ts";
@@ -238,6 +239,12 @@ export class TempodClient {
 
     if (request.op === "get_capabilities")
       return capabilitiesForAgent(await sessionManifest(this.core, session));
+
+    if (request.op === "request_cloudflare_access") {
+      if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+      return requestCloudflareAccess(this.core, session, request.params);
+    }
 
     if (request.op === "submit_proof") {
       if (session.runId) throw new TempoError("RUN_NOT_RUNNING");

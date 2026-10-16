@@ -11,7 +11,7 @@ import {
   IssueState,
   ProjectVisibility,
 } from "./enums.ts";
-import { EgressPolicy } from "./enums.ts";
+import { DeployPermission, EgressPolicy } from "./enums.ts";
 import {
   EgressAllowlist,
   Environment,
@@ -46,6 +46,7 @@ import {
   ProjectProfile,
   ChecklistItem,
   LoopReport,
+  CloudflareGrant,
   DeploySettings,
   CiRun,
   CiRunDetail,
@@ -290,6 +291,13 @@ export const API = {
   resolveAgentProposal: fn("POST", Schema.Struct({ ...W, proposalId: S, apply: B }), Empty),
   confirmIntent: fn("POST", Schema.Struct({ ...W, intentId: S }), Empty),
   getLoopReport: fn("GET", Schema.Struct({ from: N, to: N }), LoopReport),
+  decideCloudflareAccess: fn("POST", Schema.Struct({ ...W, requestId: S, approve: B }), Empty),
+  listCloudflareGrants: fn("GET", Schema.Struct({ projectId: S }), Schema.Array(CloudflareGrant)),
+  removeCloudflareGrant: fn(
+    "POST",
+    Schema.Struct({ projectId: S, permission: DeployPermission }),
+    Schema.Array(CloudflareGrant),
+  ),
   decideCloudflareHold: fn("POST", Schema.Struct({ ...W, holdId: S, allow: B }), Empty),
   addChecklistItem: fn("POST", Schema.Struct({ ...W, itemId: S }), ChecklistItem),
   reopenChecklistItem: fn("POST", Schema.Struct({ ...W, checklistId: S }), Empty),

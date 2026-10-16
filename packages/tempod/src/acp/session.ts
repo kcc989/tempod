@@ -43,11 +43,13 @@ import { offeredOption, sessionProfile } from "./profile.ts";
 import { SessionMapper, type TurnOutcome } from "./mapper.ts";
 import { acpMcpServers, type Bridge } from "./mcp.ts";
 
-const RUN_REPORT_TOOL_NAMES = new Set([
-  "mcp__tempo__report_result",
-  "tempo.report_result",
-  "mcp:tempo:report_result",
-]);
+const toolAliases = (names: ReadonlyArray<string>) =>
+  new Set(names.flatMap((n) => [`mcp__tempo__${n}`, `tempo.${n}`, `mcp:tempo:${n}`]));
+
+const RUN_REPORT_TOOL_NAMES = toolAliases(["report_result"]);
+
+/** 13, L-ADR-1: Tempo's own intent gate and read-only tools, which a chat calls while in read-only mode. */
+const CHAT_GATE_TOOL_NAMES = toolAliases(["propose_intent", "get_capabilities", "get_project_profile"]);
 
 const STDERR_LINES = 200;
 
@@ -310,7 +312,7 @@ export class AgentSession {
       return;
     }
 
-    const allow = this.runReportAllow(params);
+    const allow = this.tempoToolAllow(params);
 
     if (allow) {
       this.byRpcId.set(rpcId, Promise.resolve({ outcome: { outcome: "selected", optionId: allow } }));
@@ -337,14 +339,16 @@ export class AgentSession {
     });
   }
   /**
-   * 08, Results: a run reports through Tempo's own `report_result`. A read-only mode such as Claude's
-   * `plan` asks before any MCP tool, and nobody answers a hook run, so tempod allows that one call.
+   * An agent's permission mode can ask before any MCP tool. tempod allows Tempo's own gate tools:
+   * `report_result` in a run (08, Results; nobody answers a hook run) and the intent tools in a
+   * chat (13, L-ADR-1).
    */
-  private runReportAllow(params: AcpFields): string | null {
-    if (!this.env[TEMPO_RUN_ID_ENV]) return null;
+  private tempoToolAllow(params: AcpFields): string | null {
     const toolCall = isObj(params["toolCall"]) ? params["toolCall"] : {};
+    const title = String(toolCall["title"] ?? "");
+    const allowed = this.env[TEMPO_RUN_ID_ENV] ? RUN_REPORT_TOOL_NAMES : CHAT_GATE_TOOL_NAMES;
 
-    if (!RUN_REPORT_TOOL_NAMES.has(String(toolCall["title"] ?? ""))) return null;
+    if (!allowed.has(title)) return null;
 
     return toPermissionOptions(params["options"]).find((o) => o.kind === "allow_once")?.optionId ?? null;
   }

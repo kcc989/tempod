@@ -54,11 +54,6 @@ export function IntentCard({
           Asking you because: {intentReasonText(intent.reasons)}
         </p>
       )}
-      {!intent.enforced && (
-        <p className="text-xs text-muted-foreground">
-          This agent has no read-only mode; it was asked not to change files.
-        </p>
-      )}
       {open && (
         <div className="flex flex-col gap-2">
           <Textarea
