@@ -1,7 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_TMUX_CONF, DEFAULT_ZSHRC } from "@tempo/protocol";
+import { playwrightServer } from "../src/acp/mcp.ts";
 import { sleep } from "./helpers.ts";
+
+type McpParams = {
+  protocolVersion?: string;
+  capabilities?: Record<string, never>;
+  clientInfo?: { name: string; version: string };
+  name?: string;
+  arguments?: { url: string };
+};
+
+type JsonRpcMessage = { jsonrpc: "2.0"; id?: number; method: string; params?: McpParams };
 
 describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () => {
   test("runs as tempo with tini as PID 1", () => {
@@ -53,4 +66,73 @@ describe.skipIf(process.env["TEMPO_IMAGE_TEST"] !== "1")("workspace image", () =
     for (let i = 0; i < 100 && existsSync(`/proc/${pid}`); i++) await sleep(20);
     expect(existsSync(`/proc/${pid}`)).toBe(false);
   });
+  test("Playwright MCP finds its Chromium build and loads a page", async () => {
+    const server = playwrightServer();
+    const cwd = mkdtempSync(join(tmpdir(), "playwright-mcp-"));
+
+    const proc = Bun.spawn([server.command, ...server.args], {
+      cwd,
+      env: { ...process.env, ...Object.fromEntries(server.env.map((e) => [e.name, e.value])) },
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+
+    try {
+      const send = (message: JsonRpcMessage): void => {
+        proc.stdin.write(`${JSON.stringify(message)}\n`);
+        proc.stdin.flush();
+      };
+
+      const reader = proc.stdout.getReader();
+      const decoder = new TextDecoder();
+      let buffered = "";
+
+      const reply = async (id: number): Promise<{ result?: { isError?: boolean; content?: unknown } }> => {
+        for (;;) {
+          const end = buffered.indexOf("\n");
+
+          if (end >= 0) {
+            const message = JSON.parse(buffered.slice(0, end));
+            buffered = buffered.slice(end + 1);
+
+            if (message.id === id) return message;
+            continue;
+          }
+
+          const chunk = await reader.read();
+
+          if (chunk.done) throw new Error("Playwright MCP exited before it answered");
+          buffered += decoder.decode(chunk.value, { stream: true });
+        }
+      };
+
+      send({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "image-test", version: "1" },
+        },
+      });
+      await reply(1);
+      send({ jsonrpc: "2.0", method: "notifications/initialized" });
+      send({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "browser_navigate", arguments: { url: "data:text/html,<title>tempo-image</title>" } },
+      });
+
+      const navigated = await reply(2);
+      expect(JSON.stringify(navigated.result?.content)).toContain("tempo-image");
+      expect(navigated.result?.isError).not.toBe(true);
+    } finally {
+      proc.kill();
+      await proc.exited;
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

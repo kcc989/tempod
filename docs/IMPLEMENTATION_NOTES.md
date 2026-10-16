@@ -635,3 +635,10 @@ Tab 13, L-ADR-7 and Phase 3. Choices made without the owner:
 | Contract checks | `getLoopReport` lists intent order and length violations. Proof completeness and one-action rollback are enforced by worker tests. | These cannot happen from the event log once the code holds them. |
 | Daily job | Cron `41 5 * * *` (UTC). It writes `loop/<date>.json` for the owner (`TEMPO_OWNER_GITHUB_ID`) and opens the issue in the owner's first native project, at most once a week per step. The body gives the window and the numbers, and names the report key. | Tempo has one owner; issues (09) exist only in native projects. |
 | Not built yet | The weekly file in `docs/evidence/loop-weekly/` through a Tempo PR | Tempo has no API yet that commits a file and opens a PR from the Worker. The CI summary already prints the newest file there. |
+
+## Smaller image uploads (2026-10-16)
+
+- **Layer order (01 Container image).** The agents and Chromium each install in their own layer before `tempod` and the home files are copied. Before, every `tempod` build changed the 2.39 GB install layer (862 MB compressed), so each deploy uploaded it again.
+- **Playwright MCP browser.** `@playwright/mcp@0.0.83` bundles `playwright-core` 1.64.0-alpha-1790635538000, which launches Chrome for Testing build 1247. The image installed build 1228 (from `playwright@1.61.1`), so Playwright MCP could not start a browser ("Browser \"chrome-for-testing\" is not installed"). The image test only checked that the bin existed. Owner decision: install only the build Playwright MCP uses, with its bundled CLI, and no headless shell. A new image test starts Playwright MCP with the `session/new` arguments and loads a page.
+- **OpenCode.** The unused OpenCode platform package (177 MiB, a second copy of the binary) is removed.
+- **Codex and Claude** have no duplicate files: each package holds one native binary for linux-x64 plus its helpers, so they are unchanged.
