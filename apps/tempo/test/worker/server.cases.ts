@@ -15,6 +15,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test"
 import { exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Schema } from "effect";
+import { ANIMALS } from "@tempo/cities";
 import {
   ApiMeta,
   CloseCode,
@@ -875,7 +876,7 @@ describe("listModels", () => {
 });
 
 describe("createWorkspace (03, Create a workspace)", () => {
-  it("picks the first unused city and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
+  it("picks an unused animal and the branch <branch_prefix><slug>, and returns a starting summary", async () => {
     const o = await owner();
 
     const first = ok(
@@ -886,11 +887,11 @@ describe("createWorkspace (03, Create a workspace)", () => {
     );
 
     expect(conforms(WorkspaceSummary)(first)).toBe(true);
+    expect(ANIMALS).toContain(first.slug);
     expect(first).toMatchObject({
       projectId: o.projectId,
-      slug: "otter",
-      title: "otter",
-      branch: "tempo/otter",
+      title: first.slug,
+      branch: `tempo/${first.slug}`,
       baseBranch: "main",
       state: "starting",
       defaultAgent: "claude",
@@ -905,13 +906,15 @@ describe("createWorkspace (03, Create a workspace)", () => {
       }),
     );
 
-    expect(second).toMatchObject({ slug: "fox", branch: "tempo/fox" });
+    expect(ANIMALS).toContain(second.slug);
+    expect(second.slug).not.toBe(first.slug);
+    expect(second.branch).toBe(`tempo/${second.slug}`);
     const row = await d1Row("SELECT * FROM workspaces WHERE id = ?", first.id);
     expect(row).toMatchObject({
       project_id: o.projectId,
       user_id: o.userId,
-      slug: "otter",
-      branch: "tempo/otter",
+      slug: first.slug,
+      branch: `tempo/${first.slug}`,
       base_branch: "main",
     });
   });
@@ -925,10 +928,10 @@ describe("createWorkspace (03, Create a workspace)", () => {
       }),
     );
 
-    expect(ws).toMatchObject({ slug: "otter", branch: "feat/otter" });
+    expect(ws.branch).toBe(`feat/${ws.slug}`);
   });
   it("reuses a slug that only an archived workspace holds", async () => {
-    // 03: "the first animal name in the fixed list that no non-archived workspace in this project uses"
+    // 03: "a random animal name from the fixed list that no non-archived workspace in this project uses"
     const o = await owner();
     await insertWorkspaceRow({
       projectId: o.projectId,
@@ -936,7 +939,8 @@ describe("createWorkspace (03, Create a workspace)", () => {
       slug: "otter",
       archivedAt: Date.now() - 1000,
     });
-    await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug: "fox" });
+
+    for (const slug of ANIMALS.slice(1)) await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug });
 
     const ws = ok(
       await call("createWorkspace", o, {
@@ -1014,7 +1018,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
       }),
     );
 
-    expect(ws).toMatchObject({ slug: "otter", branch: "feature/checkout", baseBranch: "main" });
+    expect(ws).toMatchObject({ branch: "feature/checkout", baseBranch: "main" });
   });
   it("source.kind 'branch' returns NOT_FOUND when the branch is not on origin", async () => {
     const o = await owner();
@@ -1115,7 +1119,7 @@ describe("createWorkspace (03, Create a workspace)", () => {
       await call("createWorkspace", o, { projectId: o.projectId, source: { kind: "pr", number: 8 } }),
     );
 
-    expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop", slug: "otter" });
+    expect(ws).toMatchObject({ branch: "pr-branch-8", baseBranch: "develop" });
     gh.pulls.delete(8);
   });
   it("source.kind 'pr' keeps the PR's number, state and title in D1 and the WorkspaceDO", async () => {

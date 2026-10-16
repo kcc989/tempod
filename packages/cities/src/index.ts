@@ -1,4 +1,4 @@
-/** Fixed animal slug list. The first unused name wins. */
+/** Fixed animal slug list. A random unused name wins. */
 export const ANIMALS = [
   "otter",
   "fox",
@@ -91,13 +91,17 @@ export const ANIMALS = [
 
 export type Animal = (typeof ANIMALS)[number];
 
-export const pickSlug = (used: Iterable<string>): string => {
+export const pickSlug = (used: Iterable<string>, random: () => number = Math.random): string => {
   const taken = new Set(used);
+  const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)] as T;
+  const free = ANIMALS.filter((animal) => !taken.has(animal));
 
-  for (const animal of ANIMALS) if (!taken.has(animal)) return animal;
+  if (free.length > 0) return pick(free);
+
+  const base = pick(ANIMALS);
 
   for (let n = 2; ; n++) {
-    const slug = `${ANIMALS[0]}-${n}`;
+    const slug = `${base}-${n}`;
 
     if (!taken.has(slug)) return slug;
   }

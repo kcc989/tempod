@@ -121,7 +121,7 @@ The server function does the checks and the D1 insert; the WorkspaceDO does ever
 **In the `createWorkspace` server function**
 
 1. Validate input. Load the project.
-2. Pick the slug: the first animal name in the fixed list that no non-archived workspace in this project uses. If all are used, add `-2`, `-3`, and so on to the first name.
+2. Pick the slug: a random animal name from the fixed list that no non-archived workspace in this project uses. If all are used, pick a random name from the list and add the lowest free suffix `-2`, `-3`, and so on.
 3. Pick the branch:
    - `source.kind = "new"`: `<git.branch_prefix><slug>`, for example `tempo/otter`.
    - `source.kind = "branch"`: `source.branch`. It MUST exist on origin.
