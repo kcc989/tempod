@@ -162,6 +162,17 @@ describe("links and inputs", () => {
       url: "https://github.com/acme/app/pull/12",
       className: "text-success",
       ariaLabel: "Pull request #12, open. Opens on GitHub",
+      external: true,
+    });
+    expect(
+      prLink(
+        { owner: "tempo", name: "app", id: "p1", provider: "artifacts" },
+        { prNumber: 4, prState: "open" },
+      ),
+    ).toMatchObject({
+      url: "/repositories?project=p1&tab=pulls&pull=4",
+      ariaLabel: "Pull request #4, open. Opens in Repositories",
+      external: false,
     });
 
     const tone = (prState: "open" | "draft" | "merged" | "closed" | null) =>

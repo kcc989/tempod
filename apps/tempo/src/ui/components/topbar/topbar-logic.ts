@@ -138,6 +138,7 @@ export const githubUrlFor = (
 export interface PrLink {
   readonly label: string;
   readonly url: string;
+  readonly external: boolean;
   readonly className: string;
   readonly ariaLabel: string;
 }
@@ -149,18 +150,26 @@ const PR_LINK_CLASS: Record<PrState, string> = {
   closed: "text-destructive",
 };
 
-/** 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub. */
+/** 04 Top bar, left: `#<number> ↗` after the base branch, coloured by prState, to the PR on GitHub or in Repositories. */
 export const prLink = (
-  project: { readonly owner: string; readonly name: string } | undefined,
+  project:
+    | { readonly owner: string; readonly name: string; readonly id?: string; readonly provider?: string }
+    | undefined,
   w: Pick<WorkspaceSummary, "prNumber" | "prState">,
 ): PrLink | null => {
   if (!project || w.prNumber === null) return null;
 
+  const hostedId = project.provider === "artifacts" ? project.id : undefined;
+  const hosted = hostedId !== undefined;
+
   return {
     label: `#${w.prNumber} ↗`,
-    url: githubPullUrl(project.owner, project.name, w.prNumber),
+    url: hosted
+      ? repositoryPath(hostedId, { pull: w.prNumber })
+      : githubPullUrl(project.owner, project.name, w.prNumber),
     className: w.prState ? PR_LINK_CLASS[w.prState] : "text-muted-foreground",
-    ariaLabel: `Pull request #${w.prNumber}${w.prState ? `, ${w.prState}` : ""}. Opens on GitHub`,
+    ariaLabel: `Pull request #${w.prNumber}${w.prState ? `, ${w.prState}` : ""}. ${hosted ? "Opens in Repositories" : "Opens on GitHub"}`,
+    external: !hosted,
   };
 };
 
