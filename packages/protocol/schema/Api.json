@@ -464,6 +464,169 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "rollbackDeployment": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RollbackDeploymentIn.json"
+        },
+        "output": {
+          "$ref": "Deployment.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "listProductionErrors": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "ListProductionErrorsIn.json"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "ProductionError.json"
+          }
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "startErrorFix": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "StartErrorFixIn.json"
+        },
+        "output": {
+          "$ref": "StartErrorFixOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getIssuesWebhook": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetIssuesWebhookIn.json"
+        },
+        "output": {
+          "$ref": "GetIssuesWebhookOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "rotateIssuesWebhook": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "RotateIssuesWebhookIn.json"
+        },
+        "output": {
+          "$ref": "RotateIssuesWebhookOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getProjectProfile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetProjectProfileIn.json"
+        },
+        "output": {
+          "$ref": "ProjectProfile.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "updateProjectProfile": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "UpdateProjectProfileIn.json"
+        },
+        "output": {
+          "$ref": "ProjectProfile.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getJudgeSettings": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "GetJudgeSettingsOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "setJudgeKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetJudgeKeyIn.json"
+        },
+        "output": {
+          "$ref": "SetJudgeKeyOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "deleteJudgeKey": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "Empty.json"
+        },
+        "output": {
+          "$ref": "DeleteJudgeKeyOut.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "getDeploymentLog": {
       "type": "object",
       "properties": {
@@ -874,6 +1037,102 @@
         },
         "input": {
           "$ref": "ResolveAgentProposalIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "confirmIntent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ConfirmIntentIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "getLoopReport": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "GET"
+        },
+        "input": {
+          "$ref": "GetLoopReportIn.json"
+        },
+        "output": {
+          "$ref": "LoopReport.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "decideCloudflareHold": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "DecideCloudflareHoldIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "addChecklistItem": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "AddChecklistItemIn.json"
+        },
+        "output": {
+          "$ref": "ChecklistItem.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "reopenChecklistItem": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "ReopenChecklistItemIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
+    "correctIntent": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "CorrectIntentIn.json"
         },
         "output": {
           "$ref": "Empty.json"
@@ -1773,6 +2032,22 @@
       "required": ["method", "input", "output"],
       "additionalProperties": false
     },
+    "setIntentCheck": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "POST"
+        },
+        "input": {
+          "$ref": "SetIntentCheckIn.json"
+        },
+        "output": {
+          "$ref": "Empty.json"
+        }
+      },
+      "required": ["method", "input", "output"],
+      "additionalProperties": false
+    },
     "setSessionConfig": {
       "type": "object",
       "properties": {
@@ -2499,6 +2774,16 @@
     "startDeployment",
     "redeploy",
     "cancelDeployment",
+    "rollbackDeployment",
+    "listProductionErrors",
+    "startErrorFix",
+    "getIssuesWebhook",
+    "rotateIssuesWebhook",
+    "getProjectProfile",
+    "updateProjectProfile",
+    "getJudgeSettings",
+    "setJudgeKey",
+    "deleteJudgeKey",
     "getDeploymentLog",
     "listRepositoryIssues",
     "getRepositoryIssue",
@@ -2524,6 +2809,12 @@
     "cancelRun",
     "listRuns",
     "resolveAgentProposal",
+    "confirmIntent",
+    "getLoopReport",
+    "decideCloudflareHold",
+    "addChecklistItem",
+    "reopenChecklistItem",
+    "correctIntent",
     "sendRunToChat",
     "listLifecycleEvents",
     "getTrace",
@@ -2578,6 +2869,7 @@
     "deleteQueuedTurn",
     "reorderQueue",
     "setSessionMode",
+    "setIntentCheck",
     "setSessionConfig",
     "respondPermission",
     "getChanges",

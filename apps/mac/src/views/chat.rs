@@ -9,6 +9,7 @@ use crate::links::{self, LinkTarget};
 use crate::markdown::{escape_raw_html, tool_text};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::collapsible::Collapsible;
+use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::text::{TextView, TextViewStyle};
@@ -18,7 +19,7 @@ use gpui_kit::{
     Action, AnyElement, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Image,
     ImageFormat, ImageSource, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
     Render, Role, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    Window, div, image_cache, px,
+    Subscription, Window, div, image_cache, px,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -84,6 +85,13 @@ pub enum TranscriptEvent {
         proposal_id: String,
         apply: bool,
     },
+    ConfirmIntent {
+        intent_id: String,
+    },
+    CorrectIntent {
+        intent_id: String,
+        text: tempo_protocol::CorrectIntentInText,
+    },
     RequestAgent {
         agent_id: String,
     },
@@ -114,6 +122,27 @@ pub enum TranscriptEvent {
         artifact_id: String,
         version: f64,
     },
+    AddChecklistItem {
+        item_id: String,
+    },
+    ReopenChecklistItem {
+        checklist_id: String,
+    },
+    DecideCloudflareHold {
+        hold_id: String,
+        allow: bool,
+    },
+}
+
+impl TranscriptEvent {
+    /// The pending key of a checklist request, which disables its action until the call ends.
+    pub fn checklist_key(&self) -> Option<String> {
+        match self {
+            Self::AddChecklistItem { item_id } => Some(format!("add:{item_id}")),
+            Self::ReopenChecklistItem { checklist_id } => Some(format!("reopen:{checklist_id}")),
+            _ => None,
+        }
+    }
 }
 
 impl EventEmitter<TranscriptEvent> for TranscriptView {}
@@ -186,6 +215,14 @@ pub struct TranscriptView {
     inline_images: HashMap<String, Arc<Image>>,
     media_pending: HashSet<String>,
     permission_focus: HashMap<String, FocusHandle>,
+    /// Correction fields of intents waiting for the owner, by intent id.
+    intent_inputs: HashMap<String, (Entity<TextareaState>, Subscription)>,
+    intent_pending: HashSet<String>,
+    /// The workspace checklist (13, L-ADR-2).
+    checklist: Vec<tempo_protocol::ChecklistItem>,
+    checklist_pending: HashSet<String>,
+    /// Cloudflare holds with a decision in flight (13, L-ADR-8).
+    hold_pending: HashSet<String>,
     attachment_source: Option<(Client, String)>,
     thumbnails: Thumbnails,
     pub read_only: bool,
@@ -216,6 +253,11 @@ impl TranscriptView {
             inline_images: HashMap::new(),
             media_pending: HashSet::new(),
             permission_focus: HashMap::new(),
+            intent_inputs: HashMap::new(),
+            intent_pending: HashSet::new(),
+            checklist: Vec::new(),
+            checklist_pending: HashSet::new(),
+            hold_pending: HashSet::new(),
             attachment_source: None,
             thumbnails: Thumbnails::default(),
             read_only: false,
@@ -244,7 +286,31 @@ impl TranscriptView {
                 continue;
             };
             if let ItemContent::Artifact(a) = &item.content {
-                self.load_artifact_thumbnail(&client, &workspace_id, a, item.status, &row.id, cx);
+                if a.artifact_kind == tempo_protocol::ArtifactKind::Image
+                    && item.status == ItemStatus::Completed
+                {
+                    self.load_artifact_thumbnail(
+                        &client,
+                        &workspace_id,
+                        &a.artifact_id,
+                        a.version,
+                        &row.id,
+                        cx,
+                    );
+                }
+                continue;
+            }
+            if let ItemContent::Proof(proof) = &item.content {
+                for screen in &proof.screens {
+                    self.load_artifact_thumbnail(
+                        &client,
+                        &workspace_id,
+                        &screen.artifact_id,
+                        screen.version,
+                        &row.id,
+                        cx,
+                    );
+                }
                 continue;
             }
             let ItemContent::UserMessage(message) = &item.content else {
@@ -283,26 +349,23 @@ impl TranscriptView {
         }
     }
 
-    /// 04 artifact card: kind `image` shows a thumbnail from the artifact route, decoded (SVG
+    /// 04 artifact card and 13 proof screens: a thumbnail from the artifact route, decoded (SVG
     /// rasterized) on the background executor.
     fn load_artifact_thumbnail(
         &mut self,
         client: &Client,
         workspace_id: &str,
-        a: &tempo_protocol::ArtifactItemContent,
-        status: ItemStatus,
+        artifact_id: &str,
+        version: f64,
         row_id: &SharedString,
         cx: &mut Context<Self>,
     ) {
-        let key = artifact_thumbnail_key(a);
-        if a.artifact_kind != tempo_protocol::ArtifactKind::Image
-            || status != ItemStatus::Completed
-            || !self.thumbnails.wants(&key)
-        {
+        let key = artifact_thumbnail_key(artifact_id, version);
+        if !self.thumbnails.wants(&key) {
             return;
         }
         self.thumbnails.pending.insert(key.clone());
-        let request = client.get_artifact(workspace_id, &a.artifact_id, a.version as u32);
+        let request = client.get_artifact(workspace_id, artifact_id, version as u32);
         let row_id = row_id.clone();
         cx.spawn(async move |this, cx| {
             let file = request.await.ok();
@@ -451,6 +514,182 @@ impl TranscriptView {
         self.rows.len()
     }
 
+    fn intent_row(&self, intent_id: &str) -> Option<usize> {
+        self.rows.iter().position(|row| matches!(&row.native,
+            Some(RowContent::Item { item, .. }) if matches!(&item.content, ItemContent::Intent(i) if i.intent_id == intent_id)))
+    }
+
+    /// Keeps one correction field per intent the owner can still confirm or correct.
+    pub(crate) fn sync_intent_inputs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let open: HashSet<String> = if self.read_only {
+            HashSet::new()
+        } else {
+            self.rows
+                .iter()
+                .filter_map(|row| match &row.native {
+                    Some(RowContent::Item { item, .. }) => match &item.content {
+                        ItemContent::Intent(i)
+                            if i.status == tempo_protocol::IntentContentStatus::Proposed =>
+                        {
+                            Some(i.intent_id.clone())
+                        }
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .collect()
+        };
+        self.intent_inputs.retain(|id, _| open.contains(id));
+        self.intent_pending.retain(|id| open.contains(id));
+        for id in open {
+            if self.intent_inputs.contains_key(&id) {
+                continue;
+            }
+            let input = cx.new(|cx| {
+                TextareaState::new(window, cx)
+                    .auto_grow(2, 8)
+                    .placeholder("Correct the intent (optional)")
+            });
+            let intent_id = id.clone();
+            let subscription = cx.observe(&input, move |this, _, cx| {
+                if let Some(ix) = this.intent_row(&intent_id) {
+                    this.scroller
+                        .update(cx, |s, cx| s.remeasure_items(ix..ix + 1, cx));
+                }
+                cx.notify();
+            });
+            self.intent_inputs.insert(id, (input, subscription));
+        }
+    }
+
+    pub(crate) fn intent_correction(&self, intent_id: &str, cx: &gpui_kit::App) -> String {
+        self.intent_inputs
+            .get(intent_id)
+            .map(|(input, _)| input.read(cx).value().trim().to_string())
+            .unwrap_or_default()
+    }
+
+    fn confirm_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        if self.read_only || !self.intent_inputs.contains_key(intent_id) {
+            return;
+        }
+        if self.intent_pending.insert(intent_id.to_string()) {
+            cx.emit(TranscriptEvent::ConfirmIntent {
+                intent_id: intent_id.to_string(),
+            });
+            cx.notify();
+        }
+    }
+
+    fn correct_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        let Ok(text) = self.intent_correction(intent_id, cx).parse() else {
+            return;
+        };
+        if self.read_only || self.intent_pending.contains(intent_id) {
+            return;
+        }
+        self.intent_pending.insert(intent_id.to_string());
+        cx.emit(TranscriptEvent::CorrectIntent {
+            intent_id: intent_id.to_string(),
+            text,
+        });
+        cx.notify();
+    }
+
+    /// ⌘↩ sends the correction when there is one, else confirms (13, L-ADR-1).
+    pub(crate) fn submit_intent(&mut self, intent_id: &str, cx: &mut Context<Self>) {
+        if self.intent_correction(intent_id, cx).is_empty() {
+            self.confirm_intent(intent_id, cx);
+        } else {
+            self.correct_intent(intent_id, cx);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn intent_input(&self, intent_id: &str) -> Option<Entity<TextareaState>> {
+        self.intent_inputs
+            .get(intent_id)
+            .map(|(input, _)| input.clone())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn intent_busy(&self, intent_id: &str) -> bool {
+        self.intent_pending.contains(intent_id)
+    }
+
+    /// Proof cards and user messages read the checklist, so a change remeasures every row.
+    pub fn set_checklist(
+        &mut self,
+        checklist: Vec<tempo_protocol::ChecklistItem>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.checklist == checklist {
+            return;
+        }
+        self.checklist = checklist;
+        let len = self.rows.len();
+        self.scroller
+            .update(cx, |s, cx| s.remeasure_items(0..len, cx));
+        cx.notify();
+    }
+
+    pub(crate) fn request_checklist(&mut self, event: TranscriptEvent, cx: &mut Context<Self>) {
+        let Some(key) = event.checklist_key() else {
+            return;
+        };
+        if self.read_only || !self.checklist_pending.insert(key) {
+            return;
+        }
+        cx.emit(event);
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn checklist_busy(&self, key: &str) -> bool {
+        self.checklist_pending.contains(key)
+    }
+
+    pub fn checklist_finished(&mut self, key: &str, cx: &mut Context<Self>) {
+        self.checklist_pending.remove(key);
+        cx.notify();
+    }
+
+    pub(crate) fn decide_hold(&mut self, hold_id: &str, allow: bool, cx: &mut Context<Self>) {
+        if self.read_only || !self.hold_pending.insert(hold_id.to_string()) {
+            return;
+        }
+        cx.emit(TranscriptEvent::DecideCloudflareHold {
+            hold_id: hold_id.to_string(),
+            allow,
+        });
+        cx.notify();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn hold_busy(&self, hold_id: &str) -> bool {
+        self.hold_pending.contains(hold_id)
+    }
+
+    pub fn hold_finished(&mut self, hold_id: &str, cx: &mut Context<Self>) {
+        self.hold_pending.remove(hold_id);
+        cx.notify();
+    }
+
+    /// A sent correction clears its field; a failed call keeps it for another try.
+    pub fn intent_finished(
+        &mut self,
+        intent_id: &str,
+        corrected: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.intent_pending.remove(intent_id);
+        if corrected && let Some((input, _)) = self.intent_inputs.get(intent_id) {
+            input.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        cx.notify();
+    }
+
     /// ⌃O: expands or collapses every work row and every tool call (04, Work row).
     pub fn toggle_tools(&mut self, cx: &mut Context<Self>) {
         let mut keys = Vec::new();
@@ -495,7 +734,8 @@ impl TranscriptView {
 }
 
 impl Render for TranscriptView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_intent_inputs(window, cx);
         let view = cx.weak_entity();
         let images = self.images.clone();
         let background = color(Token::Background, cx);
@@ -800,8 +1040,8 @@ fn run_card(
     card.into_any_element()
 }
 
-fn artifact_thumbnail_key(a: &tempo_protocol::ArtifactItemContent) -> String {
-    format!("artifact:{}:{}", a.artifact_id, a.version)
+fn artifact_thumbnail_key(artifact_id: &str, version: f64) -> String {
+    format!("artifact:{artifact_id}:{version}")
 }
 
 /// 04 Transcript, `artifact`: kind, title, `v<n>`, name and size, summary, and an image thumbnail.
@@ -820,7 +1060,7 @@ fn artifact_card(
         v.read(cx)
             .thumbnails
             .images
-            .get(&artifact_thumbnail_key(a))
+            .get(&artifact_thumbnail_key(&a.artifact_id, a.version))
             .cloned()
     });
     let muted = color(Token::MutedForeground, cx);
@@ -901,6 +1141,393 @@ fn plan_card(id: &SharedString, plan: &str, cx: &mut gpui_kit::App) -> AnyElemen
                 .child("Plan"),
         )
         .child(markdown(id.clone(), plan))
+        .into_any_element()
+}
+
+/// 13, L-ADR-1: the agent's goal, approach and non-goals, confirmed or corrected with one action.
+fn intent_card(
+    id: &SharedString,
+    intent: &tempo_protocol::IntentContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let muted = color(Token::MutedForeground, cx);
+    let proposed = intent.status == tempo_protocol::IntentContentStatus::Proposed;
+    let (input, busy) = view
+        .upgrade()
+        .and_then(|v| {
+            let v = v.read(cx);
+            v.intent_inputs
+                .get(&intent.intent_id)
+                .map(|(input, _)| (input.clone(), v.intent_pending.contains(&intent.intent_id)))
+        })
+        .unzip();
+    let field = |label: &'static str, value: &str| {
+        h_flex()
+            .gap_3()
+            .items_start()
+            .child(div().w(px(80.)).flex_none().text_color(muted).child(label))
+            .child(div().flex_1().min_w_0().child(value.to_string()))
+    };
+    let mut card = v_flex()
+        .id(SharedString::from(format!("{id}:intent")))
+        .role(Role::Group)
+        .aria_label("Intent")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::intent_status_text(intent)),
+        )
+        .child(field("Goal", &intent.goal))
+        .child(field("Approach", &intent.approach))
+        .child(field("Not doing", &intent.not_doing))
+        .when(proposed && !intent.reasons.is_empty(), |card| {
+            card.child(div().text_xs().text_color(muted).child(format!(
+                "Asking you because: {}",
+                chat_model::intent_reason_text(&intent.reasons)
+            )))
+        })
+        .when(!intent.enforced, |card| {
+            card.child(
+                div()
+                    .text_xs()
+                    .text_color(muted)
+                    .child("This agent has no read-only mode; it was asked not to change files."),
+            )
+        });
+    if let (true, Some(input), Some(busy)) = (proposed, input, busy) {
+        let can_correct = input
+            .read(cx)
+            .value()
+            .trim()
+            .parse::<tempo_protocol::CorrectIntentInText>()
+            .is_ok();
+        let intent_id = intent.intent_id.clone();
+        let (confirm_view, confirm_id) = (view.clone(), intent_id.clone());
+        let (correct_view, correct_id) = (view.clone(), intent_id.clone());
+        card = card
+            .child(
+                v_flex()
+                    .gap_2()
+                    .child(Textarea::new(&input).aria_label("Correction"))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                Button::new(SharedString::from(format!("{id}:confirm")))
+                                    .primary()
+                                    .small()
+                                    .label("Confirm")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = confirm_view.update(cx, |this, cx| {
+                                            this.confirm_intent(&confirm_id, cx)
+                                        });
+                                    }),
+                            )
+                            .child(
+                                Button::new(SharedString::from(format!("{id}:correct")))
+                                    .outline()
+                                    .small()
+                                    .label("Send correction")
+                                    .disabled(busy || !can_correct)
+                                    .on_click(move |_, _, cx| {
+                                        let _ = correct_view.update(cx, |this, cx| {
+                                            this.correct_intent(&correct_id, cx)
+                                        });
+                                    }),
+                            ),
+                    ),
+            )
+            .capture_key_down(move |event, _, cx| {
+                let modifiers = &event.keystroke.modifiers;
+                if busy
+                    || event.keystroke.key != "enter"
+                    || !(modifiers.platform || modifiers.control)
+                {
+                    return;
+                }
+                let _ = view.update(cx, |this, cx| this.submit_intent(&intent_id, cx));
+                cx.stop_propagation();
+            });
+    }
+    card.into_any_element()
+}
+
+/// 13, L-ADR-8: a Cloudflare API request that waits for the owner.
+fn hold_card(
+    id: &SharedString,
+    hold: &tempo_protocol::CloudflareHoldContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (writable, busy) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            (!v.read_only, v.hold_pending.contains(&hold.hold_id))
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let pending = hold.status == tempo_protocol::CloudflareHoldContentStatus::Pending;
+    let button = |label: &'static str, allow: bool| {
+        let view = view.clone();
+        let hold_id = hold.hold_id.clone();
+        let button = Button::new(SharedString::from(format!(
+            "{id}:{}",
+            if allow { "allow" } else { "refuse" }
+        )))
+        .small()
+        .label(label)
+        .disabled(busy)
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| this.decide_hold(&hold_id, allow, cx));
+        });
+        if allow {
+            button.primary()
+        } else {
+            button.outline()
+        }
+    };
+    v_flex()
+        .id(SharedString::from(format!("{id}:hold")))
+        .role(Role::Group)
+        .aria_label("Cloudflare request")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(color(Token::Border, cx))
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::hold_status_text(hold.status)),
+        )
+        .child(
+            div()
+                .font_family("monospace")
+                .text_xs()
+                .whitespace_normal()
+                .child(format!("{} {}", hold.method, hold.path)),
+        )
+        .when(!hold.reasons.is_empty(), |card| {
+            card.child(div().text_xs().text_color(muted).child(format!(
+                "Held because: {}",
+                chat_model::hold_reason_text(&hold.reasons)
+            )))
+        })
+        .when(writable && pending, |card| {
+            card.child(
+                h_flex()
+                    .gap_2()
+                    .child(button("Allow once", true))
+                    .child(button("Refuse", false)),
+            )
+        })
+        .into_any_element()
+}
+
+/// 13, L-ADR-2: a proof with its screens, Tempo's check results and what is missing.
+fn proof_card(
+    id: &SharedString,
+    proof: &tempo_protocol::ProofContent,
+    view: gpui_kit::WeakEntity<TranscriptView>,
+    cx: &mut gpui_kit::App,
+) -> AnyElement {
+    let (checklist, writable, pending, images) = view
+        .upgrade()
+        .map(|v| {
+            let v = v.read(cx);
+            let images: Vec<_> = proof
+                .screens
+                .iter()
+                .map(|s| {
+                    v.thumbnails
+                        .images
+                        .get(&artifact_thumbnail_key(&s.artifact_id, s.version))
+                        .cloned()
+                })
+                .collect();
+            (
+                v.checklist.clone(),
+                !v.read_only,
+                v.checklist_pending.clone(),
+                images,
+            )
+        })
+        .unwrap_or_default();
+    let muted = color(Token::MutedForeground, cx);
+    let border = color(Token::Border, cx);
+    let destructive = color(Token::Destructive, cx);
+    let screens = proof.screens.iter().enumerate().map(|(ix, screen)| {
+        let view = view.clone();
+        let artifact_id = screen.artifact_id.clone();
+        let version = screen.version;
+        let alt = format!("{}, {}, {}", screen.route, screen.viewport, screen.theme);
+        v_flex()
+            .id(SharedString::from(format!("{id}:screen:{ix}")))
+            .role(Role::Button)
+            .aria_label(alt.clone())
+            .items_start()
+            .gap_1()
+            .p_1()
+            .rounded_sm()
+            .border_1()
+            .border_color(border)
+            .text_xs()
+            .cursor_pointer()
+            .children(images.get(ix).cloned().flatten().map(|image| {
+                div()
+                    .id(SharedString::from(format!("{id}:screen:{ix}:image")))
+                    .role(Role::Image)
+                    .aria_label(alt)
+                    .child(
+                        gpui_kit::img(image)
+                            .h(px(96.))
+                            .max_w(px(160.))
+                            .object_fit(ObjectFit::Cover)
+                            .rounded_sm(),
+                    )
+            }))
+            .child(chat_model::proof_screen_label(screen))
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |_, cx| {
+                    cx.emit(TranscriptEvent::OpenArtifact {
+                        artifact_id: artifact_id.clone(),
+                        version,
+                    })
+                });
+            })
+    });
+    let resolved = proof.resolved.iter().map(|r| {
+        let reopen =
+            writable && chat_model::can_reopen(&checklist, &r.checklist_id, &proof.proof_id);
+        let event = TranscriptEvent::ReopenChecklistItem {
+            checklist_id: r.checklist_id.clone(),
+        };
+        let busy = event
+            .checklist_key()
+            .is_some_and(|key| pending.contains(&key));
+        let view = view.clone();
+        h_flex()
+            .items_start()
+            .justify_between()
+            .gap_2()
+            .child(
+                h_flex()
+                    .flex_wrap()
+                    .min_w_0()
+                    .child(chat_model::checklist_text(&checklist, &r.checklist_id))
+                    .children(
+                        chat_model::proof_resolved_note(&r.note)
+                            .map(|note| div().text_color(muted).child(note)),
+                    ),
+            )
+            .children(reopen.then(|| {
+                Button::new(SharedString::from(format!(
+                    "{id}:reopen:{}",
+                    r.checklist_id
+                )))
+                .ghost()
+                .small()
+                .label(chat_model::REOPEN_CHECKLIST_ITEM)
+                .disabled(busy)
+                .on_click(move |_, _, cx| {
+                    let _ = view.update(cx, |this, cx| this.request_checklist(event.clone(), cx));
+                })
+            }))
+    });
+    v_flex()
+        .id(SharedString::from(format!("{id}:proof")))
+        .role(Role::Group)
+        .aria_label("Proof")
+        .mx_4()
+        .p_3()
+        .gap_2()
+        .rounded_lg()
+        .border_1()
+        .border_color(border)
+        .text_sm()
+        .child(
+            div()
+                .text_xs()
+                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(chat_model::proof_status_text(proof.status)),
+        )
+        .child(div().whitespace_normal().child(proof.summary.clone()))
+        .when(!proof.screens.is_empty(), |card| {
+            card.child(
+                h_flex()
+                    .id(SharedString::from(format!("{id}:screens")))
+                    .role(Role::List)
+                    .aria_label("Screens")
+                    .flex_wrap()
+                    .gap_2()
+                    .children(screens),
+            )
+        })
+        .when(!proof.checks.is_empty(), |card| {
+            card.child(
+                v_flex()
+                    .id(SharedString::from(format!("{id}:checks")))
+                    .role(Role::List)
+                    .aria_label("Checks")
+                    .gap_0p5()
+                    .text_xs()
+                    .children(
+                        proof
+                            .checks
+                            .iter()
+                            .map(|c| div().child(chat_model::proof_check_text(c))),
+                    ),
+            )
+        })
+        .when(!proof.missing_routes.is_empty(), |card| {
+            card.child(
+                div()
+                    .text_xs()
+                    .text_color(destructive)
+                    .child(chat_model::proof_missing_routes_text(&proof.missing_routes)),
+            )
+        })
+        .when(!proof.missing_checklist.is_empty(), |card| {
+            card.child(
+                v_flex()
+                    .text_xs()
+                    .text_color(destructive)
+                    .child(chat_model::MISSING_CHECKLIST_TEXT)
+                    .children(proof.missing_checklist.iter().map(|c| {
+                        div()
+                            .pl_4()
+                            .child(format!("• {}", chat_model::checklist_text(&checklist, c)))
+                    })),
+            )
+        })
+        .when(!proof.resolved.is_empty(), |card| {
+            card.child(
+                v_flex()
+                    .id(SharedString::from(format!("{id}:checklist")))
+                    .role(Role::List)
+                    .aria_label("Checklist")
+                    .gap_1()
+                    .text_xs()
+                    .children(resolved),
+            )
+        })
         .into_any_element()
 }
 
@@ -1130,6 +1757,9 @@ fn render_native_row(
                     }
                 }
                 ItemContent::Artifact(a) => artifact_card(&id, &item, a, view.clone(), cx),
+                ItemContent::Intent(intent) => intent_card(&id, intent, view.clone(), cx),
+                ItemContent::Proof(proof) => proof_card(&id, proof, view.clone(), cx),
+                ItemContent::CloudflareHold(hold) => hold_card(&id, hold, view.clone(), cx),
                 ItemContent::ToolCall(c) => {
                     let blocks = c.content.iter().enumerate().map(|(index, block)| {
                         let key: SharedString = format!("{}:block:{index}", id).into();
@@ -1431,7 +2061,7 @@ fn user_message(
     view: gpui_kit::WeakEntity<TranscriptView>,
     cx: &mut gpui_kit::App,
 ) -> AnyElement {
-    let (thumbnails, can_revert) = view
+    let (thumbnails, can_revert, writable, on_checklist, checklist_pending) = view
         .upgrade()
         .map(|v| {
             let v = v.read(cx);
@@ -1440,7 +2070,13 @@ fn user_message(
                 .iter()
                 .filter_map(|a| Some((a.id.clone(), v.thumbnails.images.get(&a.id)?.clone())))
                 .collect();
-            (images, !v.read_only && v.can_revert)
+            (
+                images,
+                !v.read_only && v.can_revert,
+                !v.read_only,
+                chat_model::on_checklist(&v.checklist, &item.id),
+                v.checklist_pending.clone(),
+            )
         })
         .unwrap_or_default();
     let muted = color(Token::MutedForeground, cx);
@@ -1498,6 +2134,26 @@ fn user_message(
                 }
             })
     });
+    let checklist_action = (writable && !c.text.trim().is_empty()).then(|| {
+        if on_checklist {
+            return div().child(chat_model::ON_CHECKLIST).into_any_element();
+        }
+        let event = TranscriptEvent::AddChecklistItem {
+            item_id: item.id.clone(),
+        };
+        let busy = event
+            .checklist_key()
+            .is_some_and(|key| checklist_pending.contains(&key));
+        let view = view.clone();
+        Button::new(SharedString::from(format!("checklist-{}", item.id)))
+            .ghost()
+            .label(chat_model::ADD_TO_CHECKLIST)
+            .disabled(busy)
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |this, cx| this.request_checklist(event.clone(), cx));
+            })
+            .into_any_element()
+    });
     let turn = item.turn_id.clone();
     let group: SharedString = format!("{id}:hover").into();
     let now = now_ms();
@@ -1545,6 +2201,7 @@ fn user_message(
                 .invisible()
                 .group_hover(group, |s| s.visible())
                 .child(chat_model::format_relative(item.created_at, now))
+                .children(checklist_action)
                 .children((revertable && can_revert && turn.is_some()).then(|| {
                     Button::new(SharedString::from(format!("revert-{}", item.id)))
                         .ghost()

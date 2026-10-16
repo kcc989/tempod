@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleIntentDecidedPayload",
+  "type": "object",
+  "properties": {
+    "intentId": {
+      "type": "string"
+    },
+    "by": {
+      "type": "string",
+      "enum": ["owner", "judge"]
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["intentId", "by", "reasons"],
+  "additionalProperties": true
+}

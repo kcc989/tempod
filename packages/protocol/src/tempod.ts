@@ -61,6 +61,10 @@ export const ToolReq = Schema.Struct({
   id: Schema.String,
   op: Schema.Literals([
     "report_result",
+    "propose_intent",
+    "get_project_profile",
+    "submit_proof",
+    "get_capabilities",
     "list_agents",
     "propose_agent_change",
     ...ISSUE_TOOL_NAMES,

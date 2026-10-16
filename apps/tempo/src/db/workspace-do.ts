@@ -106,6 +106,8 @@ export const sessions = sqliteTable("sessions", {
   agentSha: text("agent_sha"),
   profileJson: text("profile_json"),
   profileIssuesJson: text("profile_issues_json").notNull().default("[]"),
+  manifestJson: text("manifest_json"),
+  intentCheck: integer("intent_check").notNull().default(1),
   sortOrder: integer("sort_order").notNull(),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
@@ -254,6 +256,7 @@ export const egressLog = sqliteTable("egress_log", {
   status: integer("status").notNull(),
   ms: integer("ms").notNull(),
   rule: integer("rule").notNull(),
+  capability: text("capability").notNull().default(""),
 });
 
 export const fileCache = sqliteTable("file_cache", {
@@ -362,7 +365,65 @@ export type LifecycleRow = typeof lifecycleEvents.$inferSelect;
 
 export type RunRow = typeof runs.$inferSelect;
 
+/** 13, L-ADR-1: one intent per chat. */
+export const intents = sqliteTable("intents", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  changeId: text("change_id"),
+  itemId: text("item_id"),
+  status: text("status", { enum: ["awaiting", "proposed", "confirmed", "corrected"] }).notNull(),
+  goal: text("goal").notNull(),
+  approach: text("approach").notNull(),
+  notDoing: text("not_doing").notNull(),
+  decidedBy: text("decided_by", { enum: ["owner", "judge"] }),
+  judgeJson: text("judge_json"),
+  priorModeId: text("prior_mode_id"),
+  enforced: integer("enforced").notNull(),
+  createdAt: integer("created_at").notNull(),
+  decidedAt: integer("decided_at"),
+});
+
+export const proofs = sqliteTable("proofs", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  changeId: text("change_id"),
+  itemId: text("item_id"),
+  summary: text("summary").notNull(),
+  screensJson: text("screens_json").notNull(),
+  checklistJson: text("checklist_json").notNull(),
+  checksJson: text("checks_json").notNull(),
+  missingJson: text("missing_json").notNull(),
+  complete: integer("complete"),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const cloudflareHolds = sqliteTable("cloudflare_holds", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id"),
+  itemId: text("item_id"),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  resource: text("resource"),
+  reasonsJson: text("reasons_json").notNull(),
+  status: text("status", { enum: ["pending", "allowed", "refused", "used"] }).notNull(),
+  createdAt: integer("created_at").notNull(),
+  decidedAt: integer("decided_at"),
+});
+
+export const checklist = sqliteTable("checklist", {
+  id: text("id").primaryKey(),
+  text: text("text").notNull(),
+  status: text("status", { enum: ["open", "resolved"] }).notNull(),
+  sourceItemId: text("source_item_id"),
+  resolvedBy: text("resolved_by"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const workspaceSchema = {
+  intents,
+  proofs,
+  checklist,
+  cloudflareHolds,
   lifecycleEvents,
   runs,
   artifacts,
@@ -393,6 +454,14 @@ export type WorkspaceRowDO = typeof workspace.$inferSelect;
 export type OpRow = typeof ops.$inferSelect;
 
 export type SessionRow = typeof sessions.$inferSelect;
+
+export type IntentRow = typeof intents.$inferSelect;
+
+export type ProofRow = typeof proofs.$inferSelect;
+
+export type ChecklistRow = typeof checklist.$inferSelect;
+
+export type CloudflareHoldRow = typeof cloudflareHolds.$inferSelect;
 
 export type TurnRow = typeof turns.$inferSelect;
 

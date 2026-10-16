@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReopenChecklistItemIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "checklistId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "checklistId"],
+  "additionalProperties": true
+}

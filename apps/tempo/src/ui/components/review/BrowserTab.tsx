@@ -3,6 +3,7 @@ import { ExternalLinkIcon, GlobeIcon, RotateCwIcon } from "lucide-react";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { CenterTabProps } from "~/ui/components/chat/tab-kinds";
 import { EmptyState } from "~/ui/components/shell/States";
+import { PreviewProof } from "~/ui/components/chat/ProofCard";
 import { openPreviewTab } from "~/ui/components/topbar/open-preview";
 import { Button } from "~/ui/components/ui/button";
 import { Input } from "~/ui/components/ui/input";
@@ -136,6 +137,7 @@ function BrowserView({ url, workspaceId, port }: { url: string; workspaceId: str
           </Button>
         </SimpleTooltip>
       </form>
+      {port !== null && <PreviewProof workspaceId={workspaceId} />}
       {src ? (
         <iframe
           key={nonce}

@@ -1,4 +1,5 @@
 import { TempoError, type DeployConfig, type Deployment, type Project } from "@tempo/protocol";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, CloudUploadIcon, RocketIcon } from "lucide-react";
 import { useState } from "react";
 import { BranchPicker } from "~/ui/components/dialogs/BranchPicker";
@@ -9,11 +10,19 @@ import { Label } from "~/ui/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/ui/components/ui/select";
 import { Textarea } from "~/ui/components/ui/textarea";
 import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
-import { formatRelative } from "~/ui/lib/format";
+import { formatRelative, formatTime } from "~/ui/lib/format";
 import { errorCode, errorText } from "~/ui/lib/toast";
 import { openDialog } from "~/ui/state/workspace-ui";
 import type { RepositoryHubProps } from "./RepositoryHub";
-import { ciDuration, deployInput, deploymentsInput, deployState, shortSha } from "./model";
+import {
+  ROLLOUT_PHASE_LABELS,
+  canRollBack,
+  ciDuration,
+  deployInput,
+  deploymentsInput,
+  deployState,
+  shortSha,
+} from "./model";
 
 type Props = RepositoryHubProps & { project: Project };
 
@@ -48,12 +57,14 @@ function DeploysHome(props: Props) {
       ) : (
         <>
           <DeployAction {...props} config={config.data} />
+          <ProductionErrors projectId={props.project.id} />
           <Deployments {...props} config={config.data} />
           <ConfigForm
             key={config.data.revision}
             config={config.data}
             onReload={() => void config.refetch()}
           />
+          <IssuesWebhook projectId={props.project.id} />
         </>
       )}
     </div>
@@ -237,6 +248,10 @@ function DeploymentDetail({ project, onNavigate, deploymentId }: Props & { deplo
 
   const cancel = useCallMutation("cancelDeployment", { invalidates: ["getDeployment", "listDeployments"] });
 
+  const rollback = useCallMutation("rollbackDeployment", {
+    invalidates: ["getDeployment", "listDeployments"],
+  });
+
   const again = useCallMutation("redeploy", {
     invalidates: ["listDeployments"],
     onSuccess: (deployment) => onNavigate({ project: project.id, tab: "deploys", deployment: deployment.id }),
@@ -294,6 +309,16 @@ function DeploymentDetail({ project, onNavigate, deploymentId }: Props & { deplo
           {deployment.revision}
         </span>
         <span className="ml-auto flex gap-2">
+          {canRollBack(deployment) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={rollback.isPending}
+              onClick={() => rollback.mutate({ projectId: project.id, deploymentId: deployment.id })}
+            >
+              Roll back
+            </Button>
+          )}
           {deployment.status === "completed" ? (
             <Button
               size="sm"
@@ -323,6 +348,7 @@ function DeploymentDetail({ project, onNavigate, deploymentId }: Props & { deplo
           </div>
         ))}
       </dl>
+      {deployment.rollout && <RolloutFacts rollout={deployment.rollout} />}
       <DeploymentLog
         projectId={project.id}
         deploymentId={deployment.id}
@@ -424,6 +450,136 @@ function ConfigForm({ config, onReload }: { config: DeployConfig; onReload: () =
         onClick={() => save.mutate({ projectId: config.projectId, source, revision: config.revision })}
       >
         {save.isPending ? "Saving…" : "Save configuration"}
+      </Button>
+    </section>
+  );
+}
+
+function RolloutFacts({ rollout }: { rollout: NonNullable<Deployment["rollout"]> }) {
+  return (
+    <section aria-label="Rollout" className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+      <p className="font-medium">
+        {ROLLOUT_PHASE_LABELS[rollout.phase]}
+        {rollout.phase === "canary" && rollout.canaryUntil !== null && (
+          <span className="font-normal text-muted-foreground">
+            {" "}
+            · moves to 100% at {formatTime(rollout.canaryUntil)}
+          </span>
+        )}
+        {rollout.rolledBackAt !== null && (
+          <span className="font-normal text-muted-foreground"> · {formatRelative(rollout.rolledBackAt)}</span>
+        )}
+      </p>
+      <ul className="flex flex-col gap-2">
+        {rollout.workers.map((w) => (
+          <li key={w.name} className="min-w-0">
+            <p className="font-mono text-xs">
+              {w.name} · {w.percentage}%
+            </p>
+            <p className="break-all font-mono text-xs text-muted-foreground">
+              version {w.versionId} · previous {w.previousVersionId ?? "none"} · Cloudflare deployment{" "}
+              {w.cloudflareDeploymentId ?? "none"}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** 12, Production errors: Clients. */
+function ProductionErrors({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
+  const errors = useCallQuery("listProductionErrors", { projectId }, { refetchInterval: LIVE_MS });
+
+  const fix = useCallMutation("startErrorFix", {
+    invalidates: ["listProductionErrors"],
+    onSuccess: ({ workspaceId }) => void navigate({ to: "/w/$workspaceId", params: { workspaceId } }),
+  });
+
+  if (errors.isPending || errors.isError || errors.data.length === 0) return null;
+
+  return (
+    <section aria-label="Production errors" className="flex flex-col gap-2">
+      <h3 className="text-base font-semibold">Production errors</h3>
+      <ul className="flex flex-col divide-y rounded-lg border">
+        {errors.data.map((error) => (
+          <li
+            key={error.id}
+            className={`flex flex-wrap items-center gap-3 px-4 py-3 ${error.fixedAt !== null ? "opacity-60" : ""}`}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{error.title}</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {error.worker ?? "Unknown Worker"} · version {error.versionId ?? "unknown"} ·{" "}
+                {error.occurrences} {error.occurrences === 1 ? "time" : "times"} · last{" "}
+                {formatRelative(error.lastSeenAt)}
+                {error.fixedAt !== null ? " · Fixed" : ""}
+              </p>
+            </div>
+            {error.fixWorkspaceId !== null ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  void navigate({ to: "/w/$workspaceId", params: { workspaceId: error.fixWorkspaceId! } })
+                }
+              >
+                Open fix
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={fix.isPending}
+                onClick={() => fix.mutate({ projectId, errorId: error.id })}
+              >
+                Start fix
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function IssuesWebhook({ projectId }: { projectId: string }) {
+  const hook = useCallQuery("getIssuesWebhook", { projectId });
+  const [secret, setSecret] = useState<string | null>(null);
+
+  const rotate = useCallMutation("rotateIssuesWebhook", {
+    invalidates: ["getIssuesWebhook"],
+    onSuccess: (out) => setSecret(out.secret),
+  });
+
+  if (hook.isPending || hook.isError) return null;
+
+  return (
+    <section
+      aria-label="Production error webhook"
+      className="flex flex-col gap-2 rounded-lg border p-4 text-sm"
+    >
+      <p className="text-base font-semibold">Production error webhook</p>
+      <p className="text-muted-foreground">
+        In Cloudflare, add a generic webhook destination with this URL and secret, and an Issues automation
+        that sends new issues to it.
+      </p>
+      <p className="break-all font-mono text-xs">{hook.data.url}</p>
+      <p className="text-muted-foreground">{hook.data.secretSet ? "A secret is set." : "No secret yet."}</p>
+      {secret !== null && (
+        <p role="status" className="break-all font-mono text-xs">
+          Secret (shown once): {secret}
+        </p>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="self-start"
+        disabled={rotate.isPending}
+        onClick={() => rotate.mutate({ projectId })}
+      >
+        New secret
       </Button>
     </section>
   );

@@ -1,3 +1,4 @@
+import { issuesSecretKey } from "../../deploy/issues.ts";
 import { waitUntil } from "cloudflare:workers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { TempoError, newId, unwrap, type FnInput, type FnOutput } from "@tempo/protocol";
@@ -214,6 +215,7 @@ export const unlinkProject = async (
   if (project.provider === "artifacts") {
     await env.REPOSITORY_CI.getByName(projectId).destroy();
     await env.APP_DEPLOY.getByName(projectId).destroy();
+    await env.CREDENTIALS.getByName(user.id).deleteSecret(issuesSecretKey(projectId));
   }
 
   await d1(env).delete(projects).where(eq(projects.id, projectId)).run();

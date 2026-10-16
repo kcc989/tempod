@@ -535,3 +535,103 @@ The owner asked for a Cloudflare control plane that deploys apps from Tempo with
 | Mac deep links | The Mac Deploys tab has no `tab=deploys&deployment=` link routing. | The Mac client has none for `tab=checks` either. |
 
 Live Cloudflare acceptance (a real token mint and revoke, an Alchemy v2 deploy with `Cloudflare.state()`, a `cloudflare.config.ts` deploy, and `cf`/`alchemy` accepting an account-owned token) has not been run.
+
+## Loop: Jev judge (2026-10-15)
+
+Tab 13, L-ADR-9. The first loop slice adds the judge module (`apps/tempo/src/judge/jev.ts`) with no caller yet. The intent gate (L-ADR-1) and the Cloudflare call gate (L-ADR-8) use it in later slices.
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Library | `@typesafe-ai/sdk` 0.7.0, pinned, in `apps/tempo` only | Owner asked for the TypeSafe TypeScript SDK. It has no dependencies, guards its `process` use and takes an explicit key and `fetch`, so it runs in workerd (the unit tests run it there). |
+| Model | `jev-1.14.0` | Owner asked for Jev 1.14. `jev-1.14` is refused by the API; the model ID has the patch number. |
+| Key | `typesafe.api_key` in the owner's `CredentialDO`, read by `ownerJudge`. Not in `SECRET_KEYS`, so it is not listed as an agent login. | It is not an agent credential and never goes to a container. The Settings field comes with the web and Mac slice that first uses the judge. |
+| New-access question | A noul with yes and no criteria that name permissions, credentials and access, and exclude product features | A plain "new capability" question scored a harmless due-date feature 0.67. With criteria it scored 0.09; a Stripe secret scored 0.92 (live, 2026-10-15). |
+| Timeout | 10 s per attempt, one retry, no compression | 12 live calls: median 0.7 s, p90 2.2 s, max 9.1 s. The spec's first 5 s draft would drop real answers. |
+| No answer | Counts as high: the owner decides | 13, L-ADR-9. |
+
+## Loop: gradual rollout and Rollback (2026-10-15)
+
+Tab 12, Gradual rollout (13, L-ADR-4). The owner asked the agent to keep building without them, so these choices were made without asking.
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Where Workers are named | `targets.<key>.workers` in the deploy configuration, not the project profile | The deploy configuration is already owner-only and revisioned; the profile (slice 7) points to it instead of keeping a second list. |
+| Opt-in | `rollout: gradual` per target; `full` keeps 12's old behavior | A project whose `alchemy.run.ts` does not read `TEMPO_DEPLOY_TRAFFIC` would otherwise fail every deploy. |
+| Smoke test at 10% | The canary step comes first, then the smoke test with the version override header | The API needs each share to be at least 0.01%, and an override only reaches a version in the current deployment. |
+| Finding the new version | The newest version created after the deployment started | Alchemy uploads with `traffic: 0` and creates no deployment. The tag annotation depends on the app's own stack code. |
+| A Worker at 100% | Treated as a migration deploy: the others go to 100% too and the deployment completes `success` with a summary | Alchemy forces Durable Object class migrations to 100%; a half-gradual state helps no one. |
+| Owner rollback token | Minted with `workers` for 15 minutes and revoked right after; a failed revoke is left to expire | Rollback has no container and no deployment row to hang the token on. |
+| Rollback scope | Only the newest successful deployment of a target, with every Worker's previous version known | A rollback of an older deployment would skip versions that came after it. |
+| Mac | The Deploys detail shows the rollout and **Roll back**, as on the web | CLAUDE.md rule 17. |
+
+Live Cloudflare acceptance (a real gradual deploy, a smoke test, a promote and a rollback drill) has not been run. Done-proof 2 in 13 needs it.
+
+## Loop: production errors (2026-10-15)
+
+Tab 12, Production errors (13, L-ADR-5 and L-ADR-6). Choices made without the owner, as asked:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Payload | Only the Notifications envelope is parsed strictly. Worker, version and issue ID are looked up by key name at any depth of `data`. | Cloudflare documents no `data` shape for Issues. Spike L-S2 records a real payload; the key list changes then if needed. |
+| Text redaction | Bearer tokens and `token=`, `key=`, `secret=`, `password=` values become `[redacted]` | The log redactor works on field names; Issue text is free text. |
+| Gate without a version | An error with no version but a Worker in canary rolls the canary back | Safer than letting a bad version through. It can roll back for an old version's error. |
+| Settings | `auto_fix` is a deploy configuration key, and the webhook block is in the Deploys tab | Both are owner-only project settings, like the rest of the deploy configuration. |
+| Auto fix | The webhook route starts the fix after its answer (`waitUntil`), as the owner, through the same function as **Start fix** | `AppDeployDO` never creates workspaces itself, and only one path creates fix workspaces. |
+| Duplicate fixes | A two-minute claim on the error stops two callers from creating two workspaces | Rule 5. |
+| Fix base | A new branch from the error's deployment branch, not its exact SHA | `createWorkspace` starts from a branch tip. |
+
+Mac notes for both slices: the canary end time shows in UTC, because the Mac crate has no time-zone library and rule 11 needs approval to add one. The Mac production-error list reloads when the tab opens and on refresh; it does not poll every 5 seconds as the web does. `cargo test -p tempo-mac` passed 3 of 5 runs; the 2 failures were the existing `queue_controls_preserve_draft_and_reorder_the_whole_workspace` test in `workspace.rs`, which these slices do not touch.
+
+## Loop: intent check (2026-10-15)
+
+Tab 13, L-ADR-1 (Exact rules) and L-ADR-9. Choices made without the owner, as asked:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Scope | Once per chat, not per message | Each message is its own change (08). A check per message would add a round trip to every follow-up. The agent proposes again when it leaves the goal. |
+| Read-only | The chat's mode switches to the agent's plan mode (Claude and OpenCode `plan`, Codex `read-only`) for the first prompt, and back after confirmation | It reuses `session.setMode` and needs no session restart. |
+| Pi | No read-only mode; the instruction alone, shown on the card as not enforced | Pi has no plan mode; a profile restart per chat would be heavy. A later change can add the tree check of 08 Runs step 7.4. |
+| Judge context | Branch and project name | The deploy configuration's targets are not in the WorkspaceDO; adding a cross-DO read to every proposal was not worth it yet. The spec row is updated. |
+| Retry | The rule stays on the turn until the agent proposes | A deferred `session.prompt` retry must keep it, as it keeps the general prompt. |
+| Settings | TypeSafe AI sits under Cloudflare in Settings | Both are owner credentials for loop services. |
+
+## Loop: proof and checklist (2026-10-15)
+
+Tab 13, L-ADR-2 (Exact rules). Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Migration | Proofs, checklist and the `proof` item kind are in migration `0014_loop` with the intents table | 0014 was not released yet; one items rebuild instead of two. |
+| Paths | `image` and `recording` may be absolute or relative to `/workspace` | Agents give both forms; the artifact row stores the absolute path. |
+| Checklist text | The user message text, trimmed; a repeat of Add to checklist returns the same item | The spec has the 2,000-character limit and no rule for repeats. |
+| Reopen | Shown on a proof card next to each item that this proof resolved | It is where the owner sees the result. |
+| Preview | The web preview Browser tab shows the newest proof in one line above the page (status, first summary line, the missing count) with Show proof. The Mac client opens previews in the default browser (07, C7), so it shows the proof in the transcript only. | 13, L-ADR-2.4. |
+| Not built yet | The "routes named by the agent" note for changed files in no `screens` entry | The Exact rules table has no field for the agent's routes. |
+
+## Capability manifest (2026-10-15)
+
+Tab 14. Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Enforcement scope | `TempoOutbound` enforces one workspace manifest: the project's current `call` list plus a built-in entry for each model key the owner has | All sessions of a workspace share one container network, so a request carries no session. Each session still stores its own frozen manifest, which the agent reads and which decides when the session ends. A `run` session with read-only access is limited to `GET` and `HEAD` in its own manifest, but not at the network. |
+| Call ids | Profile services keep their `name`. Environment secrets with hosts become `secret:<NAME>`, injectors `injector:<name>`, MCP servers `mcp:<name>`, the egress allowlist `allowlist`, model keys `anthropic`, `openai` and `openrouter` | Every rule of 01 that passes a host or adds a credential needs an entry. A profile service that names a secret replaces that secret's own entry, so its `methods` apply. |
+| Reads | `repo`, `issues`, `pull_requests` and `ci_runs` always; `deployments` and `prod_errors` when deploys are on | These follow the project's features; tools are not hidden yet (below). |
+| Revision | `AppDeployDO.manifests` maps the hash of the project part of the manifest to the next number | `revision` counts project changes; the session part changes `sha256` only. |
+| Removed access | Checked when the workspace refreshes its environment: after an environment, secret, profile or deploy configuration change, and on each egress config read | The outbound cache keeps an old config for up to 60 seconds, so a script outside a session may still use a removed capability for that long. Agent sessions end at once. |
+| Tool list | In a chat, `tools/list` asks `get_capabilities`: issue tools need `read: issues`, deploy tools `read: deployments`, and `deploy_app` a `deploy` entry. When Tempo does not answer, every tool is listed | Each tool still checks access when called; `deploy_app` checks the session's `deploy` entries first (`FORBIDDEN`, `tempo: capability deploy:<target> not granted`). |
+| Cloudflare token | One token per workspace, for 1 hour, not one per session | A request carries no session (above). The token is revoked when the manifest loses `cloudflare`; otherwise it expires. |
+
+## Loop report (2026-10-15)
+
+Tab 13, L-ADR-7 and Phase 3. Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Pairing | Intent steps pair events by `changeId`; corrections count per `intentId`; proof → merge takes the last complete proof before `tempo.pr.merged` in the same workspace; CI is the first to the last check event of a PR, counted only when the last one passed; merge → live is the merge to the last 100% `deploy.traffic.changed` of the first deployment that reached 100% after it | The events carry these keys; no new id was needed. |
+| CI start | The first `tempo.check.*` event, not the first check run's start | Lifecycle events record check results, not starts. |
+| Idle gaps | Gaps of more than 30 minutes between a workspace's lifecycle events are left out of intent, proof, merge and CI times. Deploy, rollback and error times are machine times and keep every gap. | 13, Targets. |
+| New payload fields | `prod.error.seen` has `occurredAt` (the webhook's `ts`); an owner `deploy.rolled_back` has `requestedAt` | "Error seen" and "Rollback" need their start times. |
+| Contract checks | `getLoopReport` lists intent order and length violations. Proof completeness and one-action rollback are enforced by worker tests. | These cannot happen from the event log once the code holds them. |
+| Daily job | Cron `41 5 * * *` (UTC). It writes `loop/<date>.json` for the owner (`TEMPO_OWNER_GITHUB_ID`) and opens the issue in the owner's first native project, at most once a week per step. The body gives the window and the numbers, and names the report key. | Tempo has one owner; issues (09) exist only in native projects. |
+| Not built yet | The weekly file in `docs/evidence/loop-weekly/` through a Tempo PR | Tempo has no API yet that commits a file and opens a PR from the Worker. The CI summary already prints the newest file there. |

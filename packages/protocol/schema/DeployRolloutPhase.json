@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeployRolloutPhase",
+  "type": "string",
+  "enum": ["canary", "promoted", "full", "rolled_back"]
+}

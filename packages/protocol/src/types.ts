@@ -25,9 +25,13 @@ import {
   CiTrigger,
   DeployConclusion,
   DeployPermission,
+  DeployRolloutKind,
+  DeployRolloutPhase,
   DeployStatus,
   DeployTool,
   DeployTrigger,
+  IntentStatus,
+  ChecklistStatus,
   IssueState,
   NoticeLevel,
   OpKind,
@@ -261,6 +265,9 @@ export const DeployTarget = Schema.Struct({
   branch: N(Schema.String),
   auto: Schema.Boolean,
   agent: Schema.Boolean,
+  rollout: DeployRolloutKind,
+  workers: Schema.Array(Schema.String),
+  smoke: Schema.Array(Schema.String),
 });
 
 export type DeployTarget = typeof DeployTarget.Type;
@@ -276,10 +283,30 @@ export const DeployConfig = Schema.Struct({
   timeoutMinutes: Schema.Number,
   egressAllowlist: Schema.Array(Schema.String),
   targets: Schema.Array(DeployTarget),
+  autoFix: Schema.Boolean,
   updatedAt: N(Ms),
 });
 
 export type DeployConfig = typeof DeployConfig.Type;
+
+export const DeployRolloutWorker = Schema.Struct({
+  name: Schema.String,
+  versionId: Schema.String,
+  previousVersionId: N(Schema.String),
+  percentage: Schema.Number,
+  cloudflareDeploymentId: N(Schema.String),
+});
+
+export type DeployRolloutWorker = typeof DeployRolloutWorker.Type;
+
+export const DeployRollout = Schema.Struct({
+  phase: DeployRolloutPhase,
+  canaryUntil: N(Ms),
+  rolledBackAt: N(Ms),
+  workers: Schema.Array(DeployRolloutWorker),
+});
+
+export type DeployRollout = typeof DeployRollout.Type;
 
 export const Deployment = Schema.Struct({
   id: Schema.String,
@@ -300,6 +327,7 @@ export const Deployment = Schema.Struct({
   startedAt: N(Ms),
   completedAt: N(Ms),
   url: Schema.String,
+  rollout: N(DeployRollout),
 });
 
 export type Deployment = typeof Deployment.Type;
@@ -311,6 +339,35 @@ export const DeploySettings = Schema.Struct({
 });
 
 export type DeploySettings = typeof DeploySettings.Type;
+
+/** 13, L-ADR-3. */
+export const ProjectProfile = Schema.Struct({
+  projectId: Schema.String,
+  revision: Schema.Number,
+  source: Schema.String,
+  updatedAt: N(Ms),
+});
+
+export type ProjectProfile = typeof ProjectProfile.Type;
+
+/** 12, Production errors. */
+export const ProductionError = Schema.Struct({
+  id: Schema.String,
+  projectId: Schema.String,
+  worker: N(Schema.String),
+  versionId: N(Schema.String),
+  deploymentId: N(Schema.String),
+  deploymentNumber: N(Schema.Number),
+  title: Schema.String,
+  text: Schema.String,
+  occurrences: Schema.Number,
+  firstSeenAt: Ms,
+  lastSeenAt: Ms,
+  fixWorkspaceId: N(Schema.String),
+  fixedAt: N(Ms),
+});
+
+export type ProductionError = typeof ProductionError.Type;
 
 export const WorkspaceSummary = Schema.Struct({
   id: Schema.String,
@@ -367,6 +424,18 @@ export const ChangesSummary = Schema.Struct({
 
 export type ChangesSummary = typeof ChangesSummary.Type;
 
+/** 13, L-ADR-2: the design checklist. */
+export const ChecklistItem = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  status: ChecklistStatus,
+  sourceItemId: N(Schema.String),
+  resolvedBy: N(Schema.String),
+  createdAt: Ms,
+});
+
+export type ChecklistItem = typeof ChecklistItem.Type;
+
 export const WorkspaceDetail = Schema.Struct({
   ...WorkspaceSummary.fields,
   errorCode: N(Schema.String),
@@ -393,6 +462,7 @@ export const WorkspaceDetail = Schema.Struct({
   environmentId: Schema.optional(N(Schema.String)),
   agentProposals: Schema.optionalKey(Schema.Array(AgentProposalRecord)),
   environmentProposals: Schema.optional(Schema.Array(PendingEnvironmentProposal)),
+  checklist: Schema.optionalKey(Schema.Array(ChecklistItem)),
 });
 
 export type WorkspaceDetail = typeof WorkspaceDetail.Type;
@@ -416,6 +486,8 @@ export const Session = Schema.Struct({
   agentVersion: Schema.optional(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
   agentSha: Schema.optional(Schema.String),
   profileIssues: Schema.optional(Schema.Array(ProfileIssue)),
+  /** 13, L-ADR-1: the owner's intent check control for this chat. Only `setIntentCheck` changes it. */
+  intentCheck: Schema.optional(Schema.Boolean),
 });
 
 export type Session = typeof Session.Type;
@@ -539,9 +611,99 @@ export const RunContent = Schema.Struct({ runId: Schema.String });
 
 export const AgentProposalContent = Schema.Struct({ proposalId: Schema.String });
 
+/** 13, Targets: one loop step over the report's window. Times are milliseconds; corrections are a count. */
+export const LoopStepResult = Schema.Struct({
+  step: Schema.Literals([
+    "intent_shown",
+    "intent_corrections",
+    "preview_proof",
+    "proof_to_merge",
+    "ci",
+    "merge_to_live",
+    "rollback",
+    "error_seen",
+    "error_fixed",
+  ]),
+  n: Schema.Number,
+  median: N(Schema.Number),
+  p90: N(Schema.Number),
+  targetMedian: Schema.Number,
+  targetP90: Schema.Number,
+  met: N(Schema.Boolean),
+});
+
+export const LoopReport = Schema.Struct({
+  from: Ms,
+  to: Ms,
+  steps: Schema.Array(LoopStepResult),
+  /** 13, Phase 3: contract checks that failed in the window. */
+  violations: Schema.Array(Schema.String),
+});
+
+export type LoopReport = typeof LoopReport.Type;
+
+/** 13, L-ADR-8: a Cloudflare API request held for the owner. */
+export const CloudflareHoldContent = Schema.Struct({
+  holdId: Schema.String,
+  method: Schema.String,
+  path: Schema.String,
+  resource: N(Schema.String),
+  reasons: Schema.Array(Schema.String),
+  status: Schema.Literals(["pending", "allowed", "refused", "used"]),
+});
+
+export type CloudflareHoldContent = typeof CloudflareHoldContent.Type;
+
+/** 13, L-ADR-1: the intent card. Updated in place as the intent changes. */
+export const IntentContent = Schema.Struct({
+  intentId: Schema.String,
+  status: IntentStatus,
+  goal: Schema.String,
+  approach: Schema.String,
+  notDoing: Schema.String,
+  decidedBy: N(Schema.Literals(["owner", "judge"])),
+  reasons: Schema.Array(Schema.String),
+  enforced: Schema.Boolean,
+});
+
+export type IntentContent = typeof IntentContent.Type;
+
+/** 13, L-ADR-2: one proof, updated in place while its checks run. */
+export const ProofScreen = Schema.Struct({
+  route: Schema.String,
+  viewport: Schema.Literals(["desktop", "phone"]),
+  theme: Schema.Literals(["light", "dark"]),
+  artifactId: Schema.String,
+  version: Schema.Number,
+  recordingArtifactId: N(Schema.String),
+});
+
+export const ProofCheck = Schema.Struct({
+  name: Schema.String,
+  runId: N(Schema.String),
+  status: Schema.Literals(["running", "passed", "failed"]),
+  exitCode: N(Schema.Number),
+});
+
+export const ProofContent = Schema.Struct({
+  proofId: Schema.String,
+  summary: Schema.String,
+  screens: Schema.Array(ProofScreen),
+  checks: Schema.Array(ProofCheck),
+  resolved: Schema.Array(Schema.Struct({ checklistId: Schema.String, note: Schema.String })),
+  missingRoutes: Schema.Array(Schema.String),
+  missingChecklist: Schema.Array(Schema.String),
+  status: Schema.Literals(["checking", "complete", "incomplete"]),
+});
+
+export type ProofContent = typeof ProofContent.Type;
+
 export const ITEM_CONTENT = {
   run: RunContent,
   agent_proposal: AgentProposalContent,
+  intent: IntentContent,
+  proof: ProofContent,
+  cloudflare_hold: CloudflareHoldContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -571,6 +733,9 @@ const itemOf = <K extends keyof typeof ITEM_CONTENT>(kind: K) =>
 export const Item = Schema.Union([
   itemOf("run"),
   itemOf("agent_proposal"),
+  itemOf("intent"),
+  itemOf("proof"),
+  itemOf("cloudflare_hold"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),
@@ -710,6 +875,8 @@ export const Diagnostics = Schema.Struct({
       status: Schema.Number,
       ms: Schema.Number,
       rule: Schema.Number,
+      /** 14, Enforcement: the capability id the request used, or empty. */
+      capability: Schema.optional(Schema.String),
     }),
   ),
   sessions: Schema.Array(

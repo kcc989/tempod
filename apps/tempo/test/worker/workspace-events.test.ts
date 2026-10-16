@@ -1,3 +1,4 @@
+import { INTENT_TEXT } from "../../src/do/workspace/intent.ts";
 import { Schema } from "effect";
 import type { WorkspaceStub } from "../../src/do/workspace/stub.ts";
 import { env, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
@@ -9,7 +10,7 @@ import {
   TURN_SUMMARY_RULE,
   type TempodEvent,
 } from "@tempo/protocol";
-import { describe, it } from "vitest";
+import { describe, expect as matchers, it } from "vitest";
 import type { WorkspaceDO } from "../../src/do/workspace/index.ts";
 import { recoverSteering } from "../../src/do/workspace/queue.ts";
 import {
@@ -2086,6 +2087,12 @@ describe.concurrent("outbox.overflow", () => {
 // Queue runner: content blocks (01 Sessions, Send a prompt) and scheduling (03 Queue runner)
 // =============================================================================================
 
+/** 14, Delivery 1: the manifest summary is the first block of a session's first prompt. */
+const MANIFEST_BLOCK = {
+  type: "text",
+  text: matchers.stringMatching(/^Capabilities \(manifest revision \d+\)/),
+};
+
 describe.concurrent("prompt content blocks", () => {
   const GENERAL = "Always run the tests before you finish.";
   const withGeneral = { ...DEFAULT_EFFECTIVE, prompts: { general: GENERAL } };
@@ -2097,8 +2104,10 @@ describe.concurrent("prompt content blocks", () => {
       const ctx = await runningTurn({ prompt: "First", effective: withGeneral });
       const p1 = ctx.tempod.requestsOf("session.prompt")[0];
       expect(p1.content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "First" },
       ]);
       await endTurn(ctx, ctx.sessionId, ctx.turnId);
@@ -2116,8 +2125,10 @@ describe.concurrent("prompt content blocks", () => {
       );
       const t3 = await prompt(ctx, session.id, "Third");
       expect((await waitPrompt(ctx, t3)).content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Third" },
       ]);
     },
@@ -2130,7 +2141,9 @@ describe.concurrent("prompt content blocks", () => {
       // 01 Send a prompt, block 1: "if it is set".
       const ctx = await runningTurn({ prompt: "Only text" });
       expect(ctx.tempod.requestsOf("session.prompt")[0].content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Only text" },
       ]);
     },
@@ -2363,11 +2376,13 @@ describe.concurrent("prompt content blocks", () => {
 
       const p = await waitPrompt(ctx, turn);
       expect(p.content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
         { type: "text", text: "Review comments:\na.ts:1: why" },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Do it" },
         { type: "resource_link", uri: "file:///workspace/b.ts", name: "b.ts" },
       ]);
@@ -2433,10 +2448,12 @@ describe.concurrent("prompt content blocks", () => {
       await runInDurableObject(ctx.stub, (i: WorkspaceDO) => internals(i).core.kickQueue());
       await waitFor(async () => (await turnRow(ctx.stub, turn))?.status === "running", 5000, "turn running");
       expect(ctx.tempod.requestsOf("session.prompt").at(-1).content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: HANDOFF_FIRST_LINE },
         { type: "text", text: note },
+        { type: "text", text: INTENT_TEXT.rule },
         { type: "text", text: "Do it" },
       ]);
       expect(await sessionRow(ctx.stub, sessionId)).toMatchObject({
@@ -2470,6 +2487,7 @@ describe.concurrent("prompt content blocks", () => {
       ctx.tempod.failures.delete("session.prompt");
       const t2 = await prompt(ctx, sessionId, "Second try");
       expect((await waitPrompt(ctx, t2)).content).toEqual([
+        MANIFEST_BLOCK,
         { type: "text", text: TURN_SUMMARY_RULE },
         { type: "text", text: GENERAL },
         { type: "text", text: [HANDOFF_FIRST_LINE, "User: First try"].join("\n") },

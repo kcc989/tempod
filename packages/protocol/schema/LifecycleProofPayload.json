@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LifecycleProofPayload",
+  "type": "object",
+  "properties": {
+    "proofId": {
+      "type": "string"
+    },
+    "complete": {
+      "type": "boolean"
+    }
+  },
+  "required": ["proofId", "complete"],
+  "additionalProperties": true
+}

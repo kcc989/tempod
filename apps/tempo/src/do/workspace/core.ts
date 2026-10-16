@@ -1,3 +1,6 @@
+import { pendingIntent } from "./intent.ts";
+import { pendingHold } from "./cloudflare-gate.ts";
+import { listChecklist } from "./proof.ts";
 import { proposalRecords } from "../../agents/proposals.ts";
 import type { CiCoordinator } from "../../ci/types.ts";
 import type { DeployCoordinator } from "../../deploy/types.ts";
@@ -244,7 +247,19 @@ export class WorkspaceCore {
     return undefined;
   }
   updateWs(patch: Partial<typeof workspace.$inferInsert>): void {
+    const before = patch.prState === "merged" ? this.ws() : null;
     this.db.update(workspace).set(patch).where(eq(workspace.id, 1)).run();
+
+    // 13, L-ADR-7: the merge is a loop step.
+    if (before && before.prState !== "merged" && before.prNumber !== null) {
+      this.lifecycle.append({
+        type: "tempo.pr.merged",
+        source: "tempo",
+        dedupeKey: `pr:${before.prNumber}:merged`,
+        payload: { prNumber: before.prNumber },
+      });
+      this.lifecycle.kick();
+    }
   }
   get state(): WorkspaceState {
     return this.ws().state;
@@ -450,7 +465,7 @@ export class WorkspaceCore {
       .where(eq(permissions.status, "pending"))
       .get();
 
-    if (pending) return "needs_input";
+    if (pending || pendingIntent(this) || pendingHold(this)) return "needs_input";
 
     const newest = this.db
       .select()
@@ -544,6 +559,7 @@ export class WorkspaceCore {
       environmentId: row.environmentId,
       environmentProposals: this.pendingProposals(),
       agentProposals: proposalRecords(this),
+      checklist: listChecklist(this),
     };
   }
   /**
@@ -613,7 +629,7 @@ export class WorkspaceCore {
       steering: json.capabilities.read(r.capabilitiesJson, {})["steering"] === true,
     } satisfies Session;
 
-    const session = r.runId ? { ...wire, runId: r.runId } : wire;
+    const session = r.runId ? { ...wire, runId: r.runId } : { ...wire, intentCheck: r.intentCheck === 1 };
 
     if (!r.agentId) return session;
 

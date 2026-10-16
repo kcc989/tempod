@@ -1,0 +1,34 @@
+version: 1
+stack:
+  runtime: bun 1.3
+  package_manager: bun
+  frameworks: [TanStack Start, Effect v4, Drizzle, Alchemy v2]
+  libraries: ["@typesafe-ai/sdk 0.7.0", Better Auth]
+services:
+  - name: typesafe
+    purpose: Jev (jev-1.14.0) picks tags and ranks research results
+    hosts: [api.typesafe.ai]
+    credential: TYPESAFE_API_KEY
+    methods: [POST]
+checks:
+  - name: typecheck
+    command: bun run typecheck
+    timeout_minutes: 5
+  - name: lint
+    command: bun run lint
+    timeout_minutes: 5
+  - name: test
+    command: bun run test
+    timeout_minutes: 10
+screens:
+  - route: /
+    files: ["apps/web/src/routes/index.tsx", "apps/web/src/components/todos/**"]
+  - route: /todos/$todoId
+    files: ["apps/web/src/routes/todos/**", "apps/web/src/components/research/**"]
+  - route: /settings
+    files: ["apps/web/src/routes/settings.tsx", "apps/web/src/components/tags/**"]
+notes: |
+  Owner-only app: one user, signed in with Better Auth. MCP clients use OAuth through Better Auth.
+  Web search uses env.AI.websearch with no API key; do not add another search provider.
+  The research job runs in the ResearchDO Durable Object.
+  Show every screen at desktop and phone width, light and dark.

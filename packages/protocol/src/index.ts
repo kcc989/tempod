@@ -49,3 +49,5 @@ export * from "./issue-tools.ts";
 export * from "./deploy-tools.ts";
 
 export * from "./dotfiles.ts";
+
+export * from "./capabilities.ts";

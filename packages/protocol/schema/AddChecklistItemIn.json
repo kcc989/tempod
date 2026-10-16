@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AddChecklistItemIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "itemId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "itemId"],
+  "additionalProperties": true
+}

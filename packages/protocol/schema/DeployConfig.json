@@ -65,6 +65,9 @@
         "$ref": "DeployTarget.json"
       }
     },
+    "autoFix": {
+      "type": "boolean"
+    },
     "updatedAt": {
       "anyOf": [
         {
@@ -95,6 +98,7 @@
     "timeoutMinutes",
     "egressAllowlist",
     "targets",
+    "autoFix",
     "updatedAt"
   ],
   "additionalProperties": true

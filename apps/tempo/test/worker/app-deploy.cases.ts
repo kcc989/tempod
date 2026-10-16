@@ -22,6 +22,9 @@ import type { HandlerCtx } from "../../src/server/run.ts";
 import { artifactMetadata, fakeArtifactRepo, fakeArtifacts } from "./artifacts-fake.ts";
 import { FakeTempod, emitEvent, installFakes, internals, seedProject, waitFor } from "./fakes.ts";
 import { seedReadyWorkspace } from "./ready-fixture.ts";
+import { withWorkspaceInit } from "./workspace-environment.ts";
+import type { InitInput } from "../../src/do/workspace/index.ts";
+import type { WorkspaceSummary } from "@tempo/protocol";
 
 const REMOTE = `https://${"a".repeat(32)}.artifacts.cloudflare.net/git/tempo-repos/app.git`;
 
@@ -62,7 +65,8 @@ const failed = (status: number) => new Response(JSON.stringify({ success: false,
 const fakeCloudflare = () => {
   const created: Array<{ auth: string | null; body: Schema.Json }> = [];
   const deleted: string[] = [];
-  const state = { created, deleted, deleteFailures: 0, groups: GROUPS };
+  const scripts = new Map<string, FakeScript>();
+  const state = { created, deleted, deleteFailures: 0, groups: GROUPS, scripts, refuse: new Set<string>() };
 
   const fetch = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
@@ -88,11 +92,77 @@ const fakeCloudflare = () => {
       return ok({ id: url.pathname.split("/").pop() ?? "" });
     }
 
+    const script = url.pathname.match(
+      /^\/client\/v4\/accounts\/[0-9a-f]+\/workers\/scripts\/([^/]+)\/(deployments|versions)$/,
+    );
+
+    const worker = script ? state.scripts.get(script[1]!) : undefined;
+
+    if (script && worker && request.method === "GET")
+      return script[2] === "deployments"
+        ? ok({ deployments: worker.deployments })
+        : ok({ items: worker.versions.map((v) => ({ id: v.id, metadata: { created_on: v.createdOn } })) });
+
+    if (script && worker && request.method === "POST" && script[2] === "deployments") {
+      if (state.refuse.has(script[1]!)) return failed(409);
+
+      const body = Schema.decodeUnknownSync(
+        Schema.Struct({
+          versions: Schema.Array(Schema.Struct({ version_id: Schema.String, percentage: Schema.Number })),
+        }),
+      )(await request.json());
+
+      const created = {
+        id: `cfdep-${script[1]}-${worker.deployments.length + 1}`,
+        created_on: new Date().toISOString(),
+        versions: body.versions,
+      };
+
+      worker.deployments.unshift(created);
+      worker.posts.push({ auth: request.headers.get("authorization"), versions: body.versions });
+
+      return ok(created);
+    }
+
     return failed(404);
   };
 
   return { state, api: { fetch } };
 };
+
+interface FakeScript {
+  deployments: Array<{
+    id: string;
+    created_on: string;
+    versions: ReadonlyArray<{ version_id: string; percentage: number }>;
+  }>;
+  versions: Array<{ id: string; createdOn: string }>;
+  posts: Array<{ auth: string | null; versions: ReadonlyArray<{ version_id: string; percentage: number }> }>;
+}
+
+/** A Worker with one old version live at 100%. */
+const liveScript = (name: string): FakeScript => ({
+  deployments: [
+    {
+      id: `cfdep-${name}-0`,
+      created_on: "2026-01-01T00:00:00Z",
+      versions: [{ version_id: `${name}-v1`, percentage: 100 }],
+    },
+  ],
+  versions: [{ id: `${name}-v1`, createdOn: "2026-01-01T00:00:00Z" }],
+  posts: [],
+});
+
+const GRADUAL = [
+  "version: 1",
+  "tool: alchemy",
+  "targets:",
+  "  production:",
+  "    branch: main",
+  "    rollout: gradual",
+  "    workers: [app-web, app-api]",
+  '    smoke: ["https://app.example.com/health"]',
+].join("\n");
 
 const nativeProject = async () => {
   const seed = await seedProject();
@@ -745,5 +815,345 @@ describe("deploy agent tools (12, Agent tools)", { timeout: 30_000 }, () => {
     expect(await tool("get_deployment", { deploymentId: starts[0]!.deploymentId }, runId)).toMatchObject({
       ok: true,
     });
+  });
+});
+
+describe("gradual rollout (12, Gradual rollout)", { timeout: 30_000 }, () => {
+  const ready = async () => {
+    const w = await deploys();
+    const smoke: Array<{ url: string; override: string | null }> = [];
+    const smokeStatus = { value: 200 };
+
+    w.cloudflare.state.scripts.set("app-web", liveScript("app-web"));
+    w.cloudflare.state.scripts.set("app-api", liveScript("app-api"));
+    await runInDurableObject(w.stub, (instance: AppDeployDO) => {
+      instance.smokeFetch = async (request) => {
+        smoke.push({
+          url: request.url,
+          override: request.headers.get("cloudflare-workers-version-overrides"),
+        });
+
+        return new Response(null, { status: smokeStatus.value });
+      };
+    });
+    await w.save(GRADUAL);
+    const started = await deploy.startDeployment(w.ctx, { projectId: w.projectId, target: "production" });
+    const job = w.starts[0]!;
+
+    /** What `alchemy deploy` with version.traffic 0 leaves behind: new versions, no new deployment. */
+    const upload = () => {
+      for (const name of ["app-web", "app-api"])
+        w.cloudflare.state.scripts
+          .get(name)!
+          .versions.unshift({ id: `${name}-v2`, createdOn: new Date().toISOString() });
+    };
+
+    const endCanary = () =>
+      runInDurableObject(w.stub, (_i: AppDeployDO, state) => {
+        state.storage.sql.exec("UPDATE deployments SET canary_until = 0");
+      });
+
+    return { ...w, started, job, upload, smoke, smokeStatus, endCanary };
+  };
+
+  it.concurrent("uploads at 0%, moves 10% with a smoke test, promotes to 100%, and the owner can roll back", async ({
+    expect,
+  }) => {
+    const w = await ready();
+    expect(w.job.command).toContain("export TEMPO_DEPLOY_TRAFFIC=0");
+    w.upload();
+    await w.finish(w.job, "success", 0);
+
+    const canary = await w.get(w.started.id);
+    expect(canary).toMatchObject({ status: "running", conclusion: null, rollout: { phase: "canary" } });
+    expect(canary.rollout!.workers).toEqual([
+      {
+        name: "app-web",
+        versionId: "app-web-v2",
+        previousVersionId: "app-web-v1",
+        percentage: 10,
+        cloudflareDeploymentId: "cfdep-app-web-2",
+      },
+      {
+        name: "app-api",
+        versionId: "app-api-v2",
+        previousVersionId: "app-api-v1",
+        percentage: 10,
+        cloudflareDeploymentId: "cfdep-app-api-2",
+      },
+    ]);
+    expect(w.cloudflare.state.scripts.get("app-web")!.posts).toEqual([
+      {
+        auth: "Bearer minted-secret-1",
+        versions: [
+          { version_id: "app-web-v2", percentage: 10 },
+          { version_id: "app-web-v1", percentage: 90 },
+        ],
+      },
+    ]);
+    expect(w.smoke).toEqual([{ url: "https://app.example.com/health", override: 'app-web="app-web-v2"' }]);
+    expect(w.cloudflare.state.deleted).toEqual([]);
+
+    await runDurableObjectAlarm(w.stub);
+    expect((await w.get(w.started.id)).rollout!.phase).toBe("canary");
+    await w.endCanary();
+    await runDurableObjectAlarm(w.stub);
+
+    const done = await w.get(w.started.id);
+    expect(done).toMatchObject({
+      status: "completed",
+      conclusion: "success",
+      exitCode: 0,
+      rollout: { phase: "promoted" },
+    });
+    expect(done.rollout!.workers.map((x) => x.percentage)).toEqual([100, 100]);
+    expect(w.cloudflare.state.scripts.get("app-api")!.posts.at(-1)!.versions).toEqual([
+      { version_id: "app-api-v2", percentage: 100 },
+    ]);
+    expect(w.cloudflare.state.deleted).toEqual(["tok-1"]);
+    expect(await w.creds.getSecret(deployTokenKey(w.started.id))).toBeNull();
+
+    const back = await deploy.rollbackDeployment(w.ctx, {
+      projectId: w.projectId,
+      deploymentId: w.started.id,
+    });
+
+    expect(back.rollout).toMatchObject({ phase: "rolled_back", rolledBackAt: expect.any(Number) });
+    expect(w.cloudflare.state.scripts.get("app-web")!.posts.at(-1)).toEqual({
+      auth: "Bearer minted-secret-2",
+      versions: [{ version_id: "app-web-v1", percentage: 100 }],
+    });
+    expect(w.cloudflare.state.created[1]!.body).toMatchObject({ name: `tempo-rollback-${w.projectId}-1` });
+    expect(w.cloudflare.state.deleted).toEqual(["tok-1", "tok-2"]);
+    expect(
+      await code(() =>
+        deploy.rollbackDeployment(w.ctx, { projectId: w.projectId, deploymentId: w.started.id }),
+      ),
+    ).toEqual({ code: "VALIDATION_FAILED", detail: "Nothing to roll back to." });
+
+    const events = await runInDurableObject(w.stub, (_i: AppDeployDO, state) =>
+      state.storage.sql
+        .exec<{ type: string }>("SELECT type FROM events ORDER BY at, rowid")
+        .toArray()
+        .map((e) => e.type),
+    );
+
+    expect(events.filter((t) => t === "deploy.version.uploaded")).toHaveLength(2);
+    expect(events.filter((t) => t === "deploy.traffic.changed")).toHaveLength(4);
+    expect(events.at(-1)).toBe("deploy.rolled_back");
+  });
+
+  it.concurrent("rolls back a failed smoke test and fails a deploy that uploaded nothing", async ({
+    expect,
+  }) => {
+    const w = await ready();
+    w.smokeStatus.value = 503;
+    w.upload();
+    await w.finish(w.job, "success", 0);
+
+    const failed = await w.get(w.started.id);
+    expect(failed).toMatchObject({
+      status: "completed",
+      conclusion: "failure",
+      summary: "Rolled back: smoke test https://app.example.com/health answered 503.",
+      rollout: { phase: "rolled_back" },
+    });
+    expect(w.cloudflare.state.scripts.get("app-web")!.posts.at(-1)!.versions).toEqual([
+      { version_id: "app-web-v1", percentage: 100 },
+    ]);
+    expect(w.cloudflare.state.deleted).toEqual(["tok-1"]);
+
+    const second = await deploy.startDeployment(w.ctx, { projectId: w.projectId, target: "production" });
+    await w.finish(w.starts[1]!, "success", 0);
+    expect(await w.get(second.id)).toMatchObject({
+      status: "completed",
+      conclusion: "failure",
+      summary: "No new version of app-web was uploaded. Pass TEMPO_DEPLOY_TRAFFIC to version.traffic.",
+      rollout: null,
+    });
+  });
+
+  it.concurrent("promotes everything at once when the tool deployed a Worker at 100%, and a cancel rolls back a canary", async ({
+    expect,
+  }) => {
+    const w = await ready();
+    w.upload();
+    const web = w.cloudflare.state.scripts.get("app-web")!;
+    web.deployments.unshift({
+      id: "cfdep-app-web-migration",
+      created_on: new Date().toISOString(),
+      versions: [{ version_id: "app-web-v2", percentage: 100 }],
+    });
+    await w.finish(w.job, "success", 0);
+
+    expect(await w.get(w.started.id)).toMatchObject({
+      status: "completed",
+      conclusion: "success",
+      summary: "app-web deployed at 100% without a gradual rollout.",
+      rollout: { phase: "full" },
+    });
+    expect(web.posts).toEqual([]);
+    expect(w.cloudflare.state.scripts.get("app-api")!.posts.at(-1)!.versions).toEqual([
+      { version_id: "app-api-v2", percentage: 100 },
+    ]);
+
+    const next = await deploy.startDeployment(w.ctx, { projectId: w.projectId, target: "production" });
+
+    for (const name of ["app-web", "app-api"])
+      w.cloudflare.state.scripts
+        .get(name)!
+        .versions.unshift({ id: `${name}-v3`, createdOn: new Date().toISOString() });
+    await w.finish(w.starts[1]!, "success", 0);
+    expect((await w.get(next.id)).rollout!.phase).toBe("canary");
+
+    const cancelled = await deploy.cancelDeployment(w.ctx, { projectId: w.projectId, deploymentId: next.id });
+    expect(cancelled).toMatchObject({
+      conclusion: "cancelled",
+      summary: "Rolled back: cancelled by the owner.",
+      rollout: { phase: "rolled_back" },
+    });
+    expect(web.posts.at(-1)!.versions).toEqual([{ version_id: "app-web-v2", percentage: 100 }]);
+  });
+
+  /** POSTs one Issues webhook the way Cloudflare Notifications does. */
+  const webhook = async (
+    w: { projectId: string },
+    body: Schema.Json,
+    secret: string | null,
+    environment: Env = env,
+  ) => {
+    const pending: Array<Promise<unknown>> = [];
+    const url = new URL(`https://tempo.example.com/api/hooks/cloudflare-issues/${w.projectId}`);
+    const headers = new Headers({ "content-type": "application/json" });
+
+    if (secret !== null) headers.set("cf-webhook-auth", secret);
+
+    const res = await deploy.handleIssuesWebhook(
+      new Request(url, { method: "POST", headers, body: JSON.stringify(body) }),
+      environment,
+      url,
+      (work) => pending.push(work),
+    );
+
+    await Promise.all(pending);
+
+    return res!.status;
+  };
+
+  const issue = (id: string, version: string | null) => ({
+    name: "TypeError in app-web",
+    text: "TypeError: x is undefined at handler (src/index.ts:42:7) Authorization: Bearer abc.def",
+    ts: 1792094736,
+    alert_type: "workers_issue",
+    alert_correlation_id: `corr-${id}`,
+    data: { issue: { issue_id: id }, worker: { script_name: "app-web", version_id: version } },
+  });
+
+  it.concurrent("accepts Issues only with the secret, groups occurrences and rolls back a canary", async ({
+    expect,
+  }) => {
+    const w = await ready();
+    expect(await webhook(w, issue("i-1", null), "anything")).toBe(404);
+    const { url, secret } = await deploy.rotateIssuesWebhook(w.ctx, { projectId: w.projectId });
+    expect(url).toBe(`https://${env.APP_HOST}/api/hooks/cloudflare-issues/${w.projectId}`);
+    expect(await deploy.getIssuesWebhook(w.ctx, { projectId: w.projectId })).toEqual({
+      url,
+      secretSet: true,
+    });
+    expect(await webhook(w, issue("i-1", null), "wrong")).toBe(404);
+    expect(await webhook(w, { nope: true }, secret)).toBe(400);
+
+    w.upload();
+    await w.finish(w.job, "success", 0);
+    expect((await w.get(w.started.id)).rollout!.phase).toBe("canary");
+    expect(await webhook(w, issue("i-1", "app-web-v2"), secret)).toBe(204);
+
+    expect(await w.get(w.started.id)).toMatchObject({
+      conclusion: "failure",
+      summary: "Rolled back: new production error: TypeError in app-web.",
+      rollout: { phase: "rolled_back" },
+    });
+
+    expect(await webhook(w, issue("i-1", "app-web-v2"), secret)).toBe(204);
+    const [error] = await deploy.listProductionErrors(w.ctx, { projectId: w.projectId });
+
+    expect(error).toMatchObject({
+      worker: "app-web",
+      versionId: "app-web-v2",
+      deploymentNumber: 1,
+      occurrences: 2,
+      title: "TypeError in app-web",
+      fixWorkspaceId: null,
+    });
+    expect(error!.text).toContain("Bearer [redacted]");
+    expect(error!.text).not.toContain("abc.def");
+  });
+
+  it.concurrent("starts one fix workspace per error, on its own with auto_fix, and marks it fixed after a clean deploy", async ({
+    expect,
+  }) => {
+    const w = await ready();
+    const inits: InitInput[] = [];
+
+    const fixEnv = withWorkspaceInit(
+      {
+        ...env,
+        ARTIFACTS: fakeArtifacts(async () =>
+          fakeArtifactRepo(artifactMetadata("app", { id: "repo-app", remote: REMOTE, readOnly: false })),
+        ),
+      },
+      async (_stub, input) => {
+        inits.push(input);
+
+        // SAFETY: startErrorFix reads only the id of the created workspace.
+        return { ok: true, value: { id: input.workspaceId } as WorkspaceSummary };
+      },
+    );
+
+    const ctx: HandlerCtx = { ...w.ctx, env: fixEnv };
+    w.upload();
+    await w.finish(w.job, "success", 0);
+    await w.endCanary();
+    await runDurableObjectAlarm(w.stub);
+    const { secret } = await deploy.rotateIssuesWebhook(w.ctx, { projectId: w.projectId });
+    expect(await webhook(w, issue("i-2", "app-web-v2"), secret)).toBe(204);
+    const [error] = await deploy.listProductionErrors(w.ctx, { projectId: w.projectId });
+
+    const { workspaceId } = await deploy.startErrorFix(ctx, { projectId: w.projectId, errorId: error!.id });
+    expect(await deploy.startErrorFix(ctx, { projectId: w.projectId, errorId: error!.id })).toEqual({
+      workspaceId,
+    });
+    expect(inits).toHaveLength(1);
+    expect(inits[0]).toMatchObject({ baseBranch: "main", source: { kind: "new" } });
+    expect(inits[0]!.prompt!.text).toContain("Fix this production error in app-web.\nTypeError in app-web");
+    expect(inits[0]!.prompt!.text).toContain(
+      `Deployment #1 (production), version app-web-v2, commits unknown..${sha("1")}.`,
+    );
+
+    await w.save(`${GRADUAL}\nauto_fix: true`);
+    expect(await webhook(w, issue("i-3", null), secret, fixEnv)).toBe(204);
+    expect(inits).toHaveLength(2);
+
+    const next = await deploy.startDeployment(w.ctx, { projectId: w.projectId, target: "production" });
+
+    for (const name of ["app-web", "app-api"])
+      w.cloudflare.state.scripts
+        .get(name)!
+        .versions.unshift({ id: `${name}-v3`, createdOn: new Date().toISOString() });
+
+    await w.finish(w.starts[1]!, "success", 0);
+    await w.endCanary();
+    await runDurableObjectAlarm(w.stub);
+    expect((await w.get(next.id)).conclusion).toBe("success");
+
+    await runInDurableObject(w.stub, (_i: AppDeployDO, state) => {
+      state.storage.sql.exec("UPDATE errors SET last_seen_at = 0, fix_check_at = 600002");
+    });
+    await runDurableObjectAlarm(w.stub);
+    const errors = await deploy.listProductionErrors(w.ctx, { projectId: w.projectId });
+    expect(errors.map((e) => [e.fixWorkspaceId !== null, e.fixedAt !== null])).toEqual([
+      [true, true],
+      [true, true],
+    ]);
   });
 });

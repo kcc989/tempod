@@ -2,7 +2,7 @@
 
 This folder measures the owner's loop with coding agents before Tempo becomes the command center for Cloudflare apps. Use it as the "before" number for each loop target.
 
-It holds scripts, the label prompt and aggregate counts only. It holds no message text: the raw logs contain personal content and stay out of the repo.
+It holds scripts, the label prompt and aggregate counts only. `LOOP.md` extends it with the loop steps, production errors and sources (Phase 0). It holds no message text: the raw logs contain personal content and stay out of the repo.
 
 ## Sources
 
@@ -76,7 +76,7 @@ CI (`CI` workflow; the time includes setup):
 - The data covers 11 days. Some projects have few threads.
 - The labels come from agents. Use them to rank problems, not as exact counts.
 - PLAN_VERBOSE mixes length and direction. The split uses a keyword match on each label's reason.
-- The data does not include the time lost to each problem.
+- The data does not include the time lost to each problem. `score.py lost` computes it (LOOP.md).
 - Only local agent logs are included. It does not include Tempo's WorkspaceDO events or Conductor's own logs.
 
 ## Run it again
@@ -87,6 +87,8 @@ python3 -I scripts/score.py split <out>
 # label batch0..3 with label-prompt.md, hand-label the ids in sample_ids.json into hand_labels.json
 python3 -I scripts/score.py score <out> data/agent-logs.json
 python3 -I scripts/ci_summary.py runs-page*.json > data/ci-runs.json
+python3 -I scripts/score.py lost <out> data/time-lost.json
+python3 -I scripts/loop_steps.py <loop-in> > data/loop-steps.json
 ```
 
 Keep the codes and the seed the same so that the new numbers compare with this baseline.

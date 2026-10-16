@@ -124,6 +124,74 @@ export const cancelDeployment = createServerFn({ method: "POST" })
   .validator((data: FnInput<"cancelDeployment">) => data)
   .handler(({ data }) => run("cancelDeployment", data));
 
+export const rollbackDeployment = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rollbackDeployment">) => data)
+  .handler(({ data }) => run("rollbackDeployment", data));
+
+export const listProductionErrors = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"listProductionErrors">) => data)
+  .handler(({ data }) => run("listProductionErrors", data));
+
+export const startErrorFix = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"startErrorFix">) => data)
+  .handler(({ data }) => run("startErrorFix", data));
+
+export const getIssuesWebhook = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getIssuesWebhook">) => data)
+  .handler(({ data }) => run("getIssuesWebhook", data));
+
+export const rotateIssuesWebhook = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"rotateIssuesWebhook">) => data)
+  .handler(({ data }) => run("rotateIssuesWebhook", data));
+
+export const getJudgeSettings = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getJudgeSettings">) => data)
+  .handler(({ data }) => run("getJudgeSettings", data));
+
+export const setJudgeKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setJudgeKey">) => data)
+  .handler(({ data }) => run("setJudgeKey", data));
+
+export const deleteJudgeKey = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"deleteJudgeKey">) => data)
+  .handler(({ data }) => run("deleteJudgeKey", data));
+
+export const confirmIntent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"confirmIntent">) => data)
+  .handler(({ data }) => run("confirmIntent", data));
+
+export const setIntentCheck = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"setIntentCheck">) => data)
+  .handler(({ data }) => run("setIntentCheck", data));
+
+export const correctIntent = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"correctIntent">) => data)
+  .handler(({ data }) => run("correctIntent", data));
+
+export const getLoopReport = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getLoopReport">) => data)
+  .handler(({ data }) => run("getLoopReport", data));
+
+export const decideCloudflareHold = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"decideCloudflareHold">) => data)
+  .handler(({ data }) => run("decideCloudflareHold", data));
+
+export const addChecklistItem = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"addChecklistItem">) => data)
+  .handler(({ data }) => run("addChecklistItem", data));
+
+export const reopenChecklistItem = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"reopenChecklistItem">) => data)
+  .handler(({ data }) => run("reopenChecklistItem", data));
+
+export const getProjectProfile = createServerFn({ method: "GET" })
+  .validator((data: FnInput<"getProjectProfile">) => data)
+  .handler(({ data }) => run("getProjectProfile", data));
+
+export const updateProjectProfile = createServerFn({ method: "POST" })
+  .validator((data: FnInput<"updateProjectProfile">) => data)
+  .handler(({ data }) => run("updateProjectProfile", data));
+
 export const getDeploymentLog = createServerFn({ method: "GET" })
   .validator((data: FnInput<"getDeploymentLog">) => data)
   .handler(({ data }) => run("getDeploymentLog", data));

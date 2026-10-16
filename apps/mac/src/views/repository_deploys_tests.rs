@@ -17,18 +17,45 @@ struct Server {
 }
 
 fn deployment(id: &str, status: &str, conclusion: Value) -> Value {
-    json!({"id":id,"projectId":"project-1","number":4,"target":"production","stage":"production","branch":"main","sha":"abcdef0123456789abcdef0123456789abcdef01","revision":2,"trigger":"manual","status":status,"conclusion":conclusion,"exitCode":null,"summary":null,"workspaceId":null,"createdAt":1,"startedAt":1,"completedAt":null,"url":format!("/repositories?project=project-1&tab=deploys&deployment={id}")})
+    json!({"id":id,"projectId":"project-1","number":4,"target":"production","stage":"production","branch":"main","sha":"abcdef0123456789abcdef0123456789abcdef01","revision":2,"trigger":"manual","status":status,"conclusion":conclusion,"exitCode":null,"summary":null,"workspaceId":null,"createdAt":1,"startedAt":1,"completedAt":null,"rollout":null,"url":format!("/repositories?project=project-1&tab=deploys&deployment={id}")})
 }
 
 fn config(revision: u32, source: &Value) -> Value {
-    json!({"projectId":"project-1","revision":revision,"source":source,"enabled":true,"tool":"alchemy","root":"","permissions":["workers"],"timeoutMinutes":20,"egressAllowlist":[],"targets":[
-        {"key":"production","stage":"production","branch":"main","auto":true,"agent":false},
-        {"key":"preview","stage":"preview","branch":null,"auto":false,"agent":true}
+    json!({"projectId":"project-1","revision":revision,"source":source,"enabled":true,"tool":"alchemy","root":"","permissions":["workers"],"timeoutMinutes":20,"egressAllowlist":[],"autoFix":false,"targets":[
+        {"key":"production","stage":"production","branch":"main","auto":true,"agent":false,"rollout":"full","workers":[],"smoke":[]},
+        {"key":"preview","stage":"preview","branch":null,"auto":false,"agent":true,"rollout":"full","workers":[],"smoke":[]}
     ],"updatedAt":1})
+}
+
+fn rolled_out(id: &str, rollout: Value) -> Value {
+    let mut value = deployment(id, "completed", json!("success"));
+    value["rollout"] = rollout;
+    value
+}
+
+fn rollout(phase: &str, previous: &[Option<&str>]) -> Value {
+    let workers = previous
+        .iter()
+        .enumerate()
+        .map(|(index, previous)| json!({"name":format!("worker-{index}"),"versionId":format!("v-{index}-new"),"previousVersionId":previous,"percentage":100,"cloudflareDeploymentId":null}))
+        .collect::<Vec<_>>();
+    json!({"phase":phase,"canaryUntil":null,"rolledBackAt":null,"workers":workers})
+}
+
+fn production_error(id: &str, fix: Value, fixed: Value) -> Value {
+    json!({"id":id,"projectId":"project-1","worker":"web","versionId":"v-2","deploymentId":"d-5","deploymentNumber":5,"title":"TypeError: x is undefined","text":"at handler","occurrences":3,"firstSeenAt":1,"lastSeenAt":1,"fixWorkspaceId":fix,"fixedAt":fixed})
+}
+
+fn parse(value: Value) -> p::Deployment {
+    serde_json::from_value(value).unwrap()
 }
 
 impl Server {
     fn new() -> Self {
+        Self::with(deployment("d-1", "running", Value::Null))
+    }
+
+    fn with(initial: Value) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
@@ -37,8 +64,10 @@ impl Server {
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
         let worker = std::thread::spawn(move || {
-            let mut current = deployment("d-1", "running", Value::Null);
+            let mut current = initial;
             let mut reads = 0;
+            let mut errors = vec![production_error("e-1", Value::Null, Value::Null)];
+            let mut secret_set = false;
             let mut saves = 0;
             while !stopping.load(Ordering::Relaxed) {
                 let Ok((mut stream, _)) = listener.accept() else {
@@ -101,6 +130,27 @@ impl Server {
                     "redeploy" => {
                         current = deployment("d-3", "queued", Value::Null);
                         current["trigger"] = json!("redeploy");
+                        (200, current.clone())
+                    }
+                    "listProductionErrors" => (200, json!(errors)),
+                    "startErrorFix" => {
+                        errors[0]["fixWorkspaceId"] = json!("w-fix");
+                        (200, json!({"workspaceId":"w-fix"}))
+                    }
+                    "getIssuesWebhook" => (
+                        200,
+                        json!({"url":"https://tempo.test/api/hooks/cloudflare-issues/project-1","secretSet":secret_set}),
+                    ),
+                    "rotateIssuesWebhook" => {
+                        secret_set = true;
+                        (
+                            200,
+                            json!({"url":"https://tempo.test/api/hooks/cloudflare-issues/project-1","secret":"s3cr3t"}),
+                        )
+                    }
+                    "rollbackDeployment" => {
+                        current["rollout"]["phase"] = json!("rolled_back");
+                        current["rollout"]["rolledBackAt"] = json!(2);
                         (200, current.clone())
                     }
                     "cancelDeployment" => {
@@ -335,4 +385,149 @@ fn config_save_shows_detail_then_offers_reload_then_saves(cx: &mut TestAppContex
         server.calls("updateDeployConfig")[0],
         json!({"projectId":"project-1","source":"version: 1\ntool: alchemy\n","revision":2.0})
     );
+}
+
+#[test]
+fn roll_back_is_offered_only_for_an_unrolled_success_with_previous_versions() {
+    let ready = rolled_out("d-5", rollout("promoted", &[Some("v-a"), Some("v-b")]));
+    assert!(model::can_roll_back(&parse(ready.clone())));
+    let mut rolled_back = ready.clone();
+    rolled_back["rollout"]["rolledBackAt"] = json!(2);
+    let mut failed = ready.clone();
+    failed["conclusion"] = json!("failure");
+    let mut running = ready;
+    running["status"] = json!("running");
+    running["conclusion"] = Value::Null;
+    for value in [
+        rolled_back,
+        failed,
+        running,
+        rolled_out("d-5", rollout("full", &[Some("v-a"), None])),
+        rolled_out("d-5", rollout("promoted", &[])),
+        deployment("d-5", "completed", json!("success")),
+    ] {
+        assert!(!model::can_roll_back(&parse(value)));
+    }
+}
+
+#[test]
+fn running_canary_is_labelled_canary_with_its_rollout_facts() {
+    let mut canary = deployment("d-5", "running", Value::Null);
+    canary["rollout"] = rollout("canary", &[Some("v-a"), None]);
+    canary["rollout"]["canaryUntil"] = json!(3_723_000);
+    canary["rollout"]["workers"][0]["percentage"] = json!(10);
+    canary["rollout"]["workers"][0]["cloudflareDeploymentId"] = json!("cf-1");
+    let canary = parse(canary);
+    assert_eq!(model::state(&canary).0, "Canary");
+    let rollout = canary.rollout.as_ref().unwrap();
+    assert_eq!(
+        model::rollout_heading(rollout, 0.),
+        "Canary at 10% · moves to 100% at 01:02 UTC"
+    );
+    assert_eq!(
+        model::rollout_worker(&rollout.workers[0]),
+        (
+            "worker-0 · 10%".to_string(),
+            "version v-0-new · previous v-a · Cloudflare deployment cf-1".to_string()
+        )
+    );
+    assert_eq!(
+        model::rollout_worker(&rollout.workers[1]).1,
+        "version v-1-new · previous none · Cloudflare deployment none"
+    );
+    assert_eq!(
+        model::state(&parse(deployment("d-1", "running", Value::Null))).0,
+        "Running"
+    );
+}
+
+#[gpui_kit::test]
+fn roll_back_sends_rollback_deployment_then_shows_the_rolled_back_deployment(
+    cx: &mut TestAppContext,
+) {
+    let server = Server::with(rolled_out("d-5", rollout("promoted", &[Some("v-a")])));
+    let runtime = tempo_client::Runtime::start().unwrap();
+    let (_, view) = mount(cx, &server, &runtime);
+    view.update(cx, |view, cx| view.open_deployment("d-5".into(), cx));
+    wait(cx, &view, |view| {
+        view.deployment.as_ref().is_some_and(model::can_roll_back)
+    });
+    view.update(cx, |view, cx| view.rollback(cx));
+    wait(cx, &view, |view| {
+        !view.pending
+            && view
+                .deployment
+                .as_ref()
+                .and_then(|d| d.rollout.as_ref())
+                .is_some_and(|r| r.rolled_back_at.is_some())
+    });
+    assert_eq!(
+        server.calls("rollbackDeployment"),
+        vec![json!({"projectId":"project-1","deploymentId":"d-5"})]
+    );
+    view.read_with(cx, |view, _| {
+        let deployment = view.deployment.as_ref().unwrap();
+        assert!(!model::can_roll_back(deployment));
+        assert_eq!(
+            model::rollout_heading(deployment.rollout.as_ref().unwrap(), 2.),
+            "Rolled back · just now"
+        );
+    });
+}
+
+#[test]
+fn production_error_facts_name_worker_version_count_and_fixed() {
+    let parse_error =
+        |value: Value| -> p::ProductionError { serde_json::from_value(value).unwrap() };
+    let open = parse_error(production_error("e-1", Value::Null, Value::Null));
+    assert_eq!(
+        model::production_error_facts(&open, 1.),
+        "web · version v-2 · 3 times · last just now"
+    );
+    let mut unknown = production_error("e-2", json!("w-fix"), json!(2));
+    unknown["worker"] = Value::Null;
+    unknown["versionId"] = Value::Null;
+    unknown["occurrences"] = json!(1);
+    assert_eq!(
+        model::production_error_facts(&parse_error(unknown), 1.),
+        "Unknown Worker · version unknown · 1 time · last just now · Fixed"
+    );
+}
+
+#[gpui_kit::test]
+fn start_fix_opens_the_fix_workspace_and_new_secret_is_shown_once(cx: &mut TestAppContext) {
+    let server = Server::new();
+    let runtime = tempo_client::Runtime::start().unwrap();
+    let (_, view) = mount(cx, &server, &runtime);
+    let opened = Arc::new(Mutex::new(Vec::new()));
+    let seen = opened.clone();
+    cx.update(|cx| {
+        cx.subscribe(&view, move |_, event: &DeploysEvent, _| {
+            let DeploysEvent::OpenWorkspace(id) = event;
+            seen.lock().unwrap().push(id.clone());
+        })
+        .detach()
+    });
+    wait(cx, &view, |view| {
+        view.errors.len() == 1 && view.webhook.as_ref().is_some_and(|w| !w.secret_set)
+    });
+    view.update(cx, |view, cx| view.start_fix("e-1".into(), cx));
+    wait(cx, &view, |view| {
+        view.errors[0].fix_workspace_id.as_deref() == Some("w-fix")
+    });
+    assert_eq!(
+        server.calls("startErrorFix"),
+        vec![json!({"projectId":"project-1","errorId":"e-1"})]
+    );
+    assert_eq!(*opened.lock().unwrap(), vec!["w-fix".to_string()]);
+    view.update(cx, |view, cx| view.rotate_secret(cx));
+    wait(cx, &view, |view| view.secret.is_some());
+    assert_eq!(
+        server.calls("rotateIssuesWebhook"),
+        vec![json!({"projectId":"project-1"})]
+    );
+    view.read_with(cx, |view, _| {
+        assert_eq!(view.secret.as_deref(), Some("s3cr3t"));
+        assert!(view.webhook.as_ref().unwrap().secret_set);
+    });
 }

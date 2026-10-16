@@ -65,6 +65,7 @@ import {
   ReviewChip,
   type PendingAttachment,
   type PickerRow,
+  IntentCheckToggle,
 } from "./ComposerParts";
 import { EnvironmentProposalBanner } from "./EnvironmentProposals";
 
@@ -784,6 +785,7 @@ function ComposerBody({ workspaceId, session }: { workspaceId: string; session: 
                   />
                 </ModelPicker>
               )}
+              <IntentCheckToggle workspaceId={workspaceId} session={session} />
               <div className="ml-auto flex items-center gap-2">
                 <SimpleTooltip label={`Attach a file (${formatBinding("attach")})`}>
                   <Button

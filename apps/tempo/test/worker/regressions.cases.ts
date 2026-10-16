@@ -240,8 +240,9 @@ describe("JSON columns (02 Conventions: validated with Effect Schema on every re
   it("reads invalid stored values as safe fallbacks, so every wire shape still decodes", async () => {
     const seeded = await seedProject();
     await seedCredentials(seeded.userId);
-    const { stub } = await seedWorkspace(seeded, { prompt: "Hello" });
+    const { stub, tempod } = await seedWorkspace(seeded, { prompt: "Hello" });
     await driveToStarted(stub);
+    await waitFor(() => tempod.requestsOf("session.prompt").length === 1, 5000, "prompt");
     const [turn] = await sqlRows(stub, "SELECT id, session_id FROM turns");
     const sessionId = String(turn!["session_id"]);
     await exec(

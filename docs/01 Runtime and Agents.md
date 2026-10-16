@@ -406,6 +406,7 @@ Before rule 0, `TempoOutbound` calls the WorkspaceDO's `getEgressConfig()` for `
 | 12 | Checked after rule 6. Host equals the `host` of a server in `mcp`, and a header named in that server's `secretHeaders` has exactly the value `tempo-placeholder:mcp:<serverId>:<name>` | Replace each such header with the value of `mcp.<serverId>.header.<name>`. If one is not set, return 403, body `tempo: credential not set`. |
 | 13 | Host matches the `hosts` of an injector of the environment (first match in list order) | Run the injector (Environments, below) and return its response |
 | 14 | The request carries `tempo-secret-<NAME>`, every such name is a secret of the environment with a stored value, and the host matches the `hosts` of each | Replace each placeholder with its value and forward |
+| 15 | Checked after rule 6. Host is `api.cloudflare.com` over HTTPS, `Authorization` is exactly `Bearer tempo-placeholder`, no other placeholder, and the manifest has `cloudflare` (14) | Ask the WorkspaceDO (13, L-ADR-8). If allowed, replace `Authorization` with the workspace's minted token and forward; else return 403 with its reason. |
 | 7 | Any request that still carries `tempo-placeholder` or `tempo-secret-` | Return 403. MUST NOT forward the placeholder. |
 | 8 | Egress policy `open` | Pass through unchanged |
 | 9 | Egress policy `allowlist`, host matches an environment pattern, the built-in agent list, or the `host` of a server in `mcp` | Pass through unchanged |
@@ -456,12 +457,14 @@ A session is one ACP session in one adapter process. The adapter process may die
 **Send a prompt**
 
 - The WorkspaceDO sends `session.prompt {sessionId, turnId, content}`. `content` is a list of ACP content blocks built in this order:
-  1. On the first prompt of a session only: a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set.
+  1. On the first prompt of a session only: a text block with the capability summary (14, Delivery to the agent), then a text block with the turn-summary rule (below), then a text block with the project's `prompts.general`, if it is set, then the project profile block (13, L-ADR-3), if the project has a saved profile.
   2. On the first prompt after a handoff only: the handoff text block (below); then clear `handoff_pending`. On any prompt: `sessions.pending_note`, if set (for example, the revert note in 03); then clear it.
   3. One text block per review comment group: `Review comments:` followed by one line per comment, `<path>:<line>: <text>`.
-  4. The user's text.
-  5. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
-  6. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
+  4. On the first prompt of a chat that starts the intent check (13, L-ADR-1): the intent rule text block. When the chat's Intent check control is off, there is no rule.
+     While design checklist items are open (13, L-ADR-2): the open checklist text block.
+  5. The user's text.
+  6. One `resource_link` per @-mentioned file: `uri` = `file:///workspace/<path>`, `name` = the file name.
+  7. Images: an `image` block if `promptCapabilities.image` is true; else a `resource_link` to the file saved at `/home/tempo/attachments/<turnId>/<name>`.
 - The turn-summary rule is this fixed text. The web and Mac clients show the last agent message of a turn as its answer (04, Work row), so it must stand alone:
 
   ```text

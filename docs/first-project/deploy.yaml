@@ -1,0 +1,18 @@
+version: 1
+tool: alchemy
+root: apps/web
+build: bun run build
+permissions: [d1, secrets_store]
+timeout_minutes: 20
+auto_fix: false
+targets:
+  production:
+    branch: main
+    stage: production
+    auto: true
+    rollout: gradual
+    workers: [smart-todo]
+  preview:
+    stage: preview
+    agent: true
+    workers: [smart-todo-preview]

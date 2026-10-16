@@ -28,6 +28,30 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
     return this.rpc("resolveAgentProposal", input);
   }
 
+  confirmIntent(input: MethodInput<"confirmIntent">): Promise<Result<FnOutput<"confirmIntent">>> {
+    return this.rpc("confirmIntent", input);
+  }
+
+  decideCloudflareHold(
+    input: MethodInput<"decideCloudflareHold">,
+  ): Promise<Result<FnOutput<"decideCloudflareHold">>> {
+    return this.rpc("decideCloudflareHold", input);
+  }
+
+  addChecklistItem(input: MethodInput<"addChecklistItem">): Promise<Result<FnOutput<"addChecklistItem">>> {
+    return this.rpc("addChecklistItem", input);
+  }
+
+  reopenChecklistItem(
+    input: MethodInput<"reopenChecklistItem">,
+  ): Promise<Result<FnOutput<"reopenChecklistItem">>> {
+    return this.rpc("reopenChecklistItem", input);
+  }
+
+  correctIntent(input: MethodInput<"correctIntent">): Promise<Result<FnOutput<"correctIntent">>> {
+    return this.rpc("correctIntent", input);
+  }
+
   sendRunToChat(input: MethodInput<"sendRunToChat">): Promise<Result<FnOutput<"sendRunToChat">>> {
     return this.rpc("sendRunToChat", input);
   }
@@ -150,6 +174,10 @@ export abstract class WorkspaceRpcBase extends DurableObject<Env> {
 
   setSessionMode(input: MethodInput<"setSessionMode">): Promise<Result<FnOutput<"setSessionMode">>> {
     return this.rpc("setSessionMode", input);
+  }
+
+  setIntentCheck(input: MethodInput<"setIntentCheck">): Promise<Result<FnOutput<"setIntentCheck">>> {
+    return this.rpc("setIntentCheck", input);
   }
 
   setSessionConfig(input: MethodInput<"setSessionConfig">): Promise<Result<FnOutput<"setSessionConfig">>> {

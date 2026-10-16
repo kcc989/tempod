@@ -146,6 +146,16 @@
     },
     "url": {
       "type": "string"
+    },
+    "rollout": {
+      "anyOf": [
+        {
+          "$ref": "DeployRollout.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -166,7 +176,8 @@
     "createdAt",
     "startedAt",
     "completedAt",
-    "url"
+    "url",
+    "rollout"
   ],
   "additionalProperties": true
 }

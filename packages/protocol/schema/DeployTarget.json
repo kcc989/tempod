@@ -24,8 +24,23 @@
     },
     "agent": {
       "type": "boolean"
+    },
+    "rollout": {
+      "$ref": "DeployRolloutKind.json"
+    },
+    "workers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "smoke": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
-  "required": ["key", "stage", "branch", "auto", "agent"],
+  "required": ["key", "stage", "branch", "auto", "agent", "rollout", "workers", "smoke"],
   "additionalProperties": true
 }

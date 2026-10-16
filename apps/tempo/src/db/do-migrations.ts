@@ -602,6 +602,72 @@ SELECT id, session_id, turn_id, kind, status, content_json, rev, created_at, upd
       "CREATE INDEX ops_due ON ops(status, next_run_at)",
     ],
   },
+  {
+    tag: "0014_loop",
+    when: 1792872000000,
+    statements: [
+      `CREATE TABLE intents (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL UNIQUE,
+  change_id     TEXT,
+  item_id       TEXT,
+  status        TEXT NOT NULL CHECK (status IN ('awaiting','proposed','confirmed','corrected')),
+  goal          TEXT NOT NULL DEFAULT '',
+  approach      TEXT NOT NULL DEFAULT '',
+  not_doing     TEXT NOT NULL DEFAULT '',
+  decided_by    TEXT CHECK (decided_by IN ('owner','judge')),
+  judge_json    TEXT,
+  prior_mode_id TEXT,
+  enforced      INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL,
+  decided_at    INTEGER
+)`,
+      `CREATE TABLE proofs (
+  id              TEXT PRIMARY KEY,
+  session_id      TEXT NOT NULL,
+  change_id       TEXT,
+  item_id         TEXT,
+  summary         TEXT NOT NULL,
+  screens_json    TEXT NOT NULL,
+  checklist_json  TEXT NOT NULL,
+  checks_json     TEXT NOT NULL,
+  missing_json    TEXT NOT NULL,
+  complete        INTEGER,
+  created_at      INTEGER NOT NULL
+)`,
+      `CREATE TABLE cloudflare_holds (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT,
+  item_id       TEXT,
+  method        TEXT NOT NULL,
+  path          TEXT NOT NULL,
+  resource      TEXT,
+  reasons_json  TEXT NOT NULL,
+  status        TEXT NOT NULL CHECK (status IN ('pending','allowed','refused','used')),
+  created_at    INTEGER NOT NULL,
+  decided_at    INTEGER
+)`,
+      `CREATE TABLE checklist (
+  id              TEXT PRIMARY KEY,
+  text            TEXT NOT NULL,
+  status          TEXT NOT NULL CHECK (status IN ('open','resolved')),
+  source_item_id  TEXT UNIQUE,
+  resolved_by     TEXT,
+  created_at      INTEGER NOT NULL
+)`,
+      "ALTER TABLE sessions ADD COLUMN manifest_json TEXT",
+      "ALTER TABLE sessions ADD COLUMN intent_check INTEGER NOT NULL DEFAULT 1",
+      "ALTER TABLE egress_log ADD COLUMN capability TEXT NOT NULL DEFAULT ''",
+      `CREATE TABLE items_new(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,turn_id TEXT,
+        kind TEXT NOT NULL CHECK(kind IN ('user_message','agent_message','agent_thought','tool_call','plan','permission','notice','handoff','revert_marker','error','artifact','run','agent_proposal','intent','proof','cloudflare_hold')),
+        status TEXT NOT NULL CHECK(status IN ('streaming','pending','in_progress','completed','failed','cancelled')),content_json TEXT NOT NULL,rev INTEGER NOT NULL,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)`,
+      "INSERT INTO items_new SELECT * FROM items",
+      "DROP TABLE items",
+      "ALTER TABLE items_new RENAME TO items",
+      "CREATE INDEX items_by_session ON items(session_id,created_at)",
+      "CREATE INDEX items_by_rev ON items(rev)",
+    ],
+  },
 ];
 
 export const CREDENTIAL_MIGRATIONS: Migrations = [
@@ -739,6 +805,58 @@ export const APP_DEPLOY_MIGRATIONS: Migrations = [
       `CREATE TABLE kv (
   key         TEXT PRIMARY KEY,
   value_json  TEXT NOT NULL
+)`,
+    ],
+  },
+  {
+    tag: "0001_rollout",
+    when: 1792627200000,
+    statements: [
+      `ALTER TABLE deployments ADD COLUMN phase TEXT CHECK (phase IN ('canary','promoted','full','rolled_back'))`,
+      `ALTER TABLE deployments ADD COLUMN canary_until INTEGER`,
+      `ALTER TABLE deployments ADD COLUMN rolled_back_at INTEGER`,
+      `ALTER TABLE deployments ADD COLUMN gate_failure TEXT`,
+      `ALTER TABLE deployments ADD COLUMN rollout_json TEXT`,
+      `CREATE TABLE events (
+  id             TEXT PRIMARY KEY,
+  deployment_id  TEXT NOT NULL,
+  type           TEXT NOT NULL CHECK (type IN ('deploy.version.uploaded','deploy.traffic.changed','deploy.rolled_back','prod.error.seen','prod.error.fixed')),
+  at             INTEGER NOT NULL,
+  payload_json   TEXT NOT NULL
+)`,
+      `CREATE INDEX events_at ON events (at)`,
+      `CREATE TABLE errors (
+  id                TEXT PRIMARY KEY,
+  issue_key         TEXT NOT NULL UNIQUE,
+  worker            TEXT,
+  version_id        TEXT,
+  deployment_id     TEXT,
+  title             TEXT NOT NULL,
+  text              TEXT NOT NULL,
+  occurrences       INTEGER NOT NULL,
+  first_seen_at     INTEGER NOT NULL,
+  last_seen_at      INTEGER NOT NULL,
+  fix_workspace_id  TEXT,
+  fix_claimed_at    INTEGER,
+  fix_check_at      INTEGER,
+  fixed_at          INTEGER
+)`,
+      `CREATE INDEX errors_last_seen ON errors (last_seen_at)`,
+    ],
+  },
+  {
+    tag: "0002_profiles",
+    when: 1792713600000,
+    statements: [
+      `CREATE TABLE profiles (
+  revision    INTEGER PRIMARY KEY CHECK (revision >= 1),
+  source      TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+)`,
+      `CREATE TABLE manifests (
+  sha256      TEXT PRIMARY KEY,
+  revision    INTEGER NOT NULL UNIQUE,
+  created_at  INTEGER NOT NULL
 )`,
     ],
   },

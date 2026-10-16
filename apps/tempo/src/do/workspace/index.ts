@@ -1,4 +1,6 @@
-import { eq, lte, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, lt, lte, isNull } from "drizzle-orm";
+import { endSessionForAccess, enforceRemovedAccess, workspaceManifest } from "./manifest.ts";
+import { agentCloudflareToken, cloudflareGate, type GateAnswer } from "./cloudflare-gate.ts";
 import {
   TempoError,
   capture,
@@ -451,7 +453,43 @@ export class WorkspaceDO extends WorkspaceRpcBase {
       injectors: environment?.injectors ?? [],
       mcp: (await this.core.mcpServers()).flatMap((r) => mcpToEgress(r) ?? []),
       dotfiles: await this.dotfilesEgress(),
+      ...(await this.capabilityConfig()),
     };
+  }
+
+  private async capabilityConfig(): Promise<Pick<EgressConfig, "calls" | "cloudflare">> {
+    const manifest = await workspaceManifest(this.core);
+
+    return { calls: manifest.call, cloudflare: manifest.cloudflare !== null };
+  }
+
+  /** 13, L-ADR-7: lifecycle events in [from, to), for the loop report. */
+  async loopEvents(
+    from: number,
+    to: number,
+  ): Promise<Array<{ changeId: string | null; type: string; at: number; payloadJson: string }>> {
+    if (!this.core.wsOrNull()) return [];
+
+    return this.core.db
+      .select({
+        changeId: lifecycleEvents.changeId,
+        type: lifecycleEvents.type,
+        at: lifecycleEvents.occurredAt,
+        payloadJson: lifecycleEvents.payloadJson,
+      })
+      .from(lifecycleEvents)
+      .where(and(gte(lifecycleEvents.occurredAt, from), lt(lifecycleEvents.occurredAt, to)))
+      .orderBy(asc(lifecycleEvents.seq))
+      .all();
+  }
+
+  /** 13, L-ADR-8: TempoOutbound asks before it forwards an agent's Cloudflare API request. */
+  async cloudflareGate(method: string, path: string): Promise<GateAnswer> {
+    return cloudflareGate(this.core, method, path);
+  }
+
+  async getAgentCloudflareToken(): Promise<string | null> {
+    return agentCloudflareToken(this.core);
   }
 
   private async dotfilesEgress(): Promise<{ cloneUrl: string } | null> {
@@ -518,6 +556,7 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     status: number;
     ms: number;
     rule: number;
+    capability?: string;
   }): Promise<void> {
     if (!this.core.wsOrNull()) return;
     const blocked = row.rule === 7 || row.rule === 10;
@@ -615,6 +654,10 @@ export class WorkspaceDO extends WorkspaceRpcBase {
     if (!this.core.wsOrNull()) return;
     await this.core.project(true).catch(() => undefined);
     this.core.broadcastDetailSoon();
+    await enforceRemovedAccess(this.core, (id, removed) => endSessionForAccess(this.core, id, removed)).catch(
+      (e) =>
+        log("warn", "manifest check failed", { workspaceId: this.core.workspaceId, error: errorText(e) }),
+    );
 
     if (!this.core.tempod?.open) return;
     await sendEnv(this.core);

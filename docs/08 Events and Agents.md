@@ -73,6 +73,9 @@ A change is one user prompt or agent request, and every turn and run it causes. 
 | `tempo.change.ended` | `tempo` | The change has no queued or running turn or run, and all its events are dispatched | `status: "done", "failed" or "cancelled"` | The change's last event |
 | `tempo.branch.pushed` | `tempo` | A `commit_push` op ends `done` | `branch, commitSha` | — |
 | `tempo.check.passed`, `tempo.check.failed` | `tempo` | `checks_state` changes to `success` or `failure` (03, Status polling; 10 for native project CI) | `prNumber`, optional `commitSha` (native projects) | — |
+| `loop.intent.proposed` | `agent` | The agent's `propose_intent` is stored (13, L-ADR-1) | `intentId, lines, enforced` | — |
+| `loop.intent.confirmed` | `tempo` | The owner or the judge confirms an intent | `intentId, by: "owner" or "judge", reasons` | — |
+| `loop.intent.corrected` | `tempo` | The owner corrects an intent | `intentId` | — |
 
 - `status` in `agent.turn.ended` uses the turn status rules in 03.
 - `tempo.change.ended` status: `cancelled` if the user cancelled the change's last run; else `failed` if its last run failed; else `done`.
@@ -88,6 +91,7 @@ A change is one user prompt or agent request, and every turn and run it causes. 
 | A run | `run:<runId>:<type>` |
 | A change end | `change:<changeId>:ended` |
 | An op | `op:<opId>:<type>` |
+| An intent step | `intent:<intentId>:<step>:<ulid>` (each proposal, confirm or correction is its own event) |
 | A checks change | `checks:<prNumber>:<headSha>:<type>` |
 
 **Rules**

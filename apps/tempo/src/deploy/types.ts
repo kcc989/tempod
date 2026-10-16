@@ -28,6 +28,10 @@ export const deployLogKey = (projectId: string, deploymentId: string): string =>
 /** The CredentialDO key of a deployment's minted token (12, Tokens). */
 export const deployTokenKey = (deploymentId: string): string => `deploy.${deploymentId}.token`;
 
+/** 13, L-ADR-8: the workspace's minted Cloudflare API token. */
+export const agentCloudflareTokenKey = (workspaceId: string): string =>
+  `agent.${workspaceId}.cloudflare_token`;
+
 /** The owner's CredentialDO keys of 12, Owner settings. */
 export const DEPLOY_MASTER_KEY = "cloudflare.deploy_token";
 
@@ -54,6 +58,10 @@ export const PERMISSION_GROUPS: Readonly<
 export type DeployPlan = Pick<DeploySpec, "tool" | "root" | "install" | "build" | "permissions"> & {
   readonly stage: string;
   readonly target: string;
+  /** 12, Gradual rollout. Absent in plans stored before it. */
+  readonly rollout?: "full" | "gradual";
+  readonly workers?: ReadonlyArray<string>;
+  readonly smoke?: ReadonlyArray<string>;
 };
 
 const TOOLS = {
@@ -88,6 +96,7 @@ export const deployCommand = (plan: DeployPlan, accountId: string): string => {
     "export CI=1 CF_SEND_TELEMETRY=false DO_NOT_TRACK=1",
     `export CLOUDFLARE_ACCOUNT_ID=${accountId} CLOUDFLARE_API_TOKEN=${PLACEHOLDER}`,
     `export TEMPO_DEPLOY_TARGET=${plan.target} TEMPO_DEPLOY_STAGE=${plan.stage}`,
+    plan.rollout === "gradual" ? "export TEMPO_DEPLOY_TRAFFIC=0" : null,
     plan.root === "" ? null : `cd ${plan.root}`,
     `if [ ! -f ${tool.file} ]; then echo '${tool.file} was not found in ${where}.' >&2; exit 2; fi`,
     install,

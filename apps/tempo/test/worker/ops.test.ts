@@ -2925,6 +2925,7 @@ describe.concurrent("idle check and tempod socket loss", { timeout: 60_000 }, ()
 
 describe("unit", async () => {
   await import("./unit.cases.ts");
+  await import("./loop-report.cases.ts");
 });
 
 describe("codex-login", async () => {

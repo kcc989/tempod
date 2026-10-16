@@ -223,6 +223,28 @@ const describeSummary = (s: EnvironmentSummary | null): string => {
   return JSON.stringify(s, null, 2);
 };
 
+const Grants = Schema.Struct({
+  result: Schema.Struct({
+    read: Schema.Array(Schema.String),
+    deploy: Schema.Array(Schema.Struct({ target: Schema.String })),
+  }),
+});
+
+/** 14, Delivery 3: the chat's granted reads and deploy targets, or null when Tempo does not answer. */
+const chatGrants = async (call: Call, sessionId: string) => {
+  try {
+    const res = await call("/agent-tools", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ op: "get_capabilities", sessionId, params: {} }),
+    });
+
+    return res.ok ? Schema.decodeUnknownSync(Grants)(await res.json()).result : null;
+  } catch {
+    return null;
+  }
+};
+
 /** Handles one JSON-RPC message; returns the response, or null for a notification. */
 /** MCP clients require `type: "object"`; Effect renders a struct with no fields as any non-null value. */
 const toolInputSchema = (input: Schema.Struct<Schema.Struct.Fields>) =>
@@ -253,16 +275,24 @@ export const handleMcpMessage = async (
       });
     case "ping":
       return reply({});
-    case "tools/list":
+    case "tools/list": {
+      const grants = !runId && sessionId ? await chatGrants(call, sessionId) : null;
+      const issues = !grants || grants.read.includes("issues");
+      const deploys = !grants || grants.read.includes("deployments");
+
+      const deployNames = DEPLOY_TOOL_NAMES.filter(
+        (name) => deploys && (name !== "deploy_app" || !grants || grants.deploy.length > 0),
+      );
+
       return reply({
         tools: [
           ...TOOLS,
-          ...ISSUE_TOOL_NAMES.map((name) => ({
+          ...(issues ? ISSUE_TOOL_NAMES : []).map((name) => ({
             name,
             description: ISSUE_TOOLS[name].description,
             inputSchema: toolInputSchema(ISSUE_TOOLS[name].input),
           })),
-          ...DEPLOY_TOOL_NAMES.map((name) => ({
+          ...deployNames.map((name) => ({
             name,
             description: DEPLOY_TOOLS[name].description,
             inputSchema: JsonSchema.toDocumentDraft07(
@@ -271,6 +301,75 @@ export const handleMcpMessage = async (
           })),
           ...(!runId
             ? [
+                {
+                  name: "get_project_profile",
+                  description:
+                    "Read this project's profile: its stack, services, checks, screens and notes, as the owner wrote them. Use it instead of asking the owner to restate the stack.",
+                  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                },
+                {
+                  name: "propose_intent",
+                  description:
+                    "Before you change any file in a new task, state the goal, your approach and what you will not do, in at most 5 lines in total. Then end your turn; Tempo confirms the intent or the owner corrects it. Call it again when your work leaves the confirmed goal.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      goal: { type: "string", minLength: 1 },
+                      approach: { type: "string", minLength: 1 },
+                      notDoing: { type: "string", minLength: 1 },
+                    },
+                    required: ["goal", "approach", "notDoing"],
+                    additionalProperties: false,
+                  },
+                },
+                {
+                  name: "get_capabilities",
+                  description:
+                    "Get this chat's capability manifest: what you can read, which services you can call and how, the Cloudflare access and the deploy targets. Requests outside it are refused.",
+                  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+                },
+                {
+                  name: "submit_proof",
+                  description:
+                    "Submit proof that the preview works: a summary of at most 5 lines, one screen per changed route (images you published with publish_artifact in this chat), and a note for each open design checklist item. Tempo runs the project's checks itself. Then end your turn.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      summary: { type: "string", minLength: 1 },
+                      screens: {
+                        type: "array",
+                        maxItems: 20,
+                        items: {
+                          type: "object",
+                          properties: {
+                            route: { type: "string", minLength: 1 },
+                            viewport: { type: "string", enum: ["desktop", "phone"] },
+                            theme: { type: "string", enum: ["light", "dark"] },
+                            image: { type: "string", minLength: 1 },
+                            recording: { type: "string" },
+                          },
+                          required: ["route", "viewport", "theme", "image"],
+                          additionalProperties: false,
+                        },
+                      },
+                      checklist: {
+                        type: "array",
+                        maxItems: 50,
+                        items: {
+                          type: "object",
+                          properties: {
+                            itemId: { type: "string" },
+                            note: { type: "string", maxLength: 500 },
+                          },
+                          required: ["itemId", "note"],
+                          additionalProperties: false,
+                        },
+                      },
+                    },
+                    required: ["summary", "screens", "checklist"],
+                    additionalProperties: false,
+                  },
+                },
                 {
                   name: "list_agents",
                   description:
@@ -301,6 +400,8 @@ export const handleMcpMessage = async (
             : []),
         ],
       });
+    }
+
     case "tools/call": {
       const params = Schema.is(JsonObject)(msg["params"]) ? msg["params"] : {};
       const args = Schema.is(JsonObject)(params["arguments"]) ? params["arguments"] : {};
@@ -392,7 +493,50 @@ export const handleMcpMessage = async (
           );
         }
 
-        if (!runId && (params["name"] === "list_agents" || params["name"] === "propose_agent_change")) {
+        if (!runId && params["name"] === "get_project_profile") {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: "get_project_profile", sessionId: sessionId ?? "", params: {} }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.Json),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(
+            text(res.ok ? JSON.stringify(body.result) : (body.error ?? "Profile unavailable."), !res.ok),
+          );
+        }
+
+        if (!runId && (params["name"] === "propose_intent" || params["name"] === "submit_proof")) {
+          const res = await call("/agent-tools", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ op: params["name"], sessionId: sessionId ?? "", params: args }),
+          });
+
+          const body = Schema.decodeUnknownSync(
+            Schema.Struct({
+              result: Schema.optionalKey(Schema.String),
+              error: Schema.optionalKey(Schema.String),
+            }),
+          )(await res.json());
+
+          return reply(
+            text(res.ok ? (body.result ?? "") : (body.error ?? "Tempo rejected the call."), !res.ok),
+          );
+        }
+
+        if (
+          !runId &&
+          (params["name"] === "list_agents" ||
+            params["name"] === "propose_agent_change" ||
+            params["name"] === "get_capabilities")
+        ) {
           const res = await call("/agent-tools", {
             method: "POST",
             headers: { "content-type": "application/json" },

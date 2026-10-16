@@ -16,6 +16,21 @@ pub fn review_chip_label(n: usize) -> String {
     }
 }
 
+/// The intent check toggle's label and tooltip (04, Composer), as the web `IntentCheckToggle`.
+pub fn intent_check_text(on: bool) -> (&'static str, &'static str) {
+    if on {
+        (
+            "Intent check: On",
+            "The agent states its plan first; risky plans wait for you. Click to turn off for this chat.",
+        )
+    } else {
+        (
+            "Intent check: Off",
+            "The agent starts work at once. Click to turn on for this chat.",
+        )
+    }
+}
+
 pub fn slash_query(text: &str, caret: usize) -> Option<&str> {
     let query = text.get(..caret)?.strip_prefix('/')?;
     (!query.chars().any(|c| c.is_whitespace() || c == '/')).then_some(query)
@@ -110,6 +125,23 @@ mod tests {
     fn review_chip_matches_the_web_copy() {
         assert_eq!(review_chip_label(1), "1 review comment");
         assert_eq!(review_chip_label(3), "3 review comments");
+    }
+    #[test]
+    fn intent_check_text_matches_the_web_copy() {
+        assert_eq!(
+            intent_check_text(true),
+            (
+                "Intent check: On",
+                "The agent states its plan first; risky plans wait for you. Click to turn off for this chat."
+            )
+        );
+        assert_eq!(
+            intent_check_text(false),
+            (
+                "Intent check: Off",
+                "The agent starts work at once. Click to turn on for this chat."
+            )
+        );
     }
     #[test]
     fn mentions_follow_whitespace_and_utf8_boundaries() {

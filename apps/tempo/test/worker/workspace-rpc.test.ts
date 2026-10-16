@@ -2483,6 +2483,16 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       injectors: [],
       mcp: [],
       dotfiles: null,
+      calls: [
+        {
+          id: "allowlist",
+          hosts: ["*.npmjs.org", "example.com"],
+          credential: null,
+          methods: [],
+          builtin: false,
+        },
+      ],
+      cloudflare: false,
     });
     await useSettings(w, DEFAULT_EFFECTIVE);
     expect(await w.stub.getEgressConfig()).toEqual({
@@ -2497,6 +2507,8 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
       injectors: [],
       mcp: [],
       dotfiles: null,
+      calls: [],
+      cloudflare: false,
     });
   });
   it("getEgressConfig fails for a workspace that was never created", async ({ expect }) => {
@@ -2556,7 +2568,10 @@ describe.concurrent("internal methods: getEgressConfig and logEgress", { timeout
 
     expect(rowsNow).toEqual([a, b]);
     // 05 Diagnostics: Egress = the newest 500 egress_log rows
-    expect(ok(await w.stub.getDiagnostics({})).egress).toEqual([b, a]);
+    expect(ok(await w.stub.getDiagnostics({})).egress).toEqual([
+      { ...b, capability: "" },
+      { ...a, capability: "" },
+    ]);
     await expect(uninitialised().logEgress(a)).resolves.toBeUndefined();
   });
 });
@@ -2989,6 +3004,22 @@ describe.concurrent("getDiagnostics egress filters (02, 05 Observability)", { ti
 
 describe("runs", async () => {
   await import("./runs.cases.ts");
+});
+
+describe("intent", async () => {
+  await import("./intent.cases.ts");
+});
+
+describe("proof", async () => {
+  await import("./proof.cases.ts");
+});
+
+describe("manifest", async () => {
+  await import("./manifest.cases.ts");
+});
+
+describe("cloudflare gate", async () => {
+  await import("./cloudflare-gate.cases.ts");
 });
 
 describe("protocol-additions", async () => {

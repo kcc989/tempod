@@ -40,6 +40,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
     const workspace = this.env.WORKSPACE.getByName(workspaceId);
     let rule = injectorName ? 13 : 10;
     let status = 0;
+    let capability = "";
 
     try {
       const config: EgressConfig = this.ctx.props.catalog
@@ -58,10 +59,11 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
           ? decideForInjector(url, request.headers, this.env.APP_HOST, config, injector)
           : { rule: 13, action: "block", status: 403, body: `tempo: egress blocked for ${url.hostname}` };
       } else {
-        decision = decide(url, request.headers, this.env.APP_HOST, config);
+        decision = decide(url, request.headers, this.env.APP_HOST, config, request.method);
       }
 
       rule = decision.rule;
+      capability = decision.capability ?? "";
       const acted = await this.act(decision, request, config, userId, workspace);
       rule = acted.rule ?? rule;
       status = acted.response.status;
@@ -88,6 +90,7 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
               status,
               ms: Date.now() - started,
               rule,
+              capability,
             })
             .catch(() => undefined),
         );
@@ -112,6 +115,24 @@ export class TempoOutbound extends WorkerEntrypoint<Env, OutboundProps> {
 
       case "block":
         return { response: block(decision.status, decision.body) };
+      case "cloudflare": {
+        // 13, L-ADR-8: the WorkspaceDO decides; only an allowed request gets the minted token.
+        const url = new URL(request.url);
+        const answer = await workspace.cloudflareGate(request.method, url.pathname);
+
+        if (!answer.allow) return { response: block(403, answer.body) };
+        const token = await workspace.getAgentCloudflareToken();
+
+        if (token === null) return { response: block(403, "tempo: credential not set") };
+        const headers = new Headers(request.headers);
+
+        for (const name of ["authorization", "proxy-authorization", "cookie", "x-api-key"])
+          headers.delete(name);
+        headers.set("authorization", `Bearer ${token}`);
+
+        return { response: await fetch(new Request(request, { headers, redirect: "manual" })) };
+      }
+
       case "inject":
         return { response: await this.runInjector(decision.injector, request, config) };
       case "swap": {

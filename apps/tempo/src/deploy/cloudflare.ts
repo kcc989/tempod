@@ -125,3 +125,116 @@ export const deleteToken = async (
     return false;
   }
 };
+
+const DeploymentVersion = Schema.Struct({ version_id: Schema.String, percentage: Schema.Number });
+
+const WorkerDeployment = Schema.Struct({
+  id: Schema.String,
+  created_on: Schema.String,
+  versions: Schema.Array(DeploymentVersion),
+});
+
+export type WorkerDeployment = typeof WorkerDeployment.Type;
+
+export interface TrafficSplit {
+  readonly versionId: string;
+  readonly percentage: number;
+}
+
+const script = (accountId: string, name: string) =>
+  `/accounts/${accountId}/workers/scripts/${encodeURIComponent(name)}`;
+
+/** The Worker's deployments, newest first. The first one is live (13, L-ADR-4). */
+export const listWorkerDeployments = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+): Promise<ReadonlyArray<WorkerDeployment>> =>
+  Schema.decodeUnknownSync(Schema.Struct({ deployments: Schema.Array(WorkerDeployment) }))(
+    await call(api, token, { method: "GET", path: `${script(accountId, name)}/deployments` }),
+  ).deployments;
+
+/**
+ * Moves traffic: one version at 100% (a rollback or a full step), or two versions that add up
+ * to 100 (a gradual step). Cloudflare refuses any other split.
+ */
+export const createWorkerDeployment = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+  input: { split: ReadonlyArray<TrafficSplit>; message: string },
+): Promise<WorkerDeployment> => {
+  const total = input.split.reduce((sum, s) => sum + s.percentage, 0);
+
+  if (input.split.length < 1 || input.split.length > 2 || total !== 100)
+    throw new Error("A deployment needs one or two versions that add up to 100%.");
+
+  return Schema.decodeUnknownSync(WorkerDeployment)(
+    await call(api, token, {
+      method: "POST",
+      path: `${script(accountId, name)}/deployments`,
+      body: {
+        strategy: "percentage",
+        versions: input.split.map((s) => ({ version_id: s.versionId, percentage: s.percentage })),
+        annotations: { "workers/message": input.message.slice(0, 1000) },
+      },
+    }),
+  );
+};
+
+const WorkerVersion = Schema.Struct({
+  id: Schema.String,
+  metadata: Schema.Struct({ created_on: Schema.String }),
+});
+
+/** The Worker's newest uploaded versions, newest first. */
+export const listWorkerVersions = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  name: string,
+): Promise<ReadonlyArray<{ id: string; createdOn: string }>> =>
+  Schema.decodeUnknownSync(Schema.Struct({ items: Schema.Array(WorkerVersion) }))(
+    await call(api, token, { method: "GET", path: `${script(accountId, name)}/versions?per_page=20` }),
+  )
+    .items.map((v) => ({ id: v.id, createdOn: v.metadata.created_on }))
+    .toSorted((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn));
+
+const Binding = Schema.Struct({
+  type: Schema.String,
+  id: Schema.optional(Schema.String),
+  namespace_id: Schema.optional(Schema.String),
+  bucket_name: Schema.optional(Schema.String),
+  queue_name: Schema.optional(Schema.String),
+});
+
+const BINDING_IDS = new Map<string, (b: typeof Binding.Type) => string | undefined>([
+  ["d1", (b) => (b.id ? `d1:${b.id}` : undefined)],
+  ["kv_namespace", (b) => (b.namespace_id ? `kv:${b.namespace_id}` : undefined)],
+  ["r2_bucket", (b) => (b.bucket_name ? `r2:${b.bucket_name}` : undefined)],
+  ["queue", (b) => (b.queue_name ? `queue:${b.queue_name}` : undefined)],
+]);
+
+/** 13, L-ADR-8: the databases, namespaces, buckets and queues a Worker binds, as `kind:id`. Empty when the Worker is missing. */
+export const workerResources = async (
+  api: CloudflareApi,
+  token: string,
+  accountId: string,
+  worker: string,
+): Promise<string[]> => {
+  try {
+    const result = Schema.decodeUnknownSync(Schema.Struct({ bindings: Schema.Array(Binding) }))(
+      await call(api, token, {
+        method: "GET",
+        path: `/accounts/${accountId}/workers/scripts/${encodeURIComponent(worker)}/settings`,
+      }),
+    );
+
+    return result.bindings.flatMap((b) => BINDING_IDS.get(b.type)?.(b) ?? []);
+  } catch (e) {
+    if (e instanceof CloudflareError && e.status === 404) return [];
+    throw e;
+  }
+};

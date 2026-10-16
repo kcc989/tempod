@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConfirmIntentIn",
+  "type": "object",
+  "properties": {
+    "workspaceId": {
+      "type": "string"
+    },
+    "intentId": {
+      "type": "string"
+    }
+  },
+  "required": ["workspaceId", "intentId"],
+  "additionalProperties": true
+}

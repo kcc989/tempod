@@ -95,6 +95,16 @@ export const DeployConclusion = Schema.Literals(["success", "failure", "cancelle
 
 export type DeployConclusion = typeof DeployConclusion.Type;
 
+export const DEPLOY_ROLLOUTS = ["full", "gradual"] as const;
+
+export const DeployRolloutKind = Schema.Literals(DEPLOY_ROLLOUTS);
+
+export type DeployRolloutKind = typeof DeployRolloutKind.Type;
+
+export const DeployRolloutPhase = Schema.Literals(["canary", "promoted", "full", "rolled_back"]);
+
+export type DeployRolloutPhase = typeof DeployRolloutPhase.Type;
+
 export const CHECKS_STATES = ["pending", "success", "failure"] as const;
 
 export const ChecksState = Schema.Literals(CHECKS_STATES);
@@ -162,7 +172,20 @@ export const ITEM_KINDS = [
   "artifact",
   "run",
   "agent_proposal",
+  "intent",
+  "proof",
+  "cloudflare_hold",
 ] as const;
+
+/** 13, L-ADR-2. */
+export const ChecklistStatus = Schema.Literals(["open", "resolved"]);
+
+export type ChecklistStatus = typeof ChecklistStatus.Type;
+
+/** 13, L-ADR-1. */
+export const IntentStatus = Schema.Literals(["awaiting", "proposed", "confirmed", "corrected"]);
+
+export type IntentStatus = typeof IntentStatus.Type;
 
 export const ItemKind = Schema.Literals(ITEM_KINDS);
 

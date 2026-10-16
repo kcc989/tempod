@@ -852,6 +852,80 @@ impl WorkspaceView {
         })
         .detach();
     }
+    /// Confirm or Correct on an intent card (13, L-ADR-1). The card stays busy until the call ends.
+    fn resolve_intent<F: p::Function>(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        intent_id: String,
+        input: F::Input,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let request = self.client.call::<F>(input);
+        cx.spawn_in(window, async move |this, cx| {
+            let result = request.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.intent_finished(
+                        &intent_id,
+                        F::NAME == "correctIntent" && result.is_ok(),
+                        window,
+                        cx,
+                    )
+                });
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
+    fn checklist_request<F: p::Function>(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        event: &TranscriptEvent,
+        input: F::Input,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.checklist_key().unwrap_or_default();
+        let request = self.client.call::<F>(input);
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                transcript.update(cx, |t, cx| t.checklist_finished(&key, cx));
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
+    /// Allow once or Refuse on a Cloudflare hold card (13, L-ADR-8).
+    fn decide_hold(
+        &mut self,
+        transcript: Entity<TranscriptView>,
+        hold_id: String,
+        allow: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let request = self
+            .client
+            .call::<api::DecideCloudflareHold>(p::DecideCloudflareHoldIn {
+                workspace_id: self.store.read(cx).workspace_id.clone(),
+                hold_id: hold_id.clone(),
+                allow,
+            });
+        cx.spawn(async move |this, cx| {
+            let result = request.await;
+            let _ = this.update(cx, |this, cx| {
+                transcript.update(cx, |t, cx| t.hold_finished(&hold_id, cx));
+                if let Err(e) = &result {
+                    this.toast_error(e, cx);
+                }
+            });
+        })
+        .detach();
+    }
     fn operation(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.operation_pending {
             return;
@@ -1381,13 +1455,16 @@ impl WorkspaceView {
                 ComposerEvent::SetModel { config_id, value } => {
                     this.configure(&session, Some(config_id), value, window, cx)
                 }
+                ComposerEvent::SetIntentCheck(enabled) => {
+                    this.set_intent_check(&session, *enabled, window, cx)
+                }
             },
         );
         let session = session_id.to_string();
         let transcript_events = cx.subscribe_in(
             &transcript,
             window,
-            move |this, _, event: &TranscriptEvent, window, cx| match event {
+            move |this, transcript, event: &TranscriptEvent, window, cx| match event {
                 TranscriptEvent::OpenSetup => this.show_setup_tab(window, cx),
                 TranscriptEvent::Permission {
                     request_id,
@@ -1423,6 +1500,60 @@ impl WorkspaceView {
                         },
                         cx,
                     )
+                }
+                TranscriptEvent::ConfirmIntent { intent_id } => {
+                    let input = p::ConfirmIntentIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        intent_id: intent_id.clone(),
+                    };
+                    this.resolve_intent::<api::ConfirmIntent>(
+                        transcript.clone(),
+                        intent_id.clone(),
+                        input,
+                        window,
+                        cx,
+                    )
+                }
+                TranscriptEvent::CorrectIntent { intent_id, text } => {
+                    let input = p::CorrectIntentIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        intent_id: intent_id.clone(),
+                        text: text.clone(),
+                    };
+                    this.resolve_intent::<api::CorrectIntent>(
+                        transcript.clone(),
+                        intent_id.clone(),
+                        input,
+                        window,
+                        cx,
+                    )
+                }
+                TranscriptEvent::AddChecklistItem { item_id } => {
+                    let input = p::AddChecklistItemIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        item_id: item_id.clone(),
+                    };
+                    this.checklist_request::<api::AddChecklistItem>(
+                        transcript.clone(),
+                        event,
+                        input,
+                        cx,
+                    )
+                }
+                TranscriptEvent::ReopenChecklistItem { checklist_id } => {
+                    let input = p::ReopenChecklistItemIn {
+                        workspace_id: this.store.read(cx).workspace_id.clone(),
+                        checklist_id: checklist_id.clone(),
+                    };
+                    this.checklist_request::<api::ReopenChecklistItem>(
+                        transcript.clone(),
+                        event,
+                        input,
+                        cx,
+                    )
+                }
+                TranscriptEvent::DecideCloudflareHold { hold_id, allow } => {
+                    this.decide_hold(transcript.clone(), hold_id.clone(), *allow, cx)
                 }
                 TranscriptEvent::RequestAgent { agent_id } => this.mutate::<api::RequestAgent>(
                     p::RequestAgentIn {
@@ -1594,7 +1725,13 @@ impl WorkspaceView {
                 .map(|p| (p.id.clone(), p))
                 .collect();
             let runs = state.runs.clone();
+            let checklist = state
+                .workspace
+                .as_ref()
+                .map(|w| w.checklist.clone())
+                .unwrap_or_default();
             chat.transcript.update(cx, |t, cx| {
+                t.set_checklist(checklist, cx);
                 t.read_only = read_only;
                 t.runs = runs;
                 t.agent_proposals = agent_proposals;
@@ -2273,6 +2410,50 @@ impl WorkspaceView {
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Some(chat) = this.chats.get(&session_id) {
                     chat.composer.update(cx, |c, _| c.configuring = false);
+                }
+                if let Err(error) = result {
+                    this.toast_error(&error, cx);
+                }
+                this.sync(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn set_intent_check(
+        &mut self,
+        session_id: &str,
+        enabled: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(chat) = self.chats.get(session_id) else {
+            return;
+        };
+        if chat.composer.read(cx).intent_check_pending {
+            return;
+        }
+        chat.composer.update(cx, |c, cx| {
+            c.intent_check_pending = true;
+            cx.notify();
+        });
+        let client = self.client.clone();
+        let workspace_id = self.store.read(cx).workspace_id.clone();
+        let session_id = session_id.to_string();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = client
+                .call::<api::SetIntentCheck>(p::SetIntentCheckIn {
+                    workspace_id,
+                    session_id: session_id.clone(),
+                    enabled,
+                })
+                .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Some(chat) = this.chats.get(&session_id) {
+                    chat.composer.update(cx, |c, cx| {
+                        c.intent_check_pending = false;
+                        cx.notify();
+                    });
                 }
                 if let Err(error) = result {
                     this.toast_error(&error, cx);
@@ -3221,6 +3402,15 @@ mod tests {
                         }
                     } else if path.ends_with("/getCredentialStatus") {
                         (200,r#"{"claude":{"set":true,"updatedAt":null},"anthropic":{"set":true,"updatedAt":null},"openai":{"set":true,"updatedAt":null},"openrouter":{"set":true,"updatedAt":null},"codex":{"set":true,"updatedAt":null,"lastRefresh":null}}"#.into())
+                    } else if path.ends_with("/addChecklistItem") {
+                        (
+                            200,
+                            serde_json::json!({
+                                "id": "checklist-1", "text": "Make it bigger", "status": "open",
+                                "sourceItemId": input["itemId"], "resolvedBy": null, "createdAt": 1
+                            })
+                            .to_string(),
+                        )
                     } else if path.ends_with("/listFiles") {
                         (200, r#"{"paths":["README.md"]}"#.into())
                     } else if path.ends_with("/readFile") {
@@ -3787,6 +3977,74 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn intent_check_toggle_sends_the_flipped_value_once_while_in_flight(cx: &mut TestAppContext) {
+        use gpui_kit::test::TestWindowExt as _;
+        let mut state = fixture();
+        for session in state.sessions.values_mut() {
+            session.intent_check = Some(false);
+        }
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let (workspace_id, id) = view.read_with(cx, |view, cx| {
+            (
+                view.store.read(cx).workspace_id.clone(),
+                view.active.clone().unwrap(),
+            )
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let toggle = window.find("intent-check");
+            assert_eq!(toggle.label(), Some("Intent check: Off"));
+            assert_eq!(toggle.checked(), Some(false));
+            window.click("intent-check", cx);
+        })
+        .unwrap();
+        view.read_with(cx, |view, cx| {
+            assert!(view.chats[&id].composer.read(cx).intent_check_pending)
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("intent-check", cx);
+        })
+        .unwrap();
+        wait_until(cx, &view, |view, cx| {
+            !view.chats[&id].composer.read(cx).intent_check_pending
+        });
+        let sent: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/setIntentCheck"))
+            .map(|(path, body)| (path.clone(), body.clone()))
+            .collect();
+        assert_eq!(
+            sent,
+            [(
+                "/api/v1/rpc/setIntentCheck".to_string(),
+                serde_json::json!({"workspaceId": workspace_id, "sessionId": id, "enabled": true})
+            )]
+        );
+        view.update(cx, |view, cx| {
+            view.store.update(cx, |store, cx| {
+                store.state.sessions.get_mut(&id).unwrap().intent_check = None;
+                cx.notify();
+            })
+        });
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("intent-check").is_none());
+        })
+        .unwrap();
+    }
+
+    #[gpui_kit::test]
     fn failed_close_keeps_the_chat_and_failed_config_keeps_the_saved_mode(cx: &mut TestAppContext) {
         let mut state = fixture();
         let id = chat_model::sessions(&state, false)[0].id.clone();
@@ -4155,6 +4413,210 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn intent_card_sends_a_correction_then_confirms(cx: &mut TestAppContext) {
+        let mut state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let mut item = state
+            .items
+            .values()
+            .find(|i| i.session_id == session && i.turn_id.is_some())
+            .unwrap()
+            .clone();
+        item.id = "intent-item".into();
+        item.content = p::ItemContent::Intent(
+            serde_json::from_value(serde_json::json!({
+                "intentId": "intent-1", "status": "proposed", "goal": "Fix the login form",
+                "approach": "Edit the form", "notDoing": "No redesign", "decidedBy": null,
+                "reasons": ["new_access"], "enforced": true
+            }))
+            .unwrap(),
+        );
+        state
+            .order
+            .entry(session.clone())
+            .or_default()
+            .push(item.id.clone());
+        state.items.insert(item.id.clone(), item);
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        let submit = |cx: &mut TestAppContext, text: &str| {
+            cx.update_window(window, |_, window, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.sync_intent_inputs(window, cx);
+                    t.intent_input("intent-1")
+                        .unwrap()
+                        .update(cx, |input, cx| input.set_value(text, window, cx));
+                    t.submit_intent("intent-1", cx);
+                    assert!(t.intent_busy("intent-1"));
+                    t.submit_intent("intent-1", cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.intent_busy("intent-1")) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "intent call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        };
+        submit(cx, "  Keep the old styles  ");
+        transcript.read_with(cx, |t, cx| {
+            assert_eq!(t.intent_correction("intent-1", cx), "");
+        });
+        submit(cx, "");
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("Intent"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/correctIntent".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "intentId": "intent-1", "text": "Keep the old styles"})
+                ),
+                (
+                    "/api/v1/rpc/confirmIntent".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "intentId": "intent-1"})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn checklist_actions_send_add_and_reopen_once(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        let events = [
+            TranscriptEvent::AddChecklistItem {
+                item_id: "message-1".into(),
+            },
+            TranscriptEvent::ReopenChecklistItem {
+                checklist_id: "checklist-1".into(),
+            },
+        ];
+        for event in events {
+            let key = event.checklist_key().unwrap();
+            cx.update_window(window, |_, _, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.request_checklist(event.clone(), cx);
+                    assert!(t.checklist_busy(&key));
+                    t.request_checklist(event.clone(), cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.checklist_busy(&key)) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "checklist call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("ChecklistItem"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/addChecklistItem".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "itemId": "message-1"})
+                ),
+                (
+                    "/api/v1/rpc/reopenChecklistItem".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "checklistId": "checklist-1"})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
+    fn hold_actions_send_allow_and_refuse_once(cx: &mut TestAppContext) {
+        let state = fixture();
+        let session = chat_model::sessions(&state, false)[0].id.clone();
+        let workspace_id = state.workspace.as_ref().unwrap().id.clone();
+        let turn = state.turns.values().next().unwrap().clone();
+        let server = LocalServer::new(&turn, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, state, client);
+        let transcript = view.read_with(cx, |v, _| v.chats[&session].transcript.clone());
+        for (hold_id, allow) in [("hold-1", true), ("hold-2", false)] {
+            cx.update_window(window, |_, _, cx| {
+                transcript.update(cx, |t, cx| {
+                    t.decide_hold(hold_id, allow, cx);
+                    assert!(t.hold_busy(hold_id));
+                    t.decide_hold(hold_id, !allow, cx);
+                })
+            })
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                cx.run_until_parked();
+                if !transcript.read_with(cx, |t, _| t.hold_busy(hold_id)) {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "hold call did not finish");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let requests: Vec<_> = server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/decideCloudflareHold"))
+            .cloned()
+            .collect();
+        assert_eq!(
+            requests,
+            vec![
+                (
+                    "/api/v1/rpc/decideCloudflareHold".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "holdId": "hold-1", "allow": true})
+                ),
+                (
+                    "/api/v1/rpc/decideCloudflareHold".to_string(),
+                    serde_json::json!({"workspaceId": workspace_id, "holdId": "hold-2", "allow": false})
+                ),
+            ]
+        );
+    }
+
+    #[gpui_kit::test]
     fn queue_controls_preserve_draft_and_reorder_the_whole_workspace(cx: &mut TestAppContext) {
         let mut state = fixture();
         let session = chat_model::sessions(&state, false)[0].id.clone();
@@ -4162,6 +4624,7 @@ mod tests {
         turn.session_id = session.clone();
         turn.status = p::TurnStatus::Queued;
         turn.queue_pos = Some(1.0);
+        turn.seq = 2.0;
         let first = turn.id.clone();
         state.turns.clear();
         state.turns.insert(first.clone(), turn.clone());

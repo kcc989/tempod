@@ -1,6 +1,6 @@
 # 12 App Deploy
 
-The owner asked for a Cloudflare control plane that deploys the owner's applications from Tempo-hosted ("native") repositories. A deploy runs in a dedicated container, like a CI job (10). It supports Alchemy v2 (`alchemy.run.ts`) and the Cloudflare CLI's typed configuration (`cloudflare.config.ts`). Tempo holds one owner master token and mints a short-lived, scoped token for each deployment from what the project's deploy configuration declares. This tab extends 09 and 10. GitHub projects are not in this stage.
+The owner asked for a Cloudflare control plane that deploys the owner's applications from Tempo-hosted ("native") repositories. A deploy runs in a dedicated container, like a CI job (10). It supports Alchemy v2 (`alchemy.run.ts`) and the Cloudflare CLI's typed configuration (`cloudflare.config.ts`). Tempo holds one owner master token and mints a short-lived, scoped token for each deployment from what the project's deploy configuration declares. This tab extends 09 and 10. GitHub projects are not in this stage. [13 Loop](13%20Loop.md) changes this tab (owner-approved 2026-10-15): gradual deploys with Durable Object rules, a Rollback action and deploy events (L-ADR-4, L-ADR-7). Where they differ, 13 is correct.
 
 ## Scope
 
@@ -17,8 +17,8 @@ Not in this stage (recorded in `IMPLEMENTATION_NOTES.md`):
 - GitHub projects. Deploys need the native clone path and CI ingestion.
 - Application secrets and environment variables in deploys. The deploy command gets no secrets except the Cloudflare token swap below.
 - Container applications and anything else that needs Docker. The workspace image has no Docker (05).
-- Rollback to an earlier deployment as its own action. **Redeploy** of an earlier deployment is the rollback path.
-- Lifecycle events for deployments. Agents read state with the deploy tools.
+- Rollback to an earlier deployment as its own action. **Redeploy** of an earlier deployment is the rollback path. Changed by 13, L-ADR-4: Rollback becomes its own action.
+- Lifecycle events for deployments. Agents read state with the deploy tools. Changed by 13, L-ADR-7.
 - Tempo-managed Alchemy state. The project's `alchemy.run.ts` chooses its own state store; see Tools.
 
 ## Components
@@ -74,17 +74,21 @@ targets:
 | `permissions` | Optional list of permissions (below), no duplicates. `workers` is always granted and may be listed. |
 | `timeout_minutes` | Optional integer 1–60. Default 20. |
 | `egress_allowlist` | Optional list of at most 50 host patterns (`host.example` or `*.example`), added to the built-in hosts. |
+| `auto_fix` | Optional boolean, default `false`. A new production error starts its fix workspace with no owner action (Production errors). |
 | `targets` | Required map with 1–10 entries. Keys match `^[a-z0-9][a-z0-9_-]{0,39}$`. |
 | `targets.<key>.stage` | Optional. Matches `^[a-z0-9][a-z0-9_-]{0,39}$`. Default: the key. |
 | `targets.<key>.branch` | Optional. A valid branch name (09). When set, the target deploys only that branch. |
 | `targets.<key>.auto` | Optional boolean, default `false`. Needs `branch`. Deploys after a successful CI run on that branch; see Triggers. |
 | `targets.<key>.agent` | Optional boolean, default `false`. Agents may start deployments of this target. |
+| `targets.<key>.rollout` | Optional. `full` (default: the tool deploys at 100%) or `gradual` (Gradual rollout, below). |
+| `targets.<key>.workers` | Optional list of 1–10 Worker script names, each matching `^[a-z0-9][a-z0-9_-]{0,62}$`, no duplicates. Required when `rollout` is `gradual`. The first one serves the `smoke` URLs. |
+| `targets.<key>.smoke` | Optional list of at most 5 `https://` URLs, each at most 2,048 characters. Only with `rollout: gradual`. |
 
 Any other key, a wrong type or a broken rule fails with `DEPLOY_CONFIG_INVALID`. Its detail names the first problem, for example `targets.production.auto: needs branch`.
 
 - Each successful save makes a new revision. Revisions start at 1 and never repeat. Saving an empty (whitespace-only) source disables deploys and also makes a new revision.
 - A save sends the revision it edited. If the current revision is different, the save fails with `DEPLOY_CONFIG_CHANGED` and changes nothing.
-- The DO keeps the newest 20 revisions. A deployment records the revision it used and keeps its own copy of the commands, stage and permissions.
+- The DO keeps the newest 20 revisions. A deployment records the revision it used and keeps its own copy of the commands, stage, permissions, rollout, Workers and smoke URLs.
 
 ### Permissions
 
@@ -117,7 +121,7 @@ The deploy command runs with `bash -lc` in `root`. Tempo builds it from the depl
 - Both tools come from the project's own dependencies (`alchemy` 2.x and `cf`). Tempo installs neither. `npx --no` never downloads a package.
 - `cf` loads `cloudflare.config.ts` only on Node.js 22.18 or later and refuses Bun. The workspace image's Node.js 24 runs it.
 - Alchemy v2 stacks declare their own state store. A deploy container is new each time, so a stack that keeps only local state loses it. Projects should use a remote store such as `Cloudflare.state()`, which needs `secrets_store`.
-- The command's environment adds exactly: `CI=1`, `CF_SEND_TELEMETRY=false`, `DO_NOT_TRACK=1`, `CLOUDFLARE_ACCOUNT_ID=<accountId>`, `CLOUDFLARE_API_TOKEN=tempo-placeholder`, `TEMPO_DEPLOY_TARGET=<target>` and `TEMPO_DEPLOY_STAGE=<stage>`. The placeholder is the fixed `PLACEHOLDER` (01) and is not a secret.
+- The command's environment adds exactly: `CI=1`, `CF_SEND_TELEMETRY=false`, `DO_NOT_TRACK=1`, `CLOUDFLARE_ACCOUNT_ID=<accountId>`, `CLOUDFLARE_API_TOKEN=tempo-placeholder`, `TEMPO_DEPLOY_TARGET=<target>` and `TEMPO_DEPLOY_STAGE=<stage>`. With `rollout: gradual` it also adds `TEMPO_DEPLOY_TRAFFIC=0` (Gradual rollout). The placeholder is the fixed `PLACEHOLDER` (01) and is not a secret.
 
 ## Deployments
 
@@ -132,7 +136,7 @@ A deployment is one target at one commit SHA of one branch.
 - A result is accepted only from the runner and token that the DO started. A result for a completed deployment or an old token is ignored.
 - A deployment that does not finish by its timeout plus 5 minutes is completed as `timed_out` by the DO. A deployment whose container stops without a result completes as `failure` with summary `The deploy container stopped.`
 - Exit code 0 is `success`. A timeout is `timed_out`. Anything else is `failure`.
-- The DO keeps the newest 200 deployments. Older deployments and their R2 logs are deleted.
+- The DO keeps the newest 200 deployments. Older deployments and their R2 logs are deleted. Unlinking also deletes the Issues webhook secret.
 
 ## Triggers
 
@@ -176,6 +180,79 @@ The runner reconnects after a lost socket and checks its deployment every 30 sec
 
 Trust boundary: install, build and deploy run the branch's code, and that code can use the minted token through the proxy. The minted token's permissions, the target's `branch` and `agent` settings, and the owner-only configuration are the controls. Give agent-enabled targets a separate stage.
 
+## Gradual rollout
+
+13, L-ADR-4, owner-approved 2026-10-15. Applies only to a target with `rollout: gradual`. The project's `alchemy.run.ts` passes `TEMPO_DEPLOY_TRAFFIC` to each Worker's `version.traffic`, so the tool uploads new versions and does not move traffic. Tempo then moves traffic with the Versions and Deployments API and the deployment's minted token, which `workers` always grants (`Workers Scripts Write`).
+
+The deployment stays `running` until the rollout ends. It has a `phase`: `null` while the container runs, then `canary`, then it completes. Its minted token expires at the start time plus the timeout plus the observe window (10 minutes) plus 15 minutes, and is revoked when the deployment completes, as before.
+
+**1. Record.** After exit code 0, for each Worker in `workers`, in order:
+
+- Read its deployments. The newest is live.
+- If the live deployment was created after the deployment started and has one version at 100%, the tool deployed that Worker at 100% (for example a Durable Object class migration). Record that version as `versionId`, that deployment as `cloudflareDeploymentId`, and the version with the largest share in the newest deployment created before the start as `previousVersionId` (null when none).
+- Else read its versions. The newest version created after the start is `versionId`. None fails the deployment with summary `No new version of <worker> was uploaded. Pass TEMPO_DEPLOY_TRAFFIC to version.traffic.` `previousVersionId` is the version with the largest share in the live deployment.
+- Write one `deploy.version.uploaded` event per Worker.
+
+If any Worker went to 100%, Tempo moves every other Worker to 100% at once (step 4), and the deployment completes `success` with summary `<worker> deployed at 100% without a gradual rollout.` Else:
+
+**2. Canary.** For each Worker with a `previousVersionId`, create a deployment with `versionId` at 10% and `previousVersionId` at 90%. A Worker with no `previousVersionId` goes to 100%. Set `phase` to `canary` and `canaryUntil` to now plus the observe window (10 minutes). Write `deploy.traffic.changed` per Worker.
+
+**3. Smoke test.** For each `smoke` URL, send a `GET` with `Cloudflare-Workers-Version-Overrides: <first worker>="<its versionId>"`, a 10-second timeout and manual redirects. A status of 500 or more, or no answer, fails the gate.
+
+**4. Promote.** When `canaryUntil` passes and the gate has not failed, create a deployment with `versionId` at 100% for each Worker, write `deploy.traffic.changed`, and complete `success`.
+
+**5. Roll back.** When the gate fails during `canary`, or the owner cancels it, create a deployment with `previousVersionId` at 100% for each Worker that has one, write `deploy.rolled_back`, and complete `failure` with summary `Rolled back: <reason>.` (a cancel completes `cancelled`). A Cloudflare error during a rollback is stored in the summary; it does not stop the other Workers.
+
+The gate also fails when 13, L-ADR-5 reports a new Issue on a `versionId` (slice 4). Every step checks the phase and token first, so a repeat does nothing (rule 5). The watchdog skips a deployment in `canary`; the alarm runs steps 4 and 5.
+
+**Owner rollback.** `rollbackDeployment {projectId, deploymentId}` rolls back a completed `success` deployment of a `gradual` target:
+
+- It must be the newest completed `success` deployment of its target, no deployment of the project may be queued or running, and every Worker must have a `previousVersionId`. Else `VALIDATION_FAILED` with detail `Nothing to roll back to.` or `WORKSPACE_BUSY`.
+- Tempo mints a token with `workers` that expires in 15 minutes, creates a deployment with `previousVersionId` at 100% for each Worker, revokes the token, and sets the deployment's `rolledBackAt`. A token that fails to revoke expires on its own.
+- Writes `deploy.rolled_back`. Returns the deployment.
+
+**Events.** `AppDeployDO` keeps rollout events in its own SQLite table `events` (`id`, `deployment_id`, `type`, `at`, `payload_json`), the newest 2,000. Payloads hold the Worker, the version and Cloudflare deployment IDs and the percentages, never a token. 13, L-ADR-7 reads them.
+
+## Production errors
+
+13, L-ADR-5 and L-ADR-6, owner-approved 2026-10-15. Workers Issues sends each new issue of the project's Workers to Tempo by a generic webhook. The owner sets the webhook up once, in the Cloudflare dashboard or with `cf`, because Cloudflare documents no REST API for Issues automations.
+
+**Webhook.**
+
+- `getIssuesWebhook {projectId}` returns `{url, secretSet}`. `url` is `https://<APP_HOST>/api/hooks/cloudflare-issues/<projectId>`.
+- `rotateIssuesWebhook {projectId}` makes a new random secret (32 bytes, base64url), stores it in the owner's `CredentialDO` under `issues.<projectId>.webhook_secret`, and returns `{url, secret}`. Only this answer holds the secret. The owner pastes it into the destination's secret field.
+- `POST /api/hooks/cloudflare-issues/<projectId>` needs no session. It answers 404 unless the project is a native project, the secret is set, and the `cf-webhook-auth` header equals it (constant-time compare). A body over 256 KiB answers 413. A body that is not the Notifications envelope (a JSON object with string `text`) answers 400. Else it hands the payload to the project's `AppDeployDO` and answers 204.
+
+**Ingest.** The envelope is `{name, text, data, ts, alert_type, alert_correlation_id, ...}`; `data` varies by alert type and Cloudflare does not document it for Issues (spike L-S2). `AppDeployDO` reads, without failing on a missing key:
+
+| Field | Read from |
+| --- | --- |
+| `issueKey` | The first string at any depth of `data` under a key `issue_id`, else `alert_correlation_id`, else the SHA-256 of `text` |
+| `worker` | The first string under `script_name`, `worker_name`, `worker` or `service`, when it is one of the project's configured Workers; else null |
+| `versionId` | The first string under `version_id`, `script_version_id` or `versionId`; else null |
+| `title` | `name`, cut to 200 characters |
+| `text` | `text` with bearer tokens and `token=`, `key=`, `secret=` and `password=` values replaced by `[redacted]`, cut to 4 KiB |
+
+It never stores `data` itself, headers or request bodies. A known `issueKey` adds one occurrence and updates `lastSeenAt`; else it inserts a production error and writes `prod.error.seen`. The DO keeps the newest 500 errors and deletes errors last seen more than 90 days ago.
+
+**Gate.** A deployment in `canary` fails its gate (Gradual rollout) when an error arrives whose `versionId` is one of its new versions, or whose `versionId` is null and whose `worker` is one of its Workers. Without a known version, Tempo cannot tell an old version's error from a new one; it rolls back to be safe.
+
+**Fix.** `startErrorFix {projectId, errorId}` creates a workspace with `createWorkspace` on a new branch from the base branch of the error's deployment (the project's default branch when none is known), with the default agent and this first prompt:
+
+```
+Fix this production error in <worker or "the app">.
+<title>
+<text>
+Deployment #<number> (<target>), version <versionId or "unknown">, commits <previous sha>..<sha>.
+Seen <occurrences> times between <first> and <last> (UTC).
+```
+
+It stores the workspace ID on the error and returns `{workspaceId}`. A second call returns the same workspace. With `auto_fix: true`, Tempo calls it for each new error on its own, as the owner. A fix that fails to start is logged and the error card shows **Start fix** again.
+
+**Fixed.** When a deployment completes `success` after a fix workspace was created, and the error has no new occurrence for the observe window (10 minutes) after that completion, Tempo sets `fixedAt` and writes `prod.error.fixed`. A later occurrence clears `fixedAt` and writes `prod.error.seen` again.
+
+**Clients.** The Deploys tab shows a **Production errors** list above the deployments: title, Worker, version, occurrences, last seen, and **Start fix** or the fix workspace link, and fixed errors greyed. The Configuration section of the Deploys tab shows the webhook URL, whether a secret is set, and **New secret**, which shows the secret once.
+
 ## Logs
 
 - The runner keeps the last 1 MiB of output, as in 10 (`[tempo: earlier output dropped]`).
@@ -189,10 +266,13 @@ All are in `packages/protocol` (Effect Schema). Timestamps are Unix milliseconds
 - `DeployTool`: `alchemy`, `cloudflare-config`.
 - `DeployPermission`: `workers`, `kv`, `d1`, `r2`, `queues`, `vectorize`, `hyperdrive`, `secrets_store`, `routes`.
 - `DeployTrigger`: `manual`, `agent`, `auto`, `redeploy`. `DeployStatus`: `queued`, `running`, `completed`. `DeployConclusion`: `success`, `failure`, `cancelled`, `timed_out`.
-- `DeployTarget`: `key`, `stage`, `branch` (nullable), `auto`, `agent`.
+- `DeployTarget`: `key`, `stage`, `branch` (nullable), `auto`, `agent`, `rollout` (`full` or `gradual`), `workers` (string list), `smoke` (string list).
+- `DeployRollout`: `phase` (`canary`, `promoted`, `full`, `rolled_back`), `canaryUntil` (nullable), `rolledBackAt` (nullable), `workers`: list of `{name, versionId, previousVersionId (nullable), percentage, cloudflareDeploymentId (nullable)}`.
 - `DeployConfig`: `projectId`, `revision` (0 when never saved), `source`, `enabled`, `tool` (nullable), `root`, `permissions` (always includes `workers` when enabled), `timeoutMinutes`, `egressAllowlist`, `targets` (`DeployTarget[]`), `updatedAt` (nullable).
-- `Deployment`: `id`, `projectId`, `number`, `target`, `stage`, `branch`, `sha`, `revision`, `trigger`, `status`, `conclusion` (nullable), `exitCode` (nullable), `summary` (nullable), `workspaceId` (nullable; set for `agent`), `createdAt`, `startedAt` (nullable), `completedAt` (nullable), `url`. The URL is `/repositories?project=<id>&tab=deploys&deployment=<deploymentId>` on the app host.
+- `Deployment`: `id`, `projectId`, `number`, `target`, `stage`, `branch`, `sha`, `revision`, `trigger`, `status`, `conclusion` (nullable), `exitCode` (nullable), `summary` (nullable), `workspaceId` (nullable; set for `agent`), `createdAt`, `startedAt` (nullable), `completedAt` (nullable), `url`, `rollout` (`DeployRollout`, nullable; set once versions are recorded). The URL is `/repositories?project=<id>&tab=deploys&deployment=<deploymentId>` on the app host.
 - `DeploySettings`: `accountId` (nullable), `tokenSet`, `updatedAt` (nullable).
+- `ProductionError`: `id`, `projectId`, `worker` (nullable), `versionId` (nullable), `deploymentId` (nullable), `deploymentNumber` (nullable), `title`, `text`, `occurrences`, `firstSeenAt`, `lastSeenAt`, `fixWorkspaceId` (nullable), `fixedAt` (nullable).
+- `DeployConfig` adds `autoFix`.
 
 ## API
 
@@ -210,6 +290,11 @@ Every function uses owner authentication, schema validation, the Result envelope
 | `startDeployment` | POST | `{projectId, target, branch?}` | `Deployment` |
 | `redeploy` | POST | `{projectId, deploymentId}` | `Deployment` |
 | `cancelDeployment` | POST | `{projectId, deploymentId}` | `Deployment` |
+| `rollbackDeployment` | POST | `{projectId, deploymentId}` | `Deployment` |
+| `listProductionErrors` | GET | `{projectId}` | `ProductionError[]` (newest `lastSeenAt` first, at most 100) |
+| `startErrorFix` | POST | `{projectId, errorId}` | `{workspaceId}` |
+| `getIssuesWebhook` | GET | `{projectId}` | `{url, secretSet}` |
+| `rotateIssuesWebhook` | POST | `{projectId}` | `{url, secret}` |
 | `getDeploymentLog` | GET | `{projectId, deploymentId}` | `{text, truncated}` |
 
 - `listDeployments` returns at most 50 deployments, newest number first. Offset is a nonnegative safe integer.
@@ -248,6 +333,7 @@ The `tempo` MCP server (01) adds four tools. They act on the workspace's project
 - Both clients add a **Deploys** tab to native repositories (search key `tab=deploys`, `deployment=<deploymentId>`).
 - The tab lists deployments (number, target, stage, branch, short SHA, trigger, status/conclusion, time) with a target filter and paging, and a **Deploy** action that picks a target and, for a target without `branch`, a branch.
 - Deployment detail shows status, conclusion, exit code, duration, summary and trigger; **Cancel** for unfinished deployments; **Redeploy** for completed deployments; and the log as plain text.
+- With a rollout, the detail also shows the phase, the time the canary ends, and each Worker's version ID, previous version ID, share and Cloudflare deployment ID; and **Roll back** when `rollbackDeployment` would accept it.
 - A **Configuration** section shows the current YAML with its revision. Save shows `DEPLOY_CONFIG_INVALID` details in place and `DEPLOY_CONFIG_CHANGED` with a reload action.
 - Settings adds a **Cloudflare** section: account ID, a write-only token field, Save, Remove, and whether a token is set. `DEPLOY_TOKEN_INVALID` shows in place.
 - Both clients use shared generated protocol types. No new dependency.

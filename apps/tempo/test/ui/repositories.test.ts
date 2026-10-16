@@ -176,8 +176,18 @@ describe("repository deploys model (12, Clients)", () => {
     expect(deploymentsInput("p1", null, 0)).toEqual({ projectId: "p1", offset: 0 });
     expect(deploymentsInput("p1", "preview", 50)).toEqual({ projectId: "p1", offset: 50, target: "preview" });
 
-    const fixed = { key: "production", stage: "production", branch: "main", auto: true, agent: false };
-    const open = { key: "preview", stage: "preview", branch: null, auto: false, agent: true };
+    const extra = { rollout: "full", workers: [], smoke: [] } as const;
+
+    const fixed = {
+      key: "production",
+      stage: "production",
+      branch: "main",
+      auto: true,
+      agent: false,
+      ...extra,
+    };
+
+    const open = { key: "preview", stage: "preview", branch: null, auto: false, agent: true, ...extra };
     expect(deployInput("p1", fixed, "feature")).toEqual({ projectId: "p1", target: "production" });
     expect(deployInput("p1", open, null)).toBeNull();
     expect(deployInput("p1", open, "feature")).toEqual({

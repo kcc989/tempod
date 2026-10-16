@@ -467,9 +467,16 @@ impl RepositoryView {
             };
             let client = self.client.clone();
             let project_id = project.id.clone();
-            self.deploys = Some(cx.new(|cx| {
+            let deploys = cx.new(|cx| {
                 super::repository_deploys::DeploysView::new(client, project_id, window, cx)
-            }));
+            });
+            cx.subscribe(&deploys, |_, _, event, cx| match event {
+                super::repository_deploys::DeploysEvent::OpenWorkspace(id) => {
+                    cx.emit(RepositoryEvent::OpenWorkspace(id.clone()))
+                }
+            })
+            .detach();
+            self.deploys = Some(deploys);
             self.loading = false;
             self.error = None;
             cx.notify();

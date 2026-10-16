@@ -462,6 +462,46 @@ export const itemsOfEveryKind: ReadonlyArray<P.Item> = [
     content: { code: "AGENT_CRASHED", detail: null },
   }),
   item("artifact", { n: 11, rev: 11, seconds: 110, content: artifactContent }),
+  item("intent", {
+    n: 12,
+    rev: 12,
+    seconds: 111,
+    status: "pending",
+    content: {
+      intentId: uid(1012),
+      status: "proposed",
+      goal: "Add a due date to each todo.",
+      approach: "A nullable due_at column and a date picker on the edit form.",
+      notDoing: "No reminders or notifications.",
+      decidedBy: null,
+      reasons: ["hard_rollback"],
+      enforced: true,
+    },
+  }),
+  item("proof", {
+    n: 13,
+    rev: 13,
+    seconds: 112,
+    content: {
+      proofId: uid(1013),
+      summary: "Todos have an optional due date.\nThe edit form has a date picker.",
+      screens: [
+        {
+          route: "/todos",
+          viewport: "phone",
+          theme: "dark",
+          artifactId: uid(1014),
+          version: 1,
+          recordingArtifactId: null,
+        },
+      ],
+      checks: [{ name: "typecheck", runId: uid(1015), status: "passed", exitCode: 0 }],
+      resolved: [{ checklistId: uid(1016), note: "The picker uses the theme's input style." }],
+      missingRoutes: [],
+      missingChecklist: [],
+      status: "complete",
+    },
+  }),
 ];
 
 export const permissionRequest: P.PermissionRequest = {

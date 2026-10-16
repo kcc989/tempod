@@ -31,6 +31,36 @@ const viaSocket = (path: string) => (p: string, init?: RequestInit) => {
 };
 
 describe("tempo MCP server (01, Environments)", () => {
+  test("tools/list hides deploy tools the chat's manifest does not grant (14, Delivery 3)", async () => {
+    const deploy: { target: string }[] = [];
+    const grants = { read: ["repo", "issues"], deploy };
+    const asked: string[] = [];
+
+    const call = async (_path: string, init?: RequestInit) => {
+      asked.push(String(init?.body));
+
+      return Response.json({ result: grants });
+    };
+
+    const names = async () =>
+      Schema.decodeUnknownSync(
+        Schema.Struct({
+          result: Schema.Struct({ tools: Schema.Array(Schema.Struct({ name: Schema.String })) }),
+        }),
+      )(
+        await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "tools/list" }, call, "chat-1"),
+      ).result.tools.map((t) => t.name);
+
+    expect(await names()).not.toContain("list_deployments");
+    expect(await names()).toContain("list_issues");
+    grants.read.push("deployments");
+    expect(await names()).toContain("list_deployments");
+    expect(await names()).not.toContain("deploy_app");
+    grants.deploy.push({ target: "preview" });
+    expect(await names()).toContain("deploy_app");
+    expect(JSON.parse(asked[0]!)).toEqual({ op: "get_capabilities", sessionId: "chat-1", params: {} });
+  });
+
   test("initialize, ping and tools/list follow MCP; notifications get no answer", async () => {
     const call = () => Promise.reject(new Error("unused"));
     const init = await handleMcpMessage({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }, call);
@@ -57,6 +87,10 @@ describe("tempo MCP server (01, Environments)", () => {
       "publish_artifact",
       ...ISSUE_TOOL_NAMES,
       ...DEPLOY_TOOL_NAMES,
+      "get_project_profile",
+      "propose_intent",
+      "get_capabilities",
+      "submit_proof",
       "list_agents",
       "propose_agent_change",
     ]);
@@ -325,6 +359,43 @@ describe("run MCP reports", () => {
       result: { isError: true, content: [{ type: "text", text: "The agent is not valid." }] },
     });
     expect(JSON.stringify(client.events)).not.toContain("private proposal");
+
+    const intent = handleMcpMessage(
+      {
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "propose_intent",
+          arguments: { goal: "Add due dates", approach: "A nullable column", notDoing: "No reminders" },
+        },
+      },
+      call,
+      "chat-session",
+    );
+
+    await client.waitFor(
+      () => client.raw.filter((m) => m.type === "tool.req").length === 3,
+      5000,
+      "intent request",
+    );
+    const asked = client.raw.filter((m) => m.type === "tool.req")[2]!;
+
+    expect(asked).toMatchObject({
+      op: "propose_intent",
+      sessionId: "chat-session",
+      params: { goal: "Add due dates", approach: "A nullable column", notDoing: "No reminders" },
+    });
+    client.send({
+      type: "tool.res",
+      id: asked.id,
+      ok: true,
+      result: "The owner will confirm or correct the intent. End your turn now.",
+    });
+    expect(await intent).toMatchObject({
+      result: {
+        content: [{ type: "text", text: "The owner will confirm or correct the intent. End your turn now." }],
+      },
+    });
   });
   test("issue tools forward chat and run identity, reject forged inputs, and keep content outside events and logs", async () => {
     const config = testConfig();

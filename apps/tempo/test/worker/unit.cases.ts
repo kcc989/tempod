@@ -28,6 +28,14 @@ import {
   type EgressConfig,
 } from "../../src/egress/rules.ts";
 import { IllegalTransition, assertTransition, canTransition } from "../../src/do/workspace/transitions.ts";
+import { parseIssue } from "../../src/deploy/issues.ts";
+import { JEV_MODEL, jevClient, judgeCloudflareCall, judgeIntent } from "../../src/judge/jev.ts";
+import {
+  CloudflareError,
+  createWorkerDeployment,
+  listWorkerDeployments,
+  type CloudflareApi,
+} from "../../src/deploy/cloudflare.ts";
 import { checksStateOf, prStateOf } from "../../src/github/provider.ts";
 import { appJwt, pkcs1ToPkcs8 } from "../../src/github/app.ts";
 import {
@@ -1876,5 +1884,238 @@ describe("terminal PTY bridge", () => {
     socket.close(1000, "panel closed");
     await waitFor(() => f.terminals.size === 0 && !f.proc.stdout.locked && !f.proc.stdin.locked);
     expect(f.proc.kill).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Jev judge (13, L-ADR-9)", () => {
+  const INTENT = {
+    goal: "Add a due date to todos",
+    approach: "New nullable column and a date picker",
+    notDoing: "No reminders",
+  };
+
+  interface Seen {
+    readonly path: string;
+    readonly auth: string | null;
+    readonly model: string;
+  }
+
+  const Body = Schema.Struct({
+    model: Schema.String,
+    questions: Schema.Record(Schema.String, Schema.Struct({ type: Schema.String })),
+  });
+
+  const jev = (answers: Record<string, number>, seen: Seen[] = []) =>
+    jevClient("ts-key", async (input, init) => {
+      const req = new Request(input, init);
+      const body = Schema.decodeUnknownSync(Body)(await req.json());
+
+      seen.push({
+        path: new URL(req.url).pathname,
+        auth: req.headers.get("authorization"),
+        model: body.model,
+      });
+
+      const out = Object.fromEntries(
+        Object.entries(body.questions).map(([id, q]) =>
+          q.type === "noul"
+            ? [id, { type: "noul", noul: answers[id] }]
+            : [id, { type: "score", score: answers[id], confidence: 0.9, legend: {}, probabilities: {} }],
+        ),
+      );
+
+      return Response.json({
+        model: "jev-1.14.0",
+        answers: out,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+    });
+
+  it("lets a low-risk intent go on and calls jev-1.14.0 with the owner's key", async () => {
+    const seen: Seen[] = [];
+
+    const result = await judgeIntent(
+      jev({ new_access: 0.1, security_risk: 0.2, hard_rollback: 0.3 }, seen),
+      INTENT,
+      {},
+    );
+
+    expect(result).toEqual({
+      high: false,
+      reasons: [],
+      answers: { new_access: 0.1, security_risk: 0.2, hard_rollback: 0.3 },
+      model: JEV_MODEL,
+    });
+    expect(seen).toEqual([{ path: "/v1/systemone", auth: "Bearer ts-key", model: JEV_MODEL }]);
+  });
+
+  it("asks the owner for new access, a security risk or a hard rollback", async () => {
+    const result = await judgeIntent(
+      jev({ new_access: 0.5, security_risk: 0.9, hard_rollback: 1 }),
+      INTENT,
+      {},
+    );
+
+    expect(result.high).toBe(true);
+    expect(result.reasons).toEqual(["new_access", "security_risk", "hard_rollback"]);
+  });
+
+  it("treats no key and no answer as high risk", async () => {
+    expect(await judgeIntent(null, INTENT, {})).toMatchObject({ high: true, reasons: ["no_answer"] });
+    const down = jevClient("ts-key", async () => new Response("{}", { status: 401 }));
+    expect(await judgeIntent(down, INTENT, {})).toMatchObject({ high: true, reasons: ["no_answer"] });
+  });
+
+  it("holds a Cloudflare call that is outside the intent", async () => {
+    const call = { method: "DELETE", path: "/accounts/a/d1/database/x", resource: "todo-db" };
+
+    const result = await judgeCloudflareCall(
+      jev({ aligned: 0.2, security_risk: 0.1, hard_rollback: 0 }),
+      call,
+      INTENT,
+    );
+
+    expect(result).toMatchObject({ high: true, reasons: ["not_aligned"] });
+
+    const aligned = await judgeCloudflareCall(
+      jev({ aligned: 0.9, security_risk: 0.1, hard_rollback: 0 }),
+      call,
+      INTENT,
+    );
+
+    expect(aligned.high).toBe(false);
+  });
+});
+
+describe("Worker deployments client (13, L-ADR-4)", () => {
+  const ACCOUNT = "0123456789abcdef0123456789abcdef";
+
+  const LIVE = {
+    id: "dep-2",
+    created_on: "2026-10-15T03:10:17Z",
+    versions: [{ version_id: "v-new", percentage: 100 }],
+  };
+
+  const api = (respond: (req: Request) => Response) => {
+    const seen: Array<{ method: string; path: string; auth: string | null; body: unknown }> = [];
+
+    const client: CloudflareApi = {
+      fetch: async (req) => {
+        seen.push({
+          method: req.method,
+          path: new URL(req.url).pathname,
+          auth: req.headers.get("authorization"),
+          body: req.method === "GET" ? null : await req.clone().json(),
+        });
+
+        return respond(req);
+      },
+    };
+
+    return { client, seen };
+  };
+
+  it("lists a Worker's deployments with the minted token", async () => {
+    const { client, seen } = api(() => Response.json({ success: true, result: { deployments: [LIVE] } }));
+
+    expect(await listWorkerDeployments(client, "minted", ACCOUNT, "todo-web")).toEqual([LIVE]);
+
+    expect(seen).toEqual([
+      {
+        method: "GET",
+        path: `/client/v4/accounts/${ACCOUNT}/workers/scripts/todo-web/deployments`,
+        auth: "Bearer minted",
+        body: null,
+      },
+    ]);
+  });
+
+  it("sends a gradual step as a two-version percentage split", async () => {
+    const created = {
+      id: "dep-3",
+      created_on: "2026-10-15T04:00:00Z",
+      versions: [
+        { version_id: "v-next", percentage: 10 },
+        { version_id: "v-new", percentage: 90 },
+      ],
+    };
+
+    const { client, seen } = api(() => Response.json({ success: true, result: created }));
+
+    const split = [
+      { versionId: "v-next", percentage: 10 },
+      { versionId: "v-new", percentage: 90 },
+    ];
+
+    expect(
+      await createWorkerDeployment(client, "minted", ACCOUNT, "todo-web", {
+        split,
+        message: "tempo-deploy-7",
+      }),
+    ).toEqual(created);
+
+    expect(seen[0]!.body).toEqual({
+      strategy: "percentage",
+      versions: [
+        { version_id: "v-next", percentage: 10 },
+        { version_id: "v-new", percentage: 90 },
+      ],
+      annotations: { "workers/message": "tempo-deploy-7" },
+    });
+  });
+
+  it("refuses a split that is not 100% before calling Cloudflare, and surfaces Cloudflare errors", async () => {
+    const { client, seen } = api(() => Response.json({ success: false, errors: [] }, { status: 400 }));
+
+    const bad = [
+      { versionId: "a", percentage: 10 },
+      { versionId: "b", percentage: 80 },
+    ];
+
+    await expect(
+      createWorkerDeployment(client, "t", ACCOUNT, "w", { split: bad, message: "m" }),
+    ).rejects.toThrow("add up to 100%");
+
+    expect(seen).toHaveLength(0);
+
+    const rollback = [{ versionId: "v-old", percentage: 100 }];
+
+    await expect(
+      createWorkerDeployment(client, "t", ACCOUNT, "w", { split: rollback, message: "rollback" }),
+    ).rejects.toBeInstanceOf(CloudflareError);
+  });
+});
+
+describe("Issues webhook parsing (12, Production errors)", () => {
+  it("reads the envelope, finds keys at any depth, falls back for the key and scrubs secrets", async () => {
+    expect(await parseIssue({ name: "x" })).toBeNull();
+
+    expect(
+      await parseIssue({
+        name: "Error in api",
+        text: "boom token=s3cr3t&page=2",
+        alert_correlation_id: "corr-1",
+        data: { a: [{ b: { script_name: "api", version_id: "v9", issue_id: "iss-7" } }] },
+        ts: 1792000000,
+      }),
+    ).toEqual({
+      issueKey: "iss-7",
+      worker: "api",
+      versionId: "v9",
+      title: "Error in api",
+      text: "boom token [redacted]&page=2",
+      occurredAt: 1792000000000,
+    });
+    expect((await parseIssue({ text: "x", ts: "2026-10-15T10:00:00Z" }))?.occurredAt).toBe(
+      Date.parse("2026-10-15T10:00:00Z"),
+    );
+
+    expect(await parseIssue({ text: "boom", alert_correlation_id: "corr-1" })).toMatchObject({
+      issueKey: "corr-1",
+      worker: null,
+      versionId: null,
+      title: "Production error",
+    });
+    expect((await parseIssue({ text: "boom" }))!.issueKey).toMatch(/^[0-9a-f]{64}$/);
   });
 });

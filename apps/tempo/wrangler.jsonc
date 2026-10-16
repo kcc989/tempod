@@ -6,6 +6,7 @@
   "main": "./src/worker.ts",
   "compatibility_date": "2026-10-10",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": { "crons": ["41 5 * * *"] },
   "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
   "vars": {
     "APP_HOST": "localhost:5173",

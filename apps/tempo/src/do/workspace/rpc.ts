@@ -1,3 +1,6 @@
+import { confirmIntent, correctIntent, setIntentCheck } from "./intent.ts";
+import { addChecklistItem, reopenChecklistItem } from "./proof.ts";
+import { decideCloudflareHold } from "./cloudflare-gate.ts";
 import { resolveAgentProposal } from "../../agents/proposals.ts";
 import { Schema } from "effect";
 import { promptSlug } from "@tempo/cities";
@@ -368,6 +371,43 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
       core.updateWs({ environmentId });
       core.publish();
       core.ctx.waitUntil(sendEnv(core));
+
+      return {};
+    },
+    confirmIntent: async ({ intentId }) => {
+      notArchived(core);
+      rt.ensureAwake();
+      await confirmIntent(core, intentId);
+
+      return {};
+    },
+    setIntentCheck: async ({ sessionId, enabled }) => {
+      notArchived(core);
+      await setIntentCheck(core, sessionId, enabled);
+
+      return {};
+    },
+    correctIntent: async ({ intentId, text }) => {
+      notArchived(core);
+      rt.ensureAwake();
+      correctIntent(core, intentId, text);
+
+      return {};
+    },
+    decideCloudflareHold: async ({ holdId, allow }) => {
+      notArchived(core);
+      decideCloudflareHold(core, holdId, allow);
+
+      return {};
+    },
+    addChecklistItem: async ({ itemId }) => {
+      notArchived(core);
+
+      return addChecklistItem(core, itemId);
+    },
+    reopenChecklistItem: async ({ checklistId }) => {
+      notArchived(core);
+      reopenChecklistItem(core, checklistId);
 
       return {};
     },
@@ -891,6 +931,9 @@ export const workspaceMethods = (rt: RpcRuntime): Methods => {
     setSessionMode: async ({ sessionId, modeId }) => {
       core.sessionRow(sessionId);
       sessionBusy(core, sessionId);
+
+      // The intent mode guard keeps an owner's choice (13, Exact rules, Read-only).
+      core.setKv(`ownerMode:${sessionId}`, modeId);
 
       if (core.liveSessions.has(sessionId))
         await requireTempod(core).request("session.setMode", { sessionId, modeId });

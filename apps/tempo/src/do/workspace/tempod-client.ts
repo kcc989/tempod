@@ -1,6 +1,9 @@
+import { proposeIntent } from "./intent.ts";
+import { submitProof } from "./proof.ts";
+import { capabilitiesForAgent, sessionManifest } from "./manifest.ts";
 import { deployTool } from "../../agents/deploys.ts";
 import { issueTool } from "../../agents/issues.ts";
-import { DeployToolName, IssueToolName } from "@tempo/protocol";
+import { DeployToolName, IssueToolName, unwrap } from "@tempo/protocol";
 import { agentTool } from "../../agents/proposals.ts";
 import { toTurnUsage, type LifecycleEvent } from "@tempo/protocol";
 import {
@@ -228,6 +231,24 @@ export class TempodClient {
       if (!request.runId || session.runId !== request.runId) throw new TempoError("RUN_NOT_RUNNING");
 
       return this.core.lifecycle.runs.report(session.id, request.runId, request.params);
+    }
+
+    if (request.op === "get_project_profile")
+      return unwrap(await this.core.env.APP_DEPLOY.getByName(this.core.ws().projectId).getProfile());
+
+    if (request.op === "get_capabilities")
+      return capabilitiesForAgent(await sessionManifest(this.core, session));
+
+    if (request.op === "submit_proof") {
+      if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+      return submitProof(this.core, session, request.params);
+    }
+
+    if (request.op === "propose_intent") {
+      if (session.runId) throw new TempoError("RUN_NOT_RUNNING");
+
+      return proposeIntent(this.core, session, request.params);
     }
 
     if (Schema.is(IssueToolName)(request.op)) return issueTool(this.core, request);

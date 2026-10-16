@@ -65,6 +65,7 @@ pub enum ComposerEvent {
     TogglePlanMode,
     SetMode(String),
     SetModel { config_id: String, value: String },
+    SetIntentCheck(bool),
 }
 
 pub struct Composer {
@@ -111,6 +112,9 @@ pub struct Composer {
     profile_notice: Option<String>,
     notice_dismissed: bool,
     pub configuring: bool,
+    /// The chat's intent check (13); `None` for runs.
+    intent_check: Option<bool>,
+    pub intent_check_pending: bool,
     _picker_events: Vec<Subscription>,
     _input_changed: Subscription,
 }
@@ -222,6 +226,8 @@ impl Composer {
             profile_notice: None,
             notice_dismissed: false,
             configuring: false,
+            intent_check: None,
+            intent_check_pending: false,
             _picker_events: vec![model_events, mode_events, level_events],
             _input_changed: changed,
         }
@@ -254,6 +260,7 @@ impl Composer {
             });
         self.plan_available = super::chat_model::plan_target(session, None).is_some();
         self.starting = session.status == p::SessionStatus::Starting;
+        self.intent_check = session.intent_check;
         let config = session
             .config_options
             .iter()
@@ -624,6 +631,24 @@ impl Composer {
                             })
                     }))
             })
+    }
+
+    fn render_intent_check(&self, on: bool, cx: &mut Context<Self>) -> impl IntoElement {
+        let (label, tooltip) = composer_model::intent_check_text(on);
+        Button::new("intent-check")
+            .ghost()
+            .small()
+            .h(px(28.))
+            .label(label)
+            .accessibility_label(label)
+            .toggled(on)
+            .tooltip(tooltip)
+            .disabled(self.intent_check_pending)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if !this.intent_check_pending {
+                    cx.emit(ComposerEvent::SetIntentCheck(!on));
+                }
+            }))
     }
 
     pub fn text(&self, cx: &gpui_kit::App) -> String {
@@ -1135,6 +1160,7 @@ impl Render for Composer {
             .child(
                 composer_parts::toolbar()
                     .children((!self.model_choices.is_empty()).then(|| self.render_model_menu(cx)))
+                    .children(self.intent_check.map(|on| self.render_intent_check(on, cx)))
                     .child(div().flex_1())
                     .children(
                         self.usage
