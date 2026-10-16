@@ -65,6 +65,7 @@ export const ToolReq = Schema.Struct({
     "get_project_profile",
     "submit_proof",
     "get_capabilities",
+    "request_cloudflare_access",
     "list_agents",
     "propose_agent_change",
     ...ISSUE_TOOL_NAMES,

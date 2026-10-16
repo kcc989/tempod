@@ -410,6 +410,17 @@ export const cloudflareHolds = sqliteTable("cloudflare_holds", {
   decidedAt: integer("decided_at"),
 });
 
+export const cloudflareAccessRequests = sqliteTable("cloudflare_access_requests", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  itemId: text("item_id"),
+  permissionsJson: text("permissions_json").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status", { enum: ["pending", "approved", "denied"] }).notNull(),
+  createdAt: integer("created_at").notNull(),
+  decidedAt: integer("decided_at"),
+});
+
 export const checklist = sqliteTable("checklist", {
   id: text("id").primaryKey(),
   text: text("text").notNull(),
@@ -424,6 +435,7 @@ export const workspaceSchema = {
   proofs,
   checklist,
   cloudflareHolds,
+  cloudflareAccessRequests,
   lifecycleEvents,
   runs,
   artifacts,
@@ -462,6 +474,8 @@ export type ProofRow = typeof proofs.$inferSelect;
 export type ChecklistRow = typeof checklist.$inferSelect;
 
 export type CloudflareHoldRow = typeof cloudflareHolds.$inferSelect;
+
+export type CloudflareAccessRow = typeof cloudflareAccessRequests.$inferSelect;
 
 export type TurnRow = typeof turns.$inferSelect;
 

@@ -18,7 +18,7 @@ const detail = (source: string): string | undefined => {
 const base = "version: 1\ntool: alchemy\n";
 
 describe("parseDeployConfig", () => {
-  it("applies defaults, always grants workers and keeps target order", () => {
+  it("applies defaults and keeps target order", () => {
     const spec = parseDeployConfig(
       [
         "version: 1",
@@ -26,7 +26,6 @@ describe("parseDeployConfig", () => {
         "root: apps/web",
         "install: bun install --frozen-lockfile",
         "build: bun run build",
-        "permissions: [r2, d1]",
         "timeout_minutes: 30",
         "egress_allowlist: ['pkg.example.com']",
         "targets:",
@@ -45,7 +44,6 @@ describe("parseDeployConfig", () => {
       root: "apps/web",
       install: "bun install --frozen-lockfile",
       build: "bun run build",
-      permissions: ["workers", "d1", "r2"],
       timeoutMinutes: 30,
       egressAllowlist: ["pkg.example.com"],
       targets: [
@@ -76,7 +74,6 @@ describe("parseDeployConfig", () => {
       root: "",
       install: null,
       build: null,
-      permissions: ["workers"],
       timeoutMinutes: 20,
     });
   });
@@ -118,8 +115,8 @@ describe("parseDeployConfig", () => {
     );
     expect(detail(`${base}targets: {}\n`)).toBe("targets: 1 to 10 targets");
     expect(detail(`${base}image: x\ntargets:\n  a: {}\n`)).toBe("image: unknown key");
-    expect(detail(`${base}permissions: [dns]\ntargets:\n  a: {}\n`)).toBe(
-      'permissions: unknown permission "dns"',
+    expect(detail(`${base}permissions: [d1]\ntargets:\n  a: {}\n`)).toBe(
+      "permissions: not accepted; the agent asks for Cloudflare access and you approve it",
     );
     expect(detail(`${base}root: ../x\ntargets:\n  a: {}\n`)).toMatch(/^root: a relative directory/);
     expect(detail(`${base}root: /abs\ntargets:\n  a: {}\n`)).toMatch(/^root: a relative directory/);

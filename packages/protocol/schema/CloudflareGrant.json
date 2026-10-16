@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CloudflareGrant",
+  "type": "object",
+  "properties": {
+    "permission": {
+      "$ref": "DeployPermission.json"
+    },
+    "grantedAt": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": ["Infinity", "-Infinity", "NaN"]
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["permission", "grantedAt"],
+  "additionalProperties": true
+}

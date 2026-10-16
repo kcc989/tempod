@@ -2589,6 +2589,80 @@ pub struct CloseSessionIn {
     #[serde(rename = "workspaceId")]
     pub workspace_id: ::std::string::String,
 }
+///`CloudflareAccessContent`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CloudflareAccessContent {
+    pub permissions: ::std::vec::Vec<DeployPermission>,
+    pub reason: ::std::string::String,
+    #[serde(rename = "requestId")]
+    pub request_id: ::std::string::String,
+    pub status: CloudflareAccessContentStatus,
+}
+///`CloudflareAccessContentStatus`
+#[derive(
+    ::serde::Deserialize,
+    ::serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum CloudflareAccessContentStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "approved")]
+    Approved,
+    #[serde(rename = "denied")]
+    Denied,
+}
+impl ::std::fmt::Display for CloudflareAccessContentStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Pending => f.write_str("pending"),
+            Self::Approved => f.write_str("approved"),
+            Self::Denied => f.write_str("denied"),
+        }
+    }
+}
+impl ::std::str::FromStr for CloudflareAccessContentStatus {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "approved" => Ok(Self::Approved),
+            "denied" => Ok(Self::Denied),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for CloudflareAccessContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CloudflareAccessContentStatus {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+///`CloudflareGrant`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct CloudflareGrant {
+    #[serde(
+        rename = "grantedAt",
+        deserialize_with = "::std::option::Option::deserialize"
+    )]
+    pub granted_at: ::std::option::Option<f64>,
+    pub permission: DeployPermission,
+}
 ///`CloudflareHoldContent`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
 pub struct CloudflareHoldContent {
@@ -3629,6 +3703,15 @@ pub struct CustomInstance {
     #[serde(rename = "memoryMib")]
     pub memory_mib: i64,
     pub vcpu: ::std::num::NonZeroU64,
+}
+///`DecideCloudflareAccessIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct DecideCloudflareAccessIn {
+    pub approve: bool,
+    #[serde(rename = "requestId")]
+    pub request_id: ::std::string::String,
+    #[serde(rename = "workspaceId")]
+    pub workspace_id: ::std::string::String,
 }
 ///`DecideCloudflareHoldIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -6576,6 +6659,8 @@ pub enum ItemKind {
     Proof,
     #[serde(rename = "cloudflare_hold")]
     CloudflareHold,
+    #[serde(rename = "cloudflare_access")]
+    CloudflareAccess,
 }
 impl ::std::fmt::Display for ItemKind {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -6596,6 +6681,7 @@ impl ::std::fmt::Display for ItemKind {
             Self::Intent => f.write_str("intent"),
             Self::Proof => f.write_str("proof"),
             Self::CloudflareHold => f.write_str("cloudflare_hold"),
+            Self::CloudflareAccess => f.write_str("cloudflare_access"),
         }
     }
 }
@@ -6619,6 +6705,7 @@ impl ::std::str::FromStr for ItemKind {
             "intent" => Ok(Self::Intent),
             "proof" => Ok(Self::Proof),
             "cloudflare_hold" => Ok(Self::CloudflareHold),
+            "cloudflare_access" => Ok(Self::CloudflareAccess),
             _ => Err("invalid value".into()),
         }
     }
@@ -8173,6 +8260,12 @@ impl<'de> ::serde::Deserialize<'de> for ListCiRunsInBranch {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
     }
+}
+///`ListCloudflareGrantsIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct ListCloudflareGrantsIn {
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
 }
 ///`ListDeploymentsIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -11209,6 +11302,13 @@ pub struct RefreshPullRequestOut {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub pr_title: ::std::option::Option<::std::string::String>,
+}
+///`RemoveCloudflareGrantIn`
+#[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
+pub struct RemoveCloudflareGrantIn {
+    pub permission: DeployPermission,
+    #[serde(rename = "projectId")]
+    pub project_id: ::std::string::String,
 }
 ///`RenameBranchIn`
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug, PartialEq)]
@@ -16352,6 +16452,15 @@ pub mod api {
         type Input = crate::CreateWorkspaceIn;
         type Output = crate::WorkspaceSummary;
     }
+    /// `decideCloudflareAccess`
+    #[derive(Clone, Copy, Debug)]
+    pub struct DecideCloudflareAccess;
+    impl crate::Function for DecideCloudflareAccess {
+        const NAME: &'static str = "decideCloudflareAccess";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::DecideCloudflareAccessIn;
+        type Output = crate::Empty;
+    }
     /// `decideCloudflareHold`
     #[derive(Clone, Copy, Debug)]
     pub struct DecideCloudflareHold;
@@ -16829,6 +16938,15 @@ pub mod api {
         type Input = crate::ListCiRunsIn;
         type Output = ::std::vec::Vec<crate::CiRun>;
     }
+    /// `listCloudflareGrants`
+    #[derive(Clone, Copy, Debug)]
+    pub struct ListCloudflareGrants;
+    impl crate::Function for ListCloudflareGrants {
+        const NAME: &'static str = "listCloudflareGrants";
+        const METHOD: crate::Method = crate::Method::Get;
+        type Input = crate::ListCloudflareGrantsIn;
+        type Output = ::std::vec::Vec<crate::CloudflareGrant>;
+    }
     /// `listDeployments`
     #[derive(Clone, Copy, Debug)]
     pub struct ListDeployments;
@@ -17143,6 +17261,15 @@ pub mod api {
         const METHOD: crate::Method = crate::Method::Post;
         type Input = crate::RefreshPullRequestIn;
         type Output = crate::RefreshPullRequestOut;
+    }
+    /// `removeCloudflareGrant`
+    #[derive(Clone, Copy, Debug)]
+    pub struct RemoveCloudflareGrant;
+    impl crate::Function for RemoveCloudflareGrant {
+        const NAME: &'static str = "removeCloudflareGrant";
+        const METHOD: crate::Method = crate::Method::Post;
+        type Input = crate::RemoveCloudflareGrantIn;
+        type Output = ::std::vec::Vec<crate::CloudflareGrant>;
     }
     /// `renameBranch`
     #[derive(Clone, Copy, Debug)]
@@ -17672,6 +17799,7 @@ pub mod api {
         ("createRepositoryPullRequest", crate::Method::Post),
         ("createSession", crate::Method::Post),
         ("createWorkspace", crate::Method::Post),
+        ("decideCloudflareAccess", crate::Method::Post),
         ("decideCloudflareHold", crate::Method::Post),
         ("deleteAgent", crate::Method::Post),
         ("deleteCredential", crate::Method::Post),
@@ -17725,6 +17853,7 @@ pub mod api {
         ("listCheckRuns", crate::Method::Get),
         ("listCheckpoints", crate::Method::Get),
         ("listCiRuns", crate::Method::Get),
+        ("listCloudflareGrants", crate::Method::Get),
         ("listDeployments", crate::Method::Get),
         ("listEnvironments", crate::Method::Get),
         ("listFiles", crate::Method::Get),
@@ -17760,6 +17889,7 @@ pub mod api {
         ("readFileAt", crate::Method::Get),
         ("redeploy", crate::Method::Post),
         ("refreshPullRequest", crate::Method::Post),
+        ("removeCloudflareGrant", crate::Method::Post),
         ("renameBranch", crate::Method::Post),
         ("renameSession", crate::Method::Post),
         ("renameWorkspace", crate::Method::Post),
@@ -17873,6 +18003,8 @@ pub mod wire {
         "CiRunDetail",
         "ClientPing",
         "CloseSessionIn",
+        "CloudflareAccessContent",
+        "CloudflareGrant",
         "CloudflareHoldContent",
         "CommitAndPushIn",
         "CommitAndPushOut",
@@ -17899,6 +18031,7 @@ pub mod wire {
         "CredentialState",
         "CredentialStatus",
         "CustomInstance",
+        "DecideCloudflareAccessIn",
         "DecideCloudflareHoldIn",
         "DeleteAgentIn",
         "DeleteCredentialIn",
@@ -18017,6 +18150,7 @@ pub mod wire {
         "ListCheckRunsIn",
         "ListCheckpointsIn",
         "ListCiRunsIn",
+        "ListCloudflareGrantsIn",
         "ListDeploymentsIn",
         "ListFilesIn",
         "ListFilesOut",
@@ -18099,6 +18233,7 @@ pub mod wire {
         "RedeployIn",
         "RefreshPullRequestIn",
         "RefreshPullRequestOut",
+        "RemoveCloudflareGrantIn",
         "RenameBranchIn",
         "RenameSessionIn",
         "RenameWorkspaceIn",
@@ -18280,6 +18415,8 @@ pub mod wire {
             "CiRunDetail" => crate::roundtrip::<crate::CiRunDetail>(text),
             "ClientPing" => crate::roundtrip::<crate::ClientPing>(text),
             "CloseSessionIn" => crate::roundtrip::<crate::CloseSessionIn>(text),
+            "CloudflareAccessContent" => crate::roundtrip::<crate::CloudflareAccessContent>(text),
+            "CloudflareGrant" => crate::roundtrip::<crate::CloudflareGrant>(text),
             "CloudflareHoldContent" => crate::roundtrip::<crate::CloudflareHoldContent>(text),
             "CommitAndPushIn" => crate::roundtrip::<crate::CommitAndPushIn>(text),
             "CommitAndPushOut" => crate::roundtrip::<crate::CommitAndPushOut>(text),
@@ -18312,6 +18449,7 @@ pub mod wire {
             "CredentialState" => crate::roundtrip::<crate::CredentialState>(text),
             "CredentialStatus" => crate::roundtrip::<crate::CredentialStatus>(text),
             "CustomInstance" => crate::roundtrip::<crate::CustomInstance>(text),
+            "DecideCloudflareAccessIn" => crate::roundtrip::<crate::DecideCloudflareAccessIn>(text),
             "DecideCloudflareHoldIn" => crate::roundtrip::<crate::DecideCloudflareHoldIn>(text),
             "DeleteAgentIn" => crate::roundtrip::<crate::DeleteAgentIn>(text),
             "DeleteCredentialIn" => crate::roundtrip::<crate::DeleteCredentialIn>(text),
@@ -18460,6 +18598,7 @@ pub mod wire {
             "ListCheckRunsIn" => crate::roundtrip::<crate::ListCheckRunsIn>(text),
             "ListCheckpointsIn" => crate::roundtrip::<crate::ListCheckpointsIn>(text),
             "ListCiRunsIn" => crate::roundtrip::<crate::ListCiRunsIn>(text),
+            "ListCloudflareGrantsIn" => crate::roundtrip::<crate::ListCloudflareGrantsIn>(text),
             "ListDeploymentsIn" => crate::roundtrip::<crate::ListDeploymentsIn>(text),
             "ListFilesIn" => crate::roundtrip::<crate::ListFilesIn>(text),
             "ListFilesOut" => crate::roundtrip::<crate::ListFilesOut>(text),
@@ -18556,6 +18695,7 @@ pub mod wire {
             "RedeployIn" => crate::roundtrip::<crate::RedeployIn>(text),
             "RefreshPullRequestIn" => crate::roundtrip::<crate::RefreshPullRequestIn>(text),
             "RefreshPullRequestOut" => crate::roundtrip::<crate::RefreshPullRequestOut>(text),
+            "RemoveCloudflareGrantIn" => crate::roundtrip::<crate::RemoveCloudflareGrantIn>(text),
             "RenameBranchIn" => crate::roundtrip::<crate::RenameBranchIn>(text),
             "RenameSessionIn" => crate::roundtrip::<crate::RenameSessionIn>(text),
             "RenameWorkspaceIn" => crate::roundtrip::<crate::RenameWorkspaceIn>(text),

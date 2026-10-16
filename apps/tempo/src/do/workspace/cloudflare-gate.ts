@@ -204,7 +204,24 @@ export const decideCloudflareHold = (core: WorkspaceCore, holdId: string, allow:
   core.recomputeAttention();
 };
 
-type AgentToken = { readonly tokenId: string; readonly expiresAt: number };
+type AgentToken = {
+  readonly tokenId: string;
+  readonly expiresAt: number;
+  /** Absent for tokens minted before grants (12, Access requests and grants). */
+  readonly permissions?: ReadonlyArray<string>;
+};
+
+/** The token was minted for other permissions than the project's grant now holds. */
+export const agentTokenStale = (core: WorkspaceCore, permissions: ReadonlyArray<string>): boolean => {
+  const current = core.kv<AgentToken>("cfAgentToken");
+
+  return (
+    current !== undefined &&
+    (current.permissions === undefined ||
+      current.permissions.length !== permissions.length ||
+      current.permissions.some((p) => !permissions.includes(p)))
+  );
+};
 
 /** The workspace's minted Cloudflare token (13, L-ADR-8, 1). Mints a new one when it is near its end. */
 export const agentCloudflareToken = async (core: WorkspaceCore): Promise<string | null> => {

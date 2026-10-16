@@ -1,4 +1,10 @@
-import { TempoError, type DeployConfig, type Deployment, type Project } from "@tempo/protocol";
+import {
+  PERMISSION_GROUPS,
+  TempoError,
+  type DeployConfig,
+  type Deployment,
+  type Project,
+} from "@tempo/protocol";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, CloudUploadIcon, RocketIcon } from "lucide-react";
 import { useState } from "react";
@@ -13,6 +19,7 @@ import { useCallMutation, useCallQuery } from "~/ui/hooks/useCall";
 import { formatRelative, formatTime } from "~/ui/lib/format";
 import { errorCode, errorText } from "~/ui/lib/toast";
 import { openDialog } from "~/ui/state/workspace-ui";
+import { permissionText } from "~/ui/components/chat/transcript-model";
 import type { RepositoryHubProps } from "./RepositoryHub";
 import {
   ROLLOUT_PHASE_LABELS,
@@ -64,6 +71,7 @@ function DeploysHome(props: Props) {
             config={config.data}
             onReload={() => void config.refetch()}
           />
+          <CloudflareGrants projectId={props.project.id} />
           <IssuesWebhook projectId={props.project.id} />
         </>
       )}
@@ -581,6 +589,51 @@ function IssuesWebhook({ projectId }: { projectId: string }) {
       >
         New secret
       </Button>
+    </section>
+  );
+}
+
+/** 12, Access requests and grants: what deploys and agents may do in Cloudflare. */
+function CloudflareGrants({ projectId }: { projectId: string }) {
+  const grants = useCallQuery("listCloudflareGrants", { projectId });
+
+  const remove = useCallMutation("removeCloudflareGrant", {
+    invalidates: ["listCloudflareGrants", "getDeployConfig"],
+  });
+
+  if (grants.isPending || grants.isError) return null;
+
+  return (
+    <section aria-label="Cloudflare access" className="flex flex-col gap-2 rounded-lg border p-4 text-sm">
+      <p className="text-base font-semibold">Cloudflare access</p>
+      <p className="text-muted-foreground">
+        Agents ask for access in a chat, and you approve it there. Deploys and agents use only what is listed
+        here.
+      </p>
+      <ul className="flex flex-col gap-1">
+        {grants.data.map((g) => (
+          <li key={g.permission} className="flex items-center justify-between gap-2">
+            <span>
+              <span className="font-medium">{permissionText(g.permission)}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                · {PERMISSION_GROUPS[g.permission].groups.join(", ")}
+              </span>
+            </span>
+            {g.permission !== "workers" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate({ projectId, permission: g.permission })}
+              >
+                Remove
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

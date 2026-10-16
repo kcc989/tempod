@@ -17,6 +17,7 @@ import {
   DeployToolName,
   DEPLOY_TOOL_NAMES,
   DEPLOY_TOOLS,
+  DEPLOY_PERMISSIONS,
   PublishArtifactRequest,
   TEMPO_SESSION_ID_ENV,
   EnvironmentSummary,
@@ -329,6 +330,24 @@ export const handleMcpMessage = async (
                   inputSchema: { type: "object", properties: {}, additionalProperties: false },
                 },
                 {
+                  name: "request_cloudflare_access",
+                  description:
+                    "Ask the owner for Cloudflare permissions this project needs, with the reason. The owner approves or denies it in Tempo; deploys and your Cloudflare API calls use what the project is granted. End your turn after asking.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      permissions: {
+                        type: "array",
+                        minItems: 1,
+                        items: { type: "string", enum: [...DEPLOY_PERMISSIONS] },
+                      },
+                      reason: { type: "string", minLength: 1, maxLength: 500 },
+                    },
+                    required: ["permissions", "reason"],
+                    additionalProperties: false,
+                  },
+                },
+                {
                   name: "submit_proof",
                   description:
                     "Submit proof that the preview works: a summary of at most 5 lines, one screen per changed route (images you published with publish_artifact in this chat), and a note for each open design checklist item. Tempo runs the project's checks itself. Then end your turn.",
@@ -512,7 +531,12 @@ export const handleMcpMessage = async (
           );
         }
 
-        if (!runId && (params["name"] === "propose_intent" || params["name"] === "submit_proof")) {
+        if (
+          !runId &&
+          (params["name"] === "propose_intent" ||
+            params["name"] === "submit_proof" ||
+            params["name"] === "request_cloudflare_access")
+        ) {
           const res = await call("/agent-tools", {
             method: "POST",
             headers: { "content-type": "application/json" },

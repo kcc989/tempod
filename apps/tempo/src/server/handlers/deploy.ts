@@ -263,3 +263,21 @@ const startFixAsOwner = async (env: Env, userId: string, projectId: string, erro
     log("warn", "auto fix failed", { projectId, error: errorText(e) });
   }
 };
+
+/** 12, Access requests and grants. */
+export const listCloudflareGrants = async (
+  ctx: HandlerCtx,
+  { projectId }: FnInput<"listCloudflareGrants">,
+): Promise<FnOutput<"listCloudflareGrants">> =>
+  unwrap(await (await coordinator(ctx, projectId)).listGrants());
+
+export const removeCloudflareGrant = async (
+  ctx: HandlerCtx,
+  { projectId, permission }: FnInput<"removeCloudflareGrant">,
+): Promise<FnOutput<"removeCloudflareGrant">> => {
+  const list = unwrap(await (await coordinator(ctx, projectId)).removeGrant(permission));
+  // 14, C-ADR-1: removed access ends the sessions that held it.
+  await refreshProjectEnv(ctx, projectId);
+
+  return list;
+};

@@ -192,7 +192,16 @@ export const proposeIntent = async (
   return INTENT_TEXT.byOwner;
 };
 
-const queueTurn = (core: WorkspaceCore, r: IntentRow, text: string): void => {
+const queueTurn = (core: WorkspaceCore, r: IntentRow, text: string): void =>
+  queueChatTurn(core, r.sessionId, r.changeId, text);
+
+/** Queues Tempo's own message as a user turn of the chat, in the given change. */
+export const queueChatTurn = (
+  core: WorkspaceCore,
+  sessionId: string,
+  changeId: string | null,
+  text: string,
+): void => {
   const turnId = newId();
 
   core.ctx.storage.transactionSync(() => {
@@ -200,8 +209,8 @@ const queueTurn = (core: WorkspaceCore, r: IntentRow, text: string): void => {
       .insert(turns)
       .values({
         id: turnId,
-        sessionId: r.sessionId,
-        changeId: r.changeId,
+        sessionId: sessionId,
+        changeId: changeId,
         origin: "user",
         seq: core.nextTurnSeq(),
         queuePos: core.nextQueuePos(),
@@ -212,7 +221,7 @@ const queueTurn = (core: WorkspaceCore, r: IntentRow, text: string): void => {
       })
       .run();
     core.insertItem({
-      sessionId: r.sessionId,
+      sessionId: sessionId,
       turnId,
       kind: "user_message",
       status: "completed",

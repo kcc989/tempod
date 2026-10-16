@@ -634,3 +634,14 @@ Tab 13, L-ADR-7 and Phase 3. Choices made without the owner:
 | Contract checks | `getLoopReport` lists intent order and length violations. Proof completeness and one-action rollback are enforced by worker tests. | These cannot happen from the event log once the code holds them. |
 | Daily job | Cron `41 5 * * *` (UTC). It writes `loop/<date>.json` for the owner (`TEMPO_OWNER_GITHUB_ID`) and opens the issue in the owner's first native project, at most once a week per step. The body gives the window and the numbers, and names the report key. | Tempo has one owner; issues (09) exist only in native projects. |
 | Not built yet | The weekly file in `docs/evidence/loop-weekly/` through a Tempo PR | Tempo has no API yet that commits a file and opens a PR from the Worker. The CI summary already prints the newest file there. |
+
+## Cloudflare access requests and grants (2026-10-16)
+
+Tab 12, Access requests and grants. Choices made without the owner:
+
+| Item | What the code does | Why |
+| --- | --- | --- |
+| Plain words | The card and the grant list show each permission in plain words (for example `Write D1 databases`) and then its Cloudflare groups | The spec names the groups; the words make the card readable. |
+| Partial approval | Approve and Deny cover the whole request | The owner can remove one permission afterwards in the Deploys tab. |
+| Agent token | Tempo re-mints the workspace's Cloudflare token when the grant changes | A token keeps the permissions it was minted with. |
+| Native projects | The grant API works only for Tempo-hosted projects, as the rest of 12 does | Deploys exist only for them. |

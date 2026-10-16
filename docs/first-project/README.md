@@ -9,7 +9,7 @@ The loop is first proven on this project (13, First project). Tempo builds it; t
 3. Create an environment for the project with the secret `TYPESAFE_API_KEY`, hosts `api.typesafe.ai`. The app's own Jev calls use it through `tempo-secret-TYPESAFE_API_KEY`; the key never enters the container.
    For the deployed app, put the same key once in Cloudflare Secrets Store and bind it to the Workers in `alchemy.run.ts`; the deploy token has `secrets_store`, so the key never passes through the deploy container either.
 4. Project settings → Agent → Project profile (Profile YAML): paste [profile.yaml](profile.yaml).
-5. The repository's Deploys tab: paste [deploy.yaml](deploy.yaml) as the deploy configuration. Add `smoke` URLs to `production` once the domain exists.
+5. The repository's Deploys tab: paste [deploy.yaml](deploy.yaml) as the deploy configuration. Cloudflare permissions are not in it: the agent asks for them in the chat (for example `d1` and `secrets_store`), and you approve them there. Add `smoke` URLs to `production` once the domain exists.
 6. In Cloudflare, add a Workers Issues automation that sends to the webhook URL shown in the Deploys tab (Production errors) (13, L-ADR-5).
 
 ## First prompt

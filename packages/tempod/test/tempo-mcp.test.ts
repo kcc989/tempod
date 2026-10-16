@@ -90,6 +90,7 @@ describe("tempo MCP server (01, Environments)", () => {
       "get_project_profile",
       "propose_intent",
       "get_capabilities",
+      "request_cloudflare_access",
       "submit_proof",
       "list_agents",
       "propose_agent_change",

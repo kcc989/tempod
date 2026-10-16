@@ -642,6 +642,21 @@ export const LoopReport = Schema.Struct({
 
 export type LoopReport = typeof LoopReport.Type;
 
+/** 12, Access requests and grants: one permission of the project's grant. */
+export const CloudflareGrant = Schema.Struct({ permission: DeployPermission, grantedAt: N(Ms) });
+
+export type CloudflareGrant = typeof CloudflareGrant.Type;
+
+/** 12, Access requests and grants: an agent's request for Cloudflare permissions. */
+export const CloudflareAccessContent = Schema.Struct({
+  requestId: Schema.String,
+  permissions: Schema.Array(DeployPermission),
+  reason: Schema.String,
+  status: Schema.Literals(["pending", "approved", "denied"]),
+});
+
+export type CloudflareAccessContent = typeof CloudflareAccessContent.Type;
+
 /** 13, L-ADR-8: a Cloudflare API request held for the owner. */
 export const CloudflareHoldContent = Schema.Struct({
   holdId: Schema.String,
@@ -705,6 +720,7 @@ export const ITEM_CONTENT = {
   intent: IntentContent,
   proof: ProofContent,
   cloudflare_hold: CloudflareHoldContent,
+  cloudflare_access: CloudflareAccessContent,
   user_message: UserMessageContent,
   agent_message: AgentMessageContent,
   agent_thought: AgentThoughtContent,
@@ -737,6 +753,7 @@ export const Item = Schema.Union([
   itemOf("intent"),
   itemOf("proof"),
   itemOf("cloudflare_hold"),
+  itemOf("cloudflare_access"),
   itemOf("user_message"),
   itemOf("agent_message"),
   itemOf("agent_thought"),
