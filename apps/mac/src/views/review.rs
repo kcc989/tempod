@@ -1145,7 +1145,7 @@ impl ReviewPanel {
                 .projects
                 .iter()
                 .find(|p| p.id == w.project_id)
-                .map(|p| super::indicators::github_pull_url(&p.owner, &p.name, number))
+                .map(|p| super::indicators::repo_link(p, Some(number), None))
         });
         let tag = |tint: gpui_kit::Hsla, label: &'static str| {
             Tag::custom(tint.opacity(0.15), tint, tint.opacity(0.))
@@ -1163,16 +1163,21 @@ impl ReviewPanel {
                 h_flex()
                     .gap_2()
                     .child(match url {
-                        Some(url) => Button::new("checks-pr")
+                        Some(link) => Button::new("checks-pr")
                             .ghost()
                             .small()
                             .label(format!("#{}", number as u64))
                             .icon(IconName::ExternalLink)
                             .accessibility_label(format!(
-                                "Open pull request #{} on GitHub",
-                                number as u64
+                                "Open pull request #{} {}",
+                                number as u64,
+                                if link.hosted() {
+                                    "in Repositories"
+                                } else {
+                                    "on GitHub"
+                                }
                             ))
-                            .on_click(move |_, _, cx| cx.open_url(&url))
+                            .on_click(move |_, _, cx| link.open(cx))
                             .into_any_element(),
                         None => div()
                             .child(format!("#{}", number as u64))
@@ -1401,16 +1406,11 @@ impl Render for ReviewPanel {
                     .iter()
                     .find(|p| p.id == w.project_id)
                     .map(|p| {
-                        if w.pushed || w.pr_number.is_some() {
-                            super::indicators::github_url_for(
-                                &p.owner,
-                                &p.name,
-                                w.pr_number,
-                                &w.branch,
-                            )
-                        } else {
-                            format!("https://github.com/{}/{}", p.owner, p.name)
-                        }
+                        super::indicators::repo_link(
+                            p,
+                            w.pr_number,
+                            w.pushed.then_some(w.branch.as_str()),
+                        )
                     })
             })
         });
@@ -1450,13 +1450,17 @@ impl Render for ReviewPanel {
                                 .label("Refresh")
                                 .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
                         )
-                        .children(github.map(|url| {
+                        .children(github.map(|link| {
                             Button::new("changes-github")
                                 .ghost()
                                 .small()
                                 .icon(IconName::ExternalLink)
-                                .accessibility_label("Open on GitHub")
-                                .on_click(move |_, _, cx| cx.open_url(&url))
+                                .accessibility_label(if link.hosted() {
+                                    "Open in Repositories"
+                                } else {
+                                    "Open on GitHub"
+                                })
+                                .on_click(move |_, _, cx| link.open(cx))
                         })),
                 )
                 .child(if self.loading {

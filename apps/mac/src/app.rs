@@ -27,6 +27,8 @@ pub struct AppState {
     pub workspaces: Vec<Entity<WorkspaceStore>>,
     pub active_workspace: Option<String>,
     pub workspace_navigation_rev: u64,
+    /// A request to show Repositories at a project; the main window takes it.
+    pub repository_request: Option<crate::views::indicators::RepositoryTarget>,
     pub tokens: std::sync::Arc<dyn TokenStore>,
     cleanup_task: Option<Task<()>>,
     runtime: ClientRuntime,
@@ -64,6 +66,7 @@ impl AppState {
             workspaces: Vec::new(),
             active_workspace: None,
             workspace_navigation_rev: 0,
+            repository_request: None,
             tokens: platform::token_store().into(),
             cleanup_task: None,
             runtime,
@@ -146,6 +149,15 @@ impl AppState {
         self.workspace_navigation_rev = self.workspace_navigation_rev.wrapping_add(1);
         cx.notify();
         store
+    }
+
+    pub fn open_repository(
+        &mut self,
+        target: crate::views::indicators::RepositoryTarget,
+        cx: &mut Context<Self>,
+    ) {
+        self.repository_request = Some(target);
+        cx.notify();
     }
 
     pub fn connect(&mut self, url: &str, restore: bool, cx: &mut Context<Self>) {

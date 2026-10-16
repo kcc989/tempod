@@ -92,6 +92,7 @@ pub struct MainWindow {
     repositories: Option<Entity<super::repositories::RepositoryView>>,
     repository_events: Option<Subscription>,
     show_repositories: bool,
+    repository_target: Option<super::indicators::RepositoryTarget>,
     workspace_navigation_rev: u64,
     measured_sidebar_width: Option<f32>,
     measured_right_width: Option<f32>,
@@ -147,6 +148,11 @@ impl MainWindow {
                 if this.workspace_navigation_rev != navigation_rev {
                     this.workspace_navigation_rev = navigation_rev;
                     this.show_repositories = false;
+                }
+                if state.read(cx).repository_request.is_some() {
+                    this.repository_target =
+                        state.update(cx, |state, _| state.repository_request.take());
+                    this.show_repositories = true;
                 }
                 this.settings_active = settings_open;
                 this.signed_in = signed_in;
@@ -222,6 +228,7 @@ impl MainWindow {
             repositories: None,
             repository_events: None,
             show_repositories: false,
+            repository_target: None,
             workspace_navigation_rev,
             measured_sidebar_width: None,
             measured_right_width: None,
@@ -492,6 +499,20 @@ impl MainWindow {
                     self.repositories = Some(view);
                 }
                 if let Some(view) = &self.repositories {
+                    if let Some(target) = self.repository_target.take()
+                        && let Some(project) = app
+                            .read(cx)
+                            .hub
+                            .read(cx)
+                            .projects
+                            .iter()
+                            .find(|p| p.id == target.project_id)
+                            .cloned()
+                    {
+                        view.update(cx, |view, cx| {
+                            view.open_target(project, target.pull, target.branch, window, cx)
+                        });
+                    }
                     return div().size_full().child(view.clone()).into_any_element();
                 }
             }
@@ -749,6 +770,7 @@ impl Render for MainWindow {
             self.repositories = None;
             self.repository_events = None;
             self.show_repositories = false;
+            self.repository_target = None;
             return v_flex()
                 .size_full()
                 .bg(color(Token::Background, cx))
@@ -1191,7 +1213,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
-    fn repositories_survive_settings_updates_and_return_to_a_reselected_workspace(
+    fn repositories_survive_settings_updates_return_to_a_workspace_and_open_hosted_links(
         cx: &mut gpui_kit::TestAppContext,
     ) {
         cx.background_executor.allow_parking();
@@ -1224,6 +1246,18 @@ mod tests {
         });
         cx.run_until_parked();
         view.read_with(cx, |view, _| assert!(!view.show_repositories));
+        let target = crate::views::indicators::RepositoryTarget {
+            project_id: "project-1".into(),
+            pull: Some(7.),
+            branch: None,
+        };
+        app.update(cx, |app, cx| app.open_repository(target.clone(), cx));
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert!(view.show_repositories);
+            assert_eq!(view.repository_target, Some(target));
+        });
+        app.read_with(cx, |app, _| assert!(app.repository_request.is_none()));
     }
 }
 

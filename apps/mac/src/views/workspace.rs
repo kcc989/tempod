@@ -1202,7 +1202,7 @@ impl WorkspaceView {
         let pr_link = crate::app::AppState::try_global(cx).and_then(|app| {
             let hub = app.read(cx).hub.read(cx);
             let project = hub.projects.iter().find(|p| p.id == w.project_id)?;
-            super::indicators::pr_link(&project.owner, &project.name, w.pr_number, w.pr_state)
+            super::indicators::pr_link(project, w.pr_number, w.pr_state)
         });
         let bar = h_flex()
             .group("workspace-branch")
@@ -1247,12 +1247,16 @@ impl WorkspaceView {
                 .accessibility_label("Copy branch name").tooltip("Copy branch name")
                 .on_click(move |_, _, cx| cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(branch.clone()))))
             .children(pr_link.map(|link| {
-                let url = link.url;
+                let target = link.link;
                 Button::new("pr-link")
                     .label(link.label)
                     .text_color(color(link.token, cx))
-                    .accessibility_label("Open the pull request on GitHub")
-                    .on_click(move |_, _, cx| cx.open_url(&url))
+                    .accessibility_label(if target.hosted() {
+                        "Open the pull request in Repositories"
+                    } else {
+                        "Open the pull request on GitHub"
+                    })
+                    .on_click(move |_, _, cx| target.open(cx))
             }))
             .children(
                 super::indicators::preview_links(&w.ports, w.browser_active)

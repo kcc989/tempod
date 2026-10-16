@@ -893,7 +893,8 @@ fn project_of(w: &p::WorkspaceSummary, cx: &App) -> Option<p::Project> {
         .cloned()
 }
 
-/// 04, Right-click menu: Rename, Pin or Unpin, Copy branch name, Open on GitHub, Archive.
+/// 04, Right-click menu: Rename, Pin or Unpin, Copy branch name, Open on GitHub (or in
+/// Repositories for a Tempo-hosted project), Archive.
 fn row_menu(
     menu: gpui_kit::component::menu::PopupMenu,
     summary: &p::WorkspaceSummary,
@@ -906,7 +907,7 @@ fn row_menu(
     let github = summary
         .pr_number
         .and_then(|_| project_of(summary, cx))
-        .map(|p| ind::github_url_for(&p.owner, &p.name, summary.pr_number, &summary.branch));
+        .map(|p| ind::repo_link(&p, summary.pr_number, Some(&summary.branch)));
     let menu = menu
         .item(PopupMenuItem::new("Rename").on_click(move |_, window, cx| {
             crate::app::AppState::global(cx).update(cx, |a, cx| {
@@ -935,9 +936,14 @@ fn row_menu(
                 super::toast::success("Branch name copied.", window, cx);
             }),
         );
-    let menu = if let Some(url) = github {
+    let menu = if let Some(link) = github {
         menu.item(
-            PopupMenuItem::new("Open PR on GitHub").on_click(move |_, _, cx| cx.open_url(&url)),
+            PopupMenuItem::new(if link.hosted() {
+                "Open PR in Repositories"
+            } else {
+                "Open PR on GitHub"
+            })
+            .on_click(move |_, _, cx| link.open(cx)),
         )
     } else {
         menu

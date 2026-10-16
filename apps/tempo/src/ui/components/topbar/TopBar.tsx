@@ -142,8 +142,7 @@ function PrLinkAnchor({ workspace: w }: { workspace: WorkspaceSummary }) {
   return (
     <a
       href={link.url}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       aria-label={link.ariaLabel}
       className={cn(
         "shrink-0 rounded-md px-1 font-mono text-xs tabular-nums outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",

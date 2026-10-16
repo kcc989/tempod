@@ -390,6 +390,36 @@ impl RepositoryView {
     }
 
     fn select_project(&mut self, project: p::Project, window: &mut Window, cx: &mut Context<Self>) {
+        self.reset_project(project, window, cx);
+        self.load_tab(cx);
+    }
+
+    /// Opens a project at a PR, else at a branch (04 Top bar: the hosted PR link).
+    pub fn open_target(
+        &mut self,
+        project: p::Project,
+        pull: Option<f64>,
+        branch: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.reset_project(project, window, cx);
+        if let Some(number) = pull {
+            self.tab = RepositoryTab::PullRequests;
+            self.open_pull_request(number, cx);
+            return;
+        }
+        if let Some(branch) = branch {
+            self.inputs
+                .reference
+                .update(cx, |input, cx| input.set_value(branch.clone(), window, cx));
+            self.reference = branch;
+            self.explicit_ref = true;
+        }
+        self.load_tab(cx);
+    }
+
+    fn reset_project(&mut self, project: p::Project, window: &mut Window, cx: &mut Context<Self>) {
         self.generation += 1;
         self.detail = None;
         self.file = None;
@@ -419,7 +449,6 @@ impl RepositoryView {
             input.set_value(project.default_branch.clone(), window, cx)
         });
         self.project = Some(project);
-        self.load_tab(cx);
     }
 
     fn select_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -3030,6 +3059,46 @@ mod tests {
     #[gpui_kit::test]
     fn native_pull_request_merge_failure_preserves_open_state(cx: &mut TestAppContext) {
         verify_merge(cx, p::MergeMethod::Squash, true, false);
+    }
+
+    #[gpui_kit::test]
+    fn hosted_links_open_the_project_at_the_pull_request_or_branch(cx: &mut TestAppContext) {
+        let server = LocalServer::new(false, false);
+        let runtime = tempo_client::Runtime::start().unwrap();
+        let client = tempo_client::Server::new(&runtime.handle(), &server.url, crate::VERSION)
+            .unwrap()
+            .client(tempo_client::Token::new("test-token"));
+        let (window, view) = mount(cx, client);
+        settle(cx, &view);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.open_target(project(), Some(1.), None, window, cx)
+            })
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.read_with(cx, |view, _| {
+            assert!(view.tab == RepositoryTab::PullRequests);
+            assert_eq!(view.project.as_ref().unwrap().id, "project-artifacts");
+            assert_eq!(view.pull_request.as_ref().unwrap().number, 1.);
+        });
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| {
+                view.open_target(project(), None, Some("feature".into()), window, cx)
+            })
+        })
+        .unwrap();
+        settle(cx, &view);
+        view.read_with(cx, |view, _| {
+            assert!(view.tab == RepositoryTab::Code && view.pull_request.is_none());
+            assert_eq!(view.detail.as_ref().unwrap().ref_, "feature");
+        });
+        let requests = server.requests.lock().unwrap();
+        assert!(
+            !requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/listRepositoryPullRequests"))
+        );
     }
 
     #[gpui_kit::test]
