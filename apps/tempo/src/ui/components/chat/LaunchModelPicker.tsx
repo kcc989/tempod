@@ -64,7 +64,9 @@ export function LaunchModelPicker({
   const label =
     pickedAgent?.name ??
     selected?.name ??
-    (credentials.isPending || models.isPending ? "Loading models…" : "Choose a model");
+    (credentials.isPending || (credentials.isSuccess && models.isPending)
+      ? "Loading models…"
+      : "Choose a model");
 
   return (
     <div className="min-w-0">
@@ -97,8 +99,13 @@ export function LaunchModelPicker({
           Manage agents…
         </DropdownMenuItem>
       </ComposerModelMenu>
-      {models.isError && (
-        <Button type="button" variant="link" size="sm" onClick={() => void models.refetch()}>
+      {(credentials.isError || models.isError) && (
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          onClick={() => void (credentials.isError ? credentials.refetch() : models.refetch())}
+        >
           Retry loading models
         </Button>
       )}

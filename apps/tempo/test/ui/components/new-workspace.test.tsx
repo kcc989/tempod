@@ -74,4 +74,23 @@ describe("new workspace composer", () => {
       }),
     );
   });
+
+  it("offers Retry instead of loading forever when login status fails", async () => {
+    const answer = request.getMockImplementation()!;
+    let failStatus = true;
+
+    request.mockImplementation(async (name, input) => {
+      if (name === "getCredentialStatus" && failStatus) throw new Error("status unavailable");
+
+      return answer(name, input);
+    });
+    render(<NewWorkspaceDialog />, { wrapper: environment.Provider });
+    const retry = await screen.findByRole("button", { name: "Retry loading models" });
+    expect(screen.getByRole("button", { name: "Model" }).textContent).not.toContain("Loading models");
+    failStatus = false;
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Model" }).textContent).toContain("Reported model"),
+    );
+  });
 });

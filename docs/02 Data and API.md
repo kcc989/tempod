@@ -679,7 +679,7 @@ Public projects, the profile and pins: `getProfile`, `listProfileProjects`, `get
 | Function | Input | Output | Errors |
 | --- | --- | --- | --- |
 | `createWorkspace` | `{projectId, source, agent?, model?, agentId?, prompt?}`; `source` = `{kind: "new", baseBranch}` or `{kind: "branch", branch}` or `{kind: "pr", number}`; `prompt` = `{text}`. With `agentId`, the first session starts from that agent, and `agent` MUST be absent or equal its base agent; `model` defaults to the agent's `model`. | `WorkspaceSummary` | `BRANCH_IN_USE`, `NOT_FOUND`, `VALIDATION_FAILED` |
-| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; cached for 15 minutes and invalidated by credentials or image changes | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
+| `listModels` | `{}` | `AgentModelOptions[]` (`{agent, options: ConfigSelectOption[], currentValue}`), model options discovered directly from configured agents in an isolated temporary container, independent of workspaces and chats; stored without a time limit; a credential or image change refreshes it in the background, and a read waits only when a configured agent has no stored models | `CONTAINER_START_FAILED`, `AGENT_START_FAILED`, `TEMPOD_TIMEOUT`, `CREDENTIAL_MISSING` |
 | `listWorkspaces` | `{includeArchived?}` | `WorkspaceSummary[]` | — |
 | `getWorkspace` | `{workspaceId}` | `WorkspaceDetail` | `NOT_FOUND` |
 | `renameWorkspace` | `{workspaceId, title}` | `{}` | — |
