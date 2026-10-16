@@ -27,8 +27,8 @@ One image, named `workspace`, holds all four agents, Chromium and the dev tools.
 | `opencode-ai` | 1.18.35 | npm |
 | `@earendil-works/pi-coding-agent` | 1.1.0 | npm |
 | `pi-acp` | 0.0.34 | npm |
-| `playwright` (browsers) | 1.61.1 | npm |
-| `@playwright/mcp` | Pin in `versions.json` at build | npm |
+| `playwright` (CLI) | 1.61.1 | npm |
+| `@playwright/mcp` (and its Chromium build) | Pin in `versions.json` at build | npm |
 | `gh`, `bun` | Pin in `versions.json` at build | GitHub releases |
 | Oh My Zsh | Commit pinned as `OH_MY_ZSH_REF` in `versions.json` | GitHub (`ohmyzsh/ohmyzsh`) |
 
@@ -56,26 +56,29 @@ ARG OH_MY_ZSH_REF
 RUN git clone --filter=blob:none https://github.com/ohmyzsh/ohmyzsh.git /opt/oh-my-zsh \
  && git -C /opt/oh-my-zsh checkout --detach "${OH_MY_ZSH_REF}" && rm -rf /opt/oh-my-zsh/.git
 
-ARG PLAYWRIGHT_MCP_VERSION
-RUN npm install -g \
-    @agentclientprotocol/claude-agent-acp@0.89.1 \
-    @agentclientprotocol/codex-acp@2.2.2 \
-    opencode-ai@1.18.35 \
-    @earendil-works/pi-coding-agent@1.1.0 \
-    pi-acp@0.0.34 \
-    playwright@1.61.1 \
-    @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
+RUN npm install -g @agentclientprotocol/claude-agent-acp@0.89.1
+RUN npm install -g @agentclientprotocol/codex-acp@2.2.2
+RUN npm install -g opencode-ai@1.18.35 \
+ && dir="$(npm root -g)/opencode-ai" \
+ && for pkg in "$dir"/node_modules/opencode-linux-*; do \
+      [ "$pkg/bin/opencode" -ef "$dir/bin/opencode.exe" ] || rm -rf "$pkg"; done
+RUN npm install -g @earendil-works/pi-coding-agent@1.1.0 pi-acp@0.0.34
 
+ARG PLAYWRIGHT_MCP_VERSION
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN playwright install --with-deps chromium && chmod -R a+rwX /opt/ms-playwright
+RUN npm install -g playwright@1.61.1 @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} \
+ && node "$(npm root -g)/@playwright/mcp/node_modules/playwright-core/cli.js" install --with-deps --no-shell chromium \
+ && chmod -R a+rwX /opt/ms-playwright
 
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
 COPY container/home/ /etc/tempo/home-defaults/
+COPY --chmod=0644 container/pi/tempo-profile.ts /opt/tempo/pi/tempo-profile.ts
 
 RUN groupmod -n tempo node \
  && usermod -l tempo -d /home/tempo -s /bin/zsh node \
+ && chmod 0755 /opt/tempo /opt/tempo/pi \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent /home/tempo/.oh-my-zsh-custom \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
@@ -99,6 +102,12 @@ USER tempo
 WORKDIR /workspace
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tempod"]
 ```
+
+**Layer order.** Each agent and the browser install in their own layer, before any Tempo file is copied. A `tempod` change then rebuilds and uploads only the small layers at the end. A tool version change rebuilds its layer and the layers that follow it.
+
+**Chromium.** `@playwright/mcp` bundles its own Playwright, which can expect a different Chromium build than the `playwright` package. The browser is installed with the bundled Playwright's CLI, so it is the build Playwright MCP launches. Playwright MCP starts full Chromium even with `--headless`, so the headless shell is not installed. The global `playwright` CLI stays for agents; projects bring their own Playwright and browsers. The image test starts Playwright MCP with the `session/new` arguments, loads a local HTTP fixture and checks its page title and rendered heading in the browser snapshot.
+
+**OpenCode.** The `opencode-ai` postinstall hard-links `bin/opencode.exe` to one platform package (`opencode-linux-x64` or, on a CPU without AVX2, `opencode-linux-x64-baseline`). The other package is removed.
 
 **Files baked into `/home/tempo`** (from `container/home/`)
 

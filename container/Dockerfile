@@ -29,6 +29,39 @@ RUN --mount=type=secret,id=proxy_ca \
     git clone --filter=blob:none https://github.com/ohmyzsh/ohmyzsh.git /opt/oh-my-zsh \
  && git -C /opt/oh-my-zsh checkout --detach "${OH_MY_ZSH_REF}" && rm -rf /opt/oh-my-zsh/.git
 
+# Agents and browser install before any Tempo file is copied, so a tempod change
+# reuses their install layers.
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g @agentclientprotocol/claude-agent-acp@0.89.1 && npm cache clean --force
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g @agentclientprotocol/codex-acp@2.2.2 && npm cache clean --force
+# The postinstall links bin/opencode.exe to one platform package; drop the unused one.
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g opencode-ai@1.18.35 && npm cache clean --force \
+ && dir="$(npm root -g)/opencode-ai" \
+ && for pkg in "$dir"/node_modules/opencode-linux-*; do \
+      [ "$pkg/bin/opencode" -ef "$dir/bin/opencode.exe" ] || rm -rf "$pkg"; done \
+ && opencode --version
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g @earendil-works/pi-coding-agent@1.1.0 pi-acp@0.0.34 && npm cache clean --force
+
+ARG PLAYWRIGHT_MCP_VERSION
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+# @playwright/mcp bundles its own Playwright, so its CLI installs the Chromium build MCP launches.
+# MCP runs full Chromium even with --headless, so the headless shell is not installed.
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install -g playwright@1.61.1 @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && npm cache clean --force \
+ && if [ ! -e "$(npm prefix -g)/bin/mcp-server-playwright" ]; then \
+      ln -s "$(npm prefix -g)/bin/playwright-mcp" "$(npm prefix -g)/bin/mcp-server-playwright"; fi \
+ && node "$(npm root -g)/@playwright/mcp/node_modules/playwright-core/cli.js" install --with-deps --no-shell chromium \
+ && chmod -R a+rwX /opt/ms-playwright \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=docker.io/cloudflare/sandbox:1.0.0 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 COPY dist/tempod /usr/local/bin/tempod
 COPY container/home/ /home/tempo/
@@ -41,25 +74,6 @@ RUN groupmod -n tempo node \
  && mkdir -p /workspace /home/tempo/.claude /home/tempo/.codex /home/tempo/.pi/agent /home/tempo/.oh-my-zsh-custom \
              /home/tempo/.local/share/opencode /home/tempo/.tempod /home/tempo/attachments \
  && chown -R tempo:tempo /workspace /home/tempo
-
-ARG PLAYWRIGHT_MCP_VERSION
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN --mount=type=secret,id=proxy_ca \
-    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm install -g \
-    @agentclientprotocol/claude-agent-acp@0.89.1 \
-    @agentclientprotocol/codex-acp@2.2.2 \
-    opencode-ai@1.18.35 \
-    @earendil-works/pi-coding-agent@1.1.0 \
-    pi-acp@0.0.34 \
-    playwright@1.61.1 \
-    @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} \
- && if [ ! -e "$(npm prefix -g)/bin/mcp-server-playwright" ]; then \
-      ln -s "$(npm prefix -g)/bin/playwright-mcp" "$(npm prefix -g)/bin/mcp-server-playwright"; fi \
- && playwright install --with-deps chromium \
- && chmod -R a+rwX /opt/ms-playwright \
- && npm cache clean --force \
- && rm -rf /var/lib/apt/lists/*
 
 ENV HOME=/home/tempo \
     LANG=C.UTF-8 \

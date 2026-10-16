@@ -649,3 +649,20 @@ Tab 12, Access requests and grants. Choices made without the owner:
 ## Model list
 
 Settings → Models keeps one ordered model list per owner, in D1 `model_lists`, like Conductor's model loadout. It filters only the New workspace and New chat pickers; an empty list, or a list with no available pick, offers every reported model. Ordering is by the order picks were added; there is no drag reordering, because that needs a library the spec stack does not name.
+
+## Smaller image uploads (2026-10-16)
+
+- **Layer order (01 Container image).** The agents and Chromium each install in their own layer before `tempod` and the home files are copied. Before, every `tempod` build changed the 2.39 GB install layer (862 MB compressed), so each deploy uploaded it again.
+- **Playwright MCP browser.** `@playwright/mcp@0.0.83` bundles `playwright-core` 1.64.0-alpha-1790635538000, which launches Chrome for Testing build 1247. The image installed build 1228 (from `playwright@1.61.1`), so Playwright MCP could not start a browser ("Browser \"chrome-for-testing\" is not installed"). The image test only checked that the bin existed. Owner decision: install only the build Playwright MCP uses, with its bundled CLI, and no headless shell. A new image test starts Playwright MCP with the `session/new` arguments and loads a page.
+- **OpenCode.** The unused OpenCode platform package (177 MiB, a second copy of the binary) is removed.
+- **Codex and Claude** have no duplicate files: each package holds one native binary for linux-x64 plus its helpers, so they are unchanged.
+
+### Browser fix integration validation
+
+The omitted fix is reconciled onto main `9bca922`, retaining PRs #70 and #71. The image regression now serves a local HTTP fixture and checks its actual page title and rendered heading in MCP's snapshot file. A 20-second process deadline bounds cleanup inside the 30-second case timeout; no CI budget, workflow, concurrency or version pin changes.
+
+The original fix's existing image run `38837116247` passed 185 cases in 11.59 seconds; the MCP page-load case took 0.808 seconds. Its container stage took 120 seconds and the job 135 seconds. Current main's existing CI run `38844113571` passed in 132.8 seconds for check commands, 155.2 including setup and 164 for the job; Worker tests took 126.0 seconds and other tests 98.7 seconds. No hosted run was started for this integration.
+
+Local macOS typecheck, lint and formatting pass. The root test command ran for 24.50 seconds and failed its existing Linux `/proc/net/tcp` listener case on macOS; the Worker stage passed in 23.749 seconds. The remaining non-daemon suites passed in 11.56 seconds (three cached tasks), and all 16 root script cases passed in 0.79 seconds. A broader Linux/amd64 daemon run under Rosetta took 89.55 seconds: 184 cases passed, but a diagnostic-image cache permission issue and the existing Git pre-push deadline case failed. This is not a complete suite pass.
+
+The final focused Linux image suite passes all five cases in 4.60 seconds of tests (4.91 wall), including the real MCP page load in 3.414 seconds, as uid 1000 with networking disabled. It uses diagnostic image `tempo-mcp-validation:local`, index `sha256:ba56ddef4bf4183cd3fda80803c06addd546f53223d980fee040afda15672b73`: the cached production image plus the bundled CLI's browser-install correction, built in 25.10 seconds. A fresh uid-1000 cache mount avoids the diagnostic build's root-owned Rosetta cache. This validates the browser correction; it is not a rebuild of the complete reordered Dockerfile or deployment acceptance.
