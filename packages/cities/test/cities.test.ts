@@ -6,7 +6,12 @@ describe("pickSlug", () => {
     expect(pickSlug([], () => 0)).toBe("otter");
     expect(pickSlug([], () => 0.999)).toBe("beetle");
     expect(pickSlug(["otter"], () => 0)).toBe("fox");
-    expect(pickSlug(ANIMALS.filter((a) => a !== "lynx"), () => 0.999)).toBe("lynx");
+    expect(
+      pickSlug(
+        ANIMALS.filter((a) => a !== "lynx"),
+        () => 0.999,
+      ),
+    ).toBe("lynx");
   });
   it("adds -2, -3 to a random name when all are used", () => {
     expect(pickSlug(ANIMALS, () => 0)).toBe("otter-2");

@@ -93,12 +93,12 @@ export type Animal = (typeof ANIMALS)[number];
 
 export const pickSlug = (used: Iterable<string>, random: () => number = Math.random): string => {
   const taken = new Set(used);
-  const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)] as T;
   const free = ANIMALS.filter((animal) => !taken.has(animal));
+  const animal = free[Math.floor(random() * free.length)];
 
-  if (free.length > 0) return pick(free);
+  if (animal !== undefined) return animal;
 
-  const base = pick(ANIMALS);
+  const base = ANIMALS[Math.floor(random() * ANIMALS.length)] ?? ANIMALS[0];
 
   for (let n = 2; ; n++) {
     const slug = `${base}-${n}`;

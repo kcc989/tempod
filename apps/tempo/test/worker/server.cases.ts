@@ -940,7 +940,8 @@ describe("createWorkspace (03, Create a workspace)", () => {
       archivedAt: Date.now() - 1000,
     });
 
-    for (const slug of ANIMALS.slice(1)) await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug });
+    for (const slug of ANIMALS.slice(1))
+      await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug });
 
     const ws = ok(
       await call("createWorkspace", o, {
@@ -1065,6 +1066,9 @@ describe("createWorkspace (03, Create a workspace)", () => {
       slug: "custom",
       branch: "tempo/otter",
     });
+
+    for (const slug of ANIMALS.slice(1))
+      await insertWorkspaceRow({ projectId: o.projectId, userId: o.userId, slug });
 
     const res = await call("createWorkspace", o, {
       projectId: o.projectId,
