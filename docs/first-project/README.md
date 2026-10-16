@@ -17,7 +17,7 @@ The loop is first proven on this project (13, First project). Tempo builds it; t
 Start a chat in a new workspace and send:
 
 ```text
-Build the smart todo list in docs/13 First project terms, in apps/web:
+Build a smart todo list in apps/web:
 - Todos: create, edit, complete, delete and order. Desktop and phone width.
 - Owner-only sign-in with Better Auth; MCP over OAuth through Better Auth, with tools to list, create, update, complete and tag todos.
 - Smart tagging: when a todo changes, ask Jev (jev-1.14.0, @typesafe-ai/sdk 0.7.0) one choice question per tag group from my tag list.
